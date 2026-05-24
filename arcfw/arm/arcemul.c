@@ -28,8 +28,8 @@
 #include "string.h"
 
 //
-// PL011 + console primitives (loader/arm/uart.c, console.c) and USB-keyboard input
-// (loader/arm/usb.c). The console is the ARM analog of the RISC firmware serial
+// PL011 + console primitives (arcfw/arm/uart.c, console.c) and USB-keyboard input
+// (arcfw/arm/usb.c). The console is the ARM analog of the RISC firmware serial
 // driver FW/MIPS/JXSERIAL.C; its input side polls both the PL011 RX and a USB HID
 // keyboard so the loader takes keystrokes from whichever is present.
 //
@@ -42,14 +42,14 @@ int usb_kbd_rx_ready(void);
 int usb_kbd_getc(void);
 
 //
-// Framebuffer console cursor query (loader/arm/fbcon.c), 0-based. Backs
+// Framebuffer console cursor query (arcfw/arm/fbcon.c), 0-based. Backs
 // AEGetDisplayStatus, the ArcGetDisplayStatus slot the arcdos line editor uses.
 //
 void fbcon_status(unsigned int *col, unsigned int *row,
                   unsigned int *maxcol, unsigned int *maxrow);
 
 //
-// The RAM-disk block device (loader/arm/ramdisk.c) - the ScsiDiskEntryTable analog
+// The RAM-disk block device (arcfw/arm/ramdisk.c) - the ScsiDiskEntryTable analog
 // AEOpen installs for a disk/partition name. RamdiskReadSectors backs the MBR read
 // AEOpen does to find a partition's base LBA.
 //
@@ -533,7 +533,7 @@ AEGetDirectoryEntry(
 }
 
 //
-// AEGetMemoryDescriptor - walk the static MDArray[] built in loader/arm/memory.c
+// AEGetMemoryDescriptor - walk the static MDArray[] built in arcfw/arm/memory.c
 // (verbatim shape of I386/ARCEMUL.C): NULL returns the first descriptor, otherwise
 // the next, NULL past the end.
 //

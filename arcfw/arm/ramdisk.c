@@ -8,7 +8,7 @@
 // The image reaches RAM one of two ways, chosen at build time by RAMDISK_INITRAMFS:
 //
 //   * QEMU (RAMDISK_INITRAMFS=0, default): the image is linked into the loader as a
-//     blob (loader/ramdisk/make-ramdisk.sh -> obj/ramdisk.img, wrapped by the
+//     blob (arcfw/ramdisk/make-ramdisk.sh -> obj/ramdisk.img, wrapped by the
 //     Makefile). objcopy emits it in .rodata; with the MMU off that is ordinary RAM.
 //     QEMU has no Pi firmware to stage an initramfs, so the embedded image is used.
 //

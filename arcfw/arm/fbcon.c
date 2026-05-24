@@ -282,7 +282,7 @@ void fbcon_putc(int c)
 
 //
 // Report the cursor position and screen extent for the ArcGetDisplayStatus backend
-// (loader/arm/arcemul.c). All values are 0-based here; the caller adds 1 to match
+// (arcfw/arm/arcemul.c). All values are 0-based here; the caller adds 1 to match
 // the ARC 1-based convention, exactly as JXDISP.C's FwGetDisplayStatus does.
 //
 void fbcon_status(unsigned int *col, unsigned int *row,

@@ -14,7 +14,7 @@
 
 // ---- argument / configuration / resources ----
 //
-// BlGetArgumentValue is no longer here - ported real in loader/ported/blmisc.c
+// BlGetArgumentValue is no longer here - ported real in arcfw/ported/blmisc.c
 // (the first BOOT/LIB port). OSLOADER calls it before opening the console, so
 // it had to become real for BlOsLoader to get past its first line.
 //
@@ -55,24 +55,24 @@ PCONFIGURATION_COMPONENT_DATA KeFindConfigurationEntry(PCONFIGURATION_COMPONENT_
 // ---- memory / heap ----
 //
 // BlMemoryInitialize and BlAllocateHeap are no longer stubbed - both are ported
-// real in loader/ported/blmemory.c, backed by AEGetMemoryDescriptor over the ARM
-// memory map in loader/arm/memory.c.
+// real in arcfw/ported/blmemory.c, backed by AEGetMemoryDescriptor over the ARM
+// memory map in arcfw/arm/memory.c.
 //
 
 // ---- I/O / filesystem ----
 //
 // BlIoInitialize and BlGetFsInfo are no longer stubbed - both are ported real in
-// loader/ported/blio.c. BlIoInitialize inits the BL_FILE_TABLE and calls the FS
+// arcfw/ported/blio.c. BlIoInitialize inits the BL_FILE_TABLE and calls the FS
 // initializers (FAT will be real once FATBOOT.C is ported; others stubbed silent
 // in fsstub.c).
 //
 
 // ---- image loading / binding ----
 //
-// BlLoadImage is no longer stubbed - ported real in loader/ported/peldr.c (the NT
+// BlLoadImage is no longer stubbed - ported real in arcfw/ported/peldr.c (the NT
 // PE loader). RtlImageNtHeader (also formerly stubbed here) and
 // RtlImageDirectoryEntryToData + the LdrRelocateImage guard are in
-// loader/arm/imageldr.c. BlAllocateDataTableEntry / BlScanImportDescriptorTable
+// arcfw/arm/imageldr.c. BlAllocateDataTableEntry / BlScanImportDescriptorTable
 // stay stubbed: the trimmed kernel handoff (init.c BlArmBootKernel) skips loader
 // data-table entries and import resolution, which a real multi-image boot needs.
 //
@@ -92,7 +92,7 @@ ARC_STATUS BlScanImportDescriptorTable(ULONG DeviceId, PCHAR DeviceName,
     return ENODEV;
 }
 
-// RtlImageNtHeader is no longer stubbed - real in loader/arm/imageldr.c.
+// RtlImageNtHeader is no longer stubbed - real in arcfw/arm/imageldr.c.
 
 // ---- registry / NLS / drivers ----
 
@@ -161,6 +161,6 @@ BOOLEAN BlLastKnownGoodPrompt(PBOOLEAN UseLastKnownGood)
     return TRUE;
 }
 
-// BlSetupForNt is no longer stubbed - real (minimal) in loader/arm/ntsetup.c (the
+// BlSetupForNt is no longer stubbed - real (minimal) in arcfw/arm/ntsetup.c (the
 // ARM analog of BOOT/LIB/MIPS/NTSETUP.C): it allocates the kernel stack the kernel
 // entry switches to.

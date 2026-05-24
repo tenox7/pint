@@ -4,7 +4,7 @@
 //
 // Prototypes/constants the loader references that normally arrive via the full
 // kernel header set (ke.h, ntrtl.h, hal.h) which our minimal ntos.h does not
-// pull in. Signatures match the originals. Implemented in loader/arm/{clib,
+// pull in. Signatures match the originals. Implemented in arcfw/arm/{clib,
 // stubs}.c. Requires the NT type headers (ntimage, arc) first.
 //
 
@@ -24,7 +24,7 @@ VOID RtlInitString(OUT PSTRING DestinationString, IN PCHAR SourceString);
 
 //
 // ntos image helper BlLoadImage (BOOT/LIB/PELDR.C) calls; implemented real in
-// loader/arm/imageldr.c. (LdrRelocateImage is already declared in ntldr.h; the
+// arcfw/arm/imageldr.c. (LdrRelocateImage is already declared in ntldr.h; the
 // imageldr.c guard definition matches that signature.)
 //
 PVOID RtlImageDirectoryEntryToData(IN PVOID Base, IN BOOLEAN MappedAsImage,

@@ -4,7 +4,7 @@
  * references its own strings/data absolutely). The loader copies the blob to
  * exactly this address and jumps to its first byte, so:
  *
- *   0x00400000 MUST equal PAYLOAD_LOAD_BASE in loader/arm/init.c.
+ *   0x00400000 MUST equal PAYLOAD_LOAD_BASE in arcfw/arm/init.c.
  *
  * 4 MiB is clear of the loader (0x10000, <1 MiB) and the loader heap (~0x37FE8000).
  * .text.entry (start.S _pstart) is placed first so the entry is at offset 0 of

@@ -6,7 +6,7 @@
 # needed - it is loaded exactly where it expects to run.
 
 arm_64bit=0
-kernel=loader.bin
+kernel=arcfw.bin
 
 # Stage the FAT disk image in RAM, exactly as an initrd is loaded for Linux: the GPU
 # firmware reads ramdisk.img off this (FAT32) boot partition and places it at 0x00800000

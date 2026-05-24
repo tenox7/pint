@@ -2,10 +2,10 @@ CROSS   ?= arm-linux-gnueabihf-
 CC      := $(CROSS)gcc
 OBJCOPY := $(CROSS)objcopy
 
-ARMDIR    := ../loader/arm
-PORTEDDIR := ../loader/ported
-INCDIR    := ../loader/inc
-PAYLOADDIR := ../loader/payload
+ARMDIR    := ../arcfw/arm
+PORTEDDIR := ../arcfw/ported
+INCDIR    := ../arcfw/inc
+PAYLOADDIR := ../arcfw/payload
 OBJDIR    := ../obj
 
 # Arc disk image source. 0 (default) embeds the FAT image as a blob for QEMU; 1 omits
@@ -15,7 +15,7 @@ OBJDIR    := ../obj
 RAMDISK_INITRAMFS ?= 0
 
 # Freestanding Cortex-A7. NT-source flags: lowercase-named shim headers in
-# loader/inc come first; _ARM_ selects the ARM branches added to the copied NT
+# arcfw/inc come first; _ARM_ selects the ARM branches added to the copied NT
 # headers; _NTSYSTEM_ matches the original bldr build (NTSYSAPI -> empty);
 # -fms-extensions allows the MS-style unnamed nested structs/unions NT uses;
 # unknown-pragma warnings come from leftover MSVC #pragma warning(...) lines;
@@ -38,14 +38,14 @@ CFLAGS  := -mcpu=cortex-a7 -marm -mfloat-abi=soft \
 # address; QEMU honors it via the ELF LMA (the raw .bin is for SD boot). Override
 # with `make TEXT_BASE=0x00010000` to reproduce the earlier QEMU raw -kernel layout.
 TEXT_BASE ?= 0x00008000
-LDFLAGS := -nostdlib -no-pie -Wl,-T,loader.ld -Wl,--defsym,TEXT_BASE=$(TEXT_BASE) \
+LDFLAGS := -nostdlib -no-pie -Wl,-T,arcfw.ld -Wl,--defsym,TEXT_BASE=$(TEXT_BASE) \
            -Wl,--build-id=none -Wl,--no-warn-rwx-segments -Wl,-z,noexecstack
 
 # Handoff-test payload (the serial shell): a standalone freestanding ARM binary,
 # no NT headers. Built, raw-binary'd, then wrapped as a linkable blob object
 # (_binary_payload_bin_{start,end,size}) embedded in the loader. The loader copies
 # it to its link base and jumps. payload.ld's base MUST match PAYLOAD_LOAD_BASE in
-# loader/arm/init.c.
+# arcfw/arm/init.c.
 PCFLAGS  := -mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic \
             -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
             -O2 -Wall -Wextra
@@ -63,24 +63,24 @@ PORTED_OBJS := $(OBJDIR)/osloader.o $(OBJDIR)/blmisc.o $(OBJDIR)/blmemory.o \
                $(OBJDIR)/peldr.o
 OBJS        := $(ARM_OBJS) $(PORTED_OBJS) $(OBJDIR)/payload_blob.o
 # Embed the FAT image blob only for the QEMU build; the initramfs build serves the
-# firmware-staged image from RAM, so the ~6 MiB blob is omitted and loader.bin is tiny.
+# firmware-staged image from RAM, so the ~6 MiB blob is omitted and arcfw.bin is tiny.
 ifeq ($(RAMDISK_INITRAMFS),0)
 OBJS        += $(OBJDIR)/ramdisk_blob.o
 endif
 
 # arcdos.c is written against the ADK ARC API (plain Open/Read/Print, ADK arc.h
 # names) which collide with the loader's NT headers. Compile it in isolation: the
-# self-contained loader/arcdos-inc/ compat header ONLY, never -I$(INCDIR). The
+# self-contained arcfw/arcdos-inc/ compat header ONLY, never -I$(INCDIR). The
 # bridge (arcdos_rt.o, built with the normal CFLAGS) connects the two ABIs.
 ARCDOS_CFLAGS := -mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic \
                  -fms-extensions -fshort-wchar -fno-stack-protector \
                  -fno-unwind-tables -fno-asynchronous-unwind-tables -O2 -Wall \
                  -Wno-unused-parameter -Wno-unused-variable \
                  -Wno-unused-but-set-variable -Wno-parentheses -Wno-pointer-sign \
-                 -MMD -MP -I../loader/arcdos-inc -D_ARM_
+                 -MMD -MP -I../arcfw/arcdos-inc -D_ARM_
 $(OBJDIR)/arcdos.o: CFLAGS := $(ARCDOS_CFLAGS)
 
-all: $(OBJDIR)/loader.bin
+all: $(OBJDIR)/arcfw.bin
 
 # Rebuild every object when RAMDISK_INITRAMFS flips. -MMD -MP tracks header includes but
 # NOT -D flags, so switching the gate (e.g. `./build.sh` then `./build.sh RAMDISK_INITRAMFS=1`)
@@ -129,20 +129,20 @@ $(OBJDIR)/payload_blob.o: $(OBJDIR)/payload.bin
 	cd $(OBJDIR) && $(OBJCOPY) -I binary -O elf32-littlearm -B arm payload.bin payload_blob.o
 
 # --- RAM-disk image (the Arc block device under QEMU) ---
-# obj/ramdisk.img is built OUT OF BAND by loader/ramdisk/make-ramdisk.sh (it needs
+# obj/ramdisk.img is built OUT OF BAND by arcfw/ramdisk/make-ramdisk.sh (it needs
 # mkfs.vfat/mtools, which the arc-rpi-build image lacks). The Makefile only wraps
 # the prebuilt image into a linkable blob (_binary_ramdisk_img_{start,end,size}),
 # run in $(OBJDIR) so no absolute path is baked into the symbol names.
 $(OBJDIR)/ramdisk.img:
-	@echo "ERROR: $@ is missing - build it first: (cd ../loader/ramdisk && ./make-ramdisk.sh)" >&2; exit 1
+	@echo "ERROR: $@ is missing - build it first: (cd ../arcfw/ramdisk && ./make-ramdisk.sh)" >&2; exit 1
 
 $(OBJDIR)/ramdisk_blob.o: $(OBJDIR)/ramdisk.img
 	cd $(OBJDIR) && $(OBJCOPY) -I binary -O elf32-littlearm -B arm ramdisk.img ramdisk_blob.o
 
-$(OBJDIR)/loader.elf: $(OBJS) loader.ld
+$(OBJDIR)/arcfw.elf: $(OBJS) arcfw.ld
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) -o $@
 
-$(OBJDIR)/loader.bin: $(OBJDIR)/loader.elf
+$(OBJDIR)/arcfw.bin: $(OBJDIR)/arcfw.elf
 	$(OBJCOPY) -O binary $< $@
 
 clean:

@@ -4,7 +4,7 @@
 #include <stdarg.h>
 
 //
-// Freestanding <stdio.h> subset for the loader. Implemented in loader/arm/clib.c.
+// Freestanding <stdio.h> subset for the loader. Implemented in arcfw/arm/clib.c.
 // Only the formatting the NT loader needs (%c %s %d/%u/%x/%lx, width/zero pad).
 //
 

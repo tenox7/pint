@@ -4,7 +4,7 @@
 // The x86 BlStartup parses boot.ini, runs NTDETECT, and builds the ARC argument
 // vector (PARSBOOT.C). None of that machinery is PC-portable, so this
 // synthesizes a well-formed argument vector directly and calls the common,
-// arch-independent BlOsLoader (loader/ported/osloader.c). The console, memory,
+// arch-independent BlOsLoader (arcfw/ported/osloader.c). The console, memory,
 // and halt firmware vectors are live, so BlOsLoader opens the console,
 // initializes the loader heap + memory descriptor list, and runs until it hits
 // the still-stubbed storage/filesystem path.
@@ -30,11 +30,11 @@ extern unsigned int fb_width, fb_height;
 // USB host bring-up (Phase 3 - read a USB keyboard). Reports over the console.
 int usb_init(void);
 
-// ARC DOS shell (loader/ported/arcdos.c) - an interactive ARC file/command shell
+// ARC DOS shell (arcfw/ported/arcdos.c) - an interactive ARC file/command shell
 // running on the emulated firmware vector, the HDMI console, and the USB keyboard.
 int ArcDosMain(void);
 
-// BCM2835 system timer (loader/arm/timer.c) - used to bound the console echo test.
+// BCM2835 system timer (arcfw/arm/timer.c) - used to bound the console echo test.
 unsigned int timer_us(void);
 
 //
@@ -71,7 +71,7 @@ static PCHAR BlArmArgv[] = {
 //
 // Handoff smoke test. The loader's endgame is to load code and jump to it. No NT
 // ARM kernel exists, so this copies an embedded stand-in payload (a minimal serial
-// shell, loader/payload/) to a fixed RAM address and transfers control - proving
+// shell, arcfw/payload/) to a fixed RAM address and transfers control - proving
 // the mechanism independently of the filesystem. Set SMOKE_HANDOFF to 0 to restore
 // the normal BlOsLoader path. See ARCHITECTURE.md for the rationale.
 //
@@ -138,7 +138,7 @@ BlArmSmokeHandoff(VOID)
 
 //
 // Load and boot the NT kernel (M3 - the loader's endgame). PE-loads the stand-in
-// kernel (loader/kernel/, packaged on the Arc disk as \OS\NTOSKRNL.EXE) via the real
+// kernel (arcfw/kernel/, packaged on the Arc disk as \OS\NTOSKRNL.EXE) via the real
 // BOOT/LIB PE loader, builds the kernel stack, and transfers control with r0 = the
 // LOADER_PARAMETER_BLOCK - the same handoff osloader.c:792 performs on MIPS/Alpha.
 // Unlike the full BlOsLoader path it skips HAL load, import resolution, NLS, the
@@ -273,7 +273,7 @@ BlArmRamdiskTest(VOID)
 #define KERNEL_DEVICE "multi(0)disk(0)rdisk(0)partition(1)"
 #define KERNEL_FILE   "\\OS\\NTOSKRNL.EXE"
 
-// BlLoaderBlock is built + owned by BlMemoryInitialize (loader/ported/blmemory.c).
+// BlLoaderBlock is built + owned by BlMemoryInitialize (arcfw/ported/blmemory.c).
 extern PLOADER_PARAMETER_BLOCK BlLoaderBlock;
 
 // The kernel entry contract (osloader.c PTRANSFER_ROUTINE / KE/MIPS X4START.S):
@@ -337,7 +337,7 @@ BlArmBootKernel(VOID)
 
     //
     // Arch setup before the jump (osloader.c:779) - allocates the kernel stack the
-    // entry switches to (loader/arm/ntsetup.c).
+    // entry switches to (arcfw/arm/ntsetup.c).
     //
     Status = BlSetupForNt(BlLoaderBlock);
     if (Status != ESUCCESS) {
@@ -397,11 +397,11 @@ BlArmBootMenu(VOID)
     BOOLEAN haveConsole;
 
     BlPrint("\n");
-    BlPrint("============== NT ARC Loader - boot menu ==============\n");
+    BlPrint("===== NT 3.5 ARC Firmware Emulator - boot menu =====\n");
     BlPrint("  [1] Boot NT kernel   \\OS\\NTOSKRNL.EXE   (default)\n");
     BlPrint("  [2] ARC DOS shell\n");
-    BlPrint("  [3] BlOsLoader       (full OS load path)\n");
-    BlPrint("=======================================================\n");
+    BlPrint("  [3] OS Loader        (BlOsLoader - full NT load path)\n");
+    BlPrint("====================================================\n");
 
     haveConsole = (BOOLEAN)(ArcOpen("multi(0)serial(0)", ArcOpenReadOnly, &fid) == ESUCCESS);
 
@@ -512,7 +512,7 @@ BlStartup(
     RamdiskInit();
     BlArmFixupMemoryMap();
 
-    BlPrint("\nNT OS Loader (ARM32 / Raspberry Pi 2)\n");
+    BlPrint("\nNT 3.5 ARC Firmware Emulator (ARM32 / Raspberry Pi 2)\n");
     BlPrint("Loaded from: %s\n", PartitionName ? PartitionName : "(unknown)");
 
 #if RAMDISK_TEST

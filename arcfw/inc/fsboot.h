@@ -30,7 +30,7 @@ typedef struct _OFS_FILE_CONTEXT  { UCHAR Opaque[FS_CTX_PLACEHOLDER_BYTES]; } OF
 //
 // FS init prototypes BlIoInitialize calls. (The Is*FileStructure detectors are
 // declared in bldr.h; FatInitialize is declared in fatboot.h.) The non-FAT ones are
-// stubbed in loader/arm/fsstub.c: succeed silently, registering no filesystem.
+// stubbed in arcfw/arm/fsstub.c: succeed silently, registering no filesystem.
 //
 ARC_STATUS HpfsInitialize(VOID);
 ARC_STATUS NtfsInitialize(VOID);

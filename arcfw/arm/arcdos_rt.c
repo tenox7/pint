@@ -1,5 +1,5 @@
 //
-// arcdos runtime bridge. arcdos.c (loader/ported/arcdos.c) is written against the
+// arcdos runtime bridge. arcdos.c (arcfw/ported/arcdos.c) is written against the
 // ADK ARC/vendor API - plain Open/Read/Write/Print/StallExecution/... - which the
 // real ADK backed with a precompiled, Alpha-only adk.lib. This file supplies that
 // API for the ARM loader by forwarding to the emulated ARC firmware vector.
@@ -107,7 +107,7 @@ int printf(const char *Format, ...)
 
 //
 // StallExecution - busy-wait the requested microseconds over the BCM2835 system
-// timer (loader/arm/timer.c). arcdos uses it for the escape-key debounce (10 ms)
+// timer (arcfw/arm/timer.c). arcdos uses it for the escape-key debounce (10 ms)
 // and the exit message pause (4 s); split on the ms boundary so neither path
 // overflows the µs counter.
 //

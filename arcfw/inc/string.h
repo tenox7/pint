@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 //
-// Freestanding <string.h> for the loader. Implemented in loader/arm/clib.c.
+// Freestanding <string.h> for the loader. Implemented in arcfw/arm/clib.c.
 // Includes the Win32-spelled case-insensitive helpers (stricmp/strnicmp) the
 // NT loader uses, which POSIX spells strcasecmp/strncasecmp.
 //

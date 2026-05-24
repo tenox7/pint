@@ -5,7 +5,7 @@
 // detectors report "not my filesystem" (NULL).
 //
 // FAT itself is now REAL: FatInitialize and IsFatFileStructure live in the ported
-// loader/ported/fatboot.c (M2c) and are NOT stubbed here.
+// arcfw/ported/fatboot.c (M2c) and are NOT stubbed here.
 //
 // Signatures match the declarations in bldr.h (Is*FileStructure) and fsboot.h
 // (the *Initialize routines); the detector StructureContext arg is PVOID there.

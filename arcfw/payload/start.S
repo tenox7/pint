@@ -2,7 +2,7 @@
 @ stand-in; see shell.c and ARCHITECTURE.md).
 @
 @ The loader copies the payload blob to its link/load base (build/payload.ld,
-@ which MUST match PAYLOAD_LOAD_BASE in loader/arm/init.c) and jumps here in ARM
+@ which MUST match PAYLOAD_LOAD_BASE in arcfw/arm/init.c) and jumps here in ARM
 @ mode. This sets up a stack, zeroes BSS, and calls shell_main(). Entry is at
 @ offset 0 of the .bin via the .text.entry section, placed first by payload.ld.
 

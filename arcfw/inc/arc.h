@@ -1220,7 +1220,7 @@ extern SYSTEM_PARAMETER_BLOCK GlobalSystemBlock;
 
 //
 // ARM port: like x86, the Raspberry Pi has no ARC ROM firmware. The loader
-// emulates the firmware vector in its own memory (see loader/arm/arcemul.c),
+// emulates the firmware vector in its own memory (see arcfw/arm/arcemul.c),
 // so SYSTEM_BLOCK resolves to an ordinary global rather than a fixed ROM
 // address.
 //

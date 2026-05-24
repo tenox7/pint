@@ -45,7 +45,7 @@ Revision History:
 //
 // ARM loader port: the ADK headers above (arc.h/vendor.h/errno.h/stdlib.h/stdio.h/
 // string.h) are replaced by one self-contained compat header. arcdos.c is otherwise
-// verbatim. See loader/arcdos-inc/arcdos_compat.h and loader/arm/arcdos_rt.c.
+// verbatim. See arcfw/arcdos-inc/arcdos_compat.h and arcfw/arm/arcdos_rt.c.
 //
 #include "arcdos_compat.h"
 

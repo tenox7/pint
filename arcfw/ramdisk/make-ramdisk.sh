@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the FAT disk image the loader serves as its Arc disk. The file contents are a
-# real, editable source tree at loader/ramdisk/root/ - EDIT FILES THERE, then re-run
+# real, editable source tree at arcfw/ramdisk/root/ - EDIT FILES THERE, then re-run
 # this script. (This is also where future kernel-build output should be placed, e.g.
 # root/OS/NTOSKRNL.EXE, so it gets packaged into the image.)
 #
@@ -20,7 +20,7 @@
 # SD card by sdcard/make-sd-image.sh for real HW). Run in Docker like make-sd-image.sh;
 # the arc-rpi-build image has no mkfs.vfat.
 #
-# Usage:  cd ARM32/loader/ramdisk && ./make-ramdisk.sh
+# Usage:  cd ARM32/arcfw/ramdisk && ./make-ramdisk.sh
 set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,8 +35,8 @@ need docker
 mkdir -p ../../obj
 ARM32ROOT="$(cd ../.. && pwd)"
 
-echo ">> assembling $IMG (MBR + FAT16 partition from loader/ramdisk/root/) in Docker"
-docker run --rm -v "$ARM32ROOT":/work -w /work/loader/ramdisk \
+echo ">> assembling $IMG (MBR + FAT16 partition from arcfw/ramdisk/root/) in Docker"
+docker run --rm -v "$ARM32ROOT":/work -w /work/arcfw/ramdisk \
   -e IMG="/work/obj/ramdisk.img" -e SIZE_MB="$SIZE_MB" -e PART_START="$PART_START" \
   debian:bookworm bash -c '
 set -e
@@ -44,12 +44,12 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq dosfstools mtools fdisk >/dev/null
 
-# The FAT volume contents are a REAL editable tree at loader/ramdisk/root/ (mounted
-# here at /work/loader/ramdisk/root), not generated inline - edit/add files there and
+# The FAT volume contents are a REAL editable tree at arcfw/ramdisk/root/ (mounted
+# here at /work/arcfw/ramdisk/root), not generated inline - edit/add files there and
 # re-run this script. 8.3 names only (FATBOOT.C has no VFAT/long names). This is what
 # arcdos "dir"/"type" lists and reads, and where future kernel-build output should land
 # (e.g. root/OS/NTOSKRNL.EXE). Fail loudly if it is missing or empty.
-SRCROOT=/work/loader/ramdisk/root
+SRCROOT=/work/arcfw/ramdisk/root
 [ -d "$SRCROOT" ] && [ -n "$(ls -A "$SRCROOT" 2>/dev/null)" ] || \
   { echo "ERROR: $SRCROOT is missing or empty - it holds the disk files"; exit 1; }
 

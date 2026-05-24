@@ -11,7 +11,7 @@
 //
 // The loader needs only: the base NT types, the PE image format, the loader
 // data-table entry, and the ARC firmware contract. We include exactly those.
-// All headers here are lowercase-named copies under loader/inc so the build is
+// All headers here are lowercase-named copies under arcfw/inc so the build is
 // case-correct on Linux (Docker) where the original UPPERCASE.H names and the
 // lowercase #include "..." spellings would not match.
 //
