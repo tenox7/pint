@@ -61,7 +61,7 @@ ARM_OBJS    := $(OBJDIR)/start.o $(OBJDIR)/uart.o $(OBJDIR)/main.o \
 PORTED_OBJS := $(OBJDIR)/osloader.o $(OBJDIR)/blmisc.o $(OBJDIR)/blmemory.o \
                $(OBJDIR)/blio.o $(OBJDIR)/fatboot.o $(OBJDIR)/arcdos.o \
                $(OBJDIR)/peldr.o
-OBJS        := $(ARM_OBJS) $(PORTED_OBJS) $(OBJDIR)/payload_blob.o
+OBJS        := $(ARM_OBJS) $(PORTED_OBJS) $(OBJDIR)/payload_blob.o $(OBJDIR)/font_blob.o
 # Embed the FAT image blob only for the QEMU build; the initramfs build serves the
 # firmware-staged image from RAM, so the ~6 MiB blob is omitted and arcfw.bin is tiny.
 ifeq ($(RAMDISK_INITRAMFS),0)
@@ -127,6 +127,24 @@ $(OBJDIR)/payload.bin: $(OBJDIR)/payload.elf
 # are the stable _binary_payload_bin_{start,end,size} (no absolute path baked in).
 $(OBJDIR)/payload_blob.o: $(OBJDIR)/payload.bin
 	cd $(OBJDIR) && $(OBJCOPY) -I binary -O elf32-littlearm -B arm payload.bin payload_blob.o
+
+# --- OEM font for the kernel-side HAL display (jxdisp.c) ---
+# mkfont.py turns the 8x8 bitmaps in font8x8.h into an OEM_FONT_FILE_HEADER blob
+# (the .FNT layout HalpInitializeDisplay0/HalpOutputCharacter read). The loader embeds
+# it and hands the kernel a pointer via LoaderBlock->OemFontFile, exactly as the OS
+# loader supplies the font on MIPS/Alpha. Wrapped in $(OBJDIR) for stable symbols
+# _binary_font_fon_{start,end,size}. Needs python3 (present in arc-rpi-build).
+$(OBJDIR)/font.fon: $(ARMDIR)/mkfont.py $(ARMDIR)/font8x8.h
+	python3 $(ARMDIR)/mkfont.py $(ARMDIR)/font8x8.h $@
+
+# --set-section-alignment 16: the kernel runs MMU-off, where ARMv7 treats memory as
+# Strongly-ordered and faults EVERY unaligned LDRH/LDR regardless of SCTLR.A. The HAL
+# reads the OEM header's USHORT fields (PixelWidth@86, PixelHeight@88, Map@118 - all
+# even offsets) with LDRH, so the blob must start at an even address; a byte-aligned
+# binary import lands it odd and the first font read data-aborts. 16 gives margin.
+$(OBJDIR)/font_blob.o: $(OBJDIR)/font.fon
+	cd $(OBJDIR) && $(OBJCOPY) -I binary -O elf32-littlearm -B arm \
+		--set-section-alignment .data=16 font.fon font_blob.o
 
 # --- RAM-disk image (the Arc block device under QEMU) ---
 # obj/ramdisk.img is built OUT OF BAND by arcfw/ramdisk/make-ramdisk.sh (it needs

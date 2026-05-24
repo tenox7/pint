@@ -14,7 +14,11 @@
  * .text.entry (start.S _KiSystemStartup) is first so the entry is at the section
  * start (RVA 0x1000). The image must be .bss-free: peldr loads no zero-fill region
  * for us (mkpe sets VirtualSize == SizeOfRawData), and make-kernel.sh asserts .bss
- * is empty.
+ * is empty. The ported HAL display code (jxdisp.c) has ~14 zero-initialized globals,
+ * so rather than force each into .data with a dummy initializer, .bss and COMMON are
+ * folded INTO the .data output section here: placing NOBITS input sections inside a
+ * PROGBITS output section makes ld emit them as zero bytes in the file image, so they
+ * load correctly, `size` reports a zero .bss, and the assert + mkpe stay happy.
  */
 ENTRY(_KiSystemStartup)
 
@@ -24,13 +28,14 @@ SECTIONS
 
     .text   : { *(.text.entry) *(.text*) }
     .rodata : { *(.rodata*) }
-    .data   : { *(.data*) }
-
-    . = ALIGN(8);
-    __bss_start = .;
-    .bss : { *(.bss*) *(COMMON) }
-    . = ALIGN(8);
-    __bss_end = .;
+    .data   : {
+        *(.data*)
+        . = ALIGN(8);
+        __bss_start = .;
+        *(.bss*) *(COMMON)
+        . = ALIGN(8);
+        __bss_end = .;
+    }
 
     /DISCARD/ : { *(.comment) *(.note*) *(.ARM.attributes) }
 }

@@ -1607,13 +1607,29 @@ typedef struct _ALPHA_LOADER_BLOCK {
 //
 // ARM port (not in the original NT 3.5 arc.h). The MIPS/Alpha blocks carry the
 // arch state their kernels need at entry (GpBase, PCR/PDR pages, page-table
-// pointers). The stand-in ARM kernel runs MMU-off and needs none of that yet, so
-// this is a placeholder; real fields (e.g. a TTBR/PCR page) arrive with a real
-// ARM kernel. Kept smaller than MIPS/Alpha so it does not change the union size,
-// hence the offset of KernelStack and the other arch-independent fields.
+// pointers). The stand-in ARM kernel runs MMU-off and needs none of that yet.
+//
+// The framebuffer fields are how the OS loader hands the kernel its console
+// display. On MIPS/Alpha the kernel's HAL re-derives the video geometry by walking
+// the ARC configuration tree and re-programs the controller (NTHALS/.../JXDISP.C
+// HalpInitializeDisplay0). The RPi2 has no such ARC video node and its VideoCore
+// framebuffer is already allocated + configured by the firmware emulator (fb.c via
+// the mailbox), so we pass the granted geometry straight through here and the
+// kernel-side HalpInitializeDisplay0 consumes it instead of re-detecting. FrameBuffer
+// is an ARM-physical address (MMU off => usable directly); PixelOrder is fb.c's
+// PIXORDER_RGB/BGR so the kernel packs colors the way the VC granted.
+//
+// The union is the last member of LOADER_PARAMETER_BLOCK, so growing this block does
+// not move KernelStack or any other arch-independent field (start.S still reads
+// KernelStack at offset 24).
 //
 typedef struct _ARM_LOADER_BLOCK {
     ULONG Reserved;
+    ULONG FrameBuffer;
+    ULONG FrameBufferWidth;
+    ULONG FrameBufferHeight;
+    ULONG FrameBufferPitch;
+    ULONG FrameBufferPixelOrder;
 } ARM_LOADER_BLOCK, *PARM_LOADER_BLOCK;
 
 struct _SETUP_LOADER_BLOCK;

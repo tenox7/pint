@@ -14,6 +14,13 @@
 .arm
 .global _KiSystemStartup
 _KiSystemStartup:
+    @ Note on alignment: the HAL display code (jxdisp.c) reads the OEM font header's
+    @ USHORT fields with LDRH. We do NOT clear SCTLR.A here on purpose - it would be a
+    @ no-op. With the MMU off (as the kernel runs), memory is Strongly-ordered and
+    @ unaligned LDRH/LDR fault REGARDLESS of SCTLR.A; the A bit only relaxes Normal
+    @ memory. The fix is to keep those reads aligned: the loader embeds the font blob
+    @ 16-byte aligned (build/Makefile --set-section-alignment) so every field the HAL
+    @ reads lands >=2-byte aligned. See CLAUDE.md "MMU-off unaligned" gotcha.
     ldr     sp, [r0, #24]            @ sp = LoaderBlock->KernelStack (top; grows down)
     bl      KiSystemStartupC         @ r0 still = LoaderBlock (ldr left it intact)
 1:  wfi                              @ KiSystemStartupC does not return

@@ -1,36 +1,41 @@
 //
 // Stand-in NT kernel for the ARM32 / Raspberry Pi 2 port - the "tiny bit of a
-// kernel, enough to say hello world or less" that the OS loader hands off to.
+// kernel, enough to say hello world" the OS loader hands off to.
 //
-// This is NOT the real ntoskrnl - NT 3.5 was never built for ARM, so there is no
-// kernel to load. It is the minimal image that proves the loader's endgame: the
-// loader reads this PE off the (FAT) Arc disk via the real BOOT/LIB PE loader
-// (peldr.c BlLoadImage), maps it, and enters it at KiSystemStartup with r0 = the
-// LOADER_PARAMETER_BLOCK - the same contract KE/MIPS/X4START.S + INITKR.C use.
+// This is NOT a full ntoskrnl - NT 3.5 was never built for ARM, so there is no
+// kernel to load, and the real KiInitializeKernel -> ExpInitializeExecutive chain
+// pulls in the entire executive (PCR/PRCB/Mm/Ob/Ps/...). What IS real here is the
+// output path: kernel.c reaches the kernel exactly as KE/MIPS/X4START.S does (PE
+// loaded by the OS loader's peldr.c, entered at KiSystemStartup with r0 = the
+// LOADER_PARAMETER_BLOCK), then prints "hello world" on the HDMI framebuffer through
+// the genuine NT HAL routine HalDisplayString (arcfw/kernel/jxdisp.c, ported from
+// NTHALS/.../JXDISP.C) using the font + framebuffer the OS loader supplied.
 //
-// To keep it dependency-free it talks straight to the PL011 the loader already
-// initialized (the JAZZ-video / HalDisplayString console path is the next
-// milestone, not hello-world). It mirrors KiInitializeKernel's first acts: save
-// the loader block, then prove the handoff carried real data across by walking
-// the memory-descriptor list the loader built and echoing a passed-in string.
+// Two output sinks, kept distinct:
+//   - PL011 serial: a debug breadcrumb (the KdPrint/kernel-debugger analog) that
+//     proves the handoff carried real data across - the loader block pointer, the
+//     kernel stack, the memory-descriptor list, the passed LoadOptions. Visible on
+//     GPIO14/15 and to the headless QEMU serial check.
+//   - HDMI framebuffer: "hello world" rendered by the real HAL display path.
 //
-// Freestanding ARMv7, no libc, no .bss (the one global is non-zero-initialized so
-// it lands in .data; mkpe.py loads no zero-fill region). Runs MMU-off at its link
-// address 0x01001000, on the kernel stack BlSetupForNt allocated.
+// Freestanding ARMv7, no libc. Zero-initialized globals (the HAL display state in
+// jxdisp.c) are folded into .data by kernel.ld so the image still carries no .bss
+// zero-fill region (mkpe.py emits none). Runs MMU-off at its link address 0x01001000,
+// on the kernel stack BlSetupForNt allocated.
 //
 
-typedef unsigned int u32;
+#include "kernel.h"
 
 #define UART0   0x3F201000u
-#define UART_DR (*(volatile u32 *)(UART0 + 0x00))
-#define UART_FR (*(volatile u32 *)(UART0 + 0x18))
+#define UART_DR (*(volatile ULONG *)(UART0 + 0x00))
+#define UART_FR (*(volatile ULONG *)(UART0 + 0x18))
 #define FR_TXFF 0x20u
 
 static void kputc(int c)
 {
     while (UART_FR & FR_TXFF)
         ;
-    UART_DR = (u32)(unsigned char)c;
+    UART_DR = (ULONG)(unsigned char)c;
 }
 
 static void kputs(const char *s)
@@ -42,7 +47,7 @@ static void kputs(const char *s)
     }
 }
 
-static void kputhex(u32 v)
+static void kputhex(ULONG v)
 {
     static const char digits[] = "0123456789abcdef";
     int i;
@@ -52,58 +57,32 @@ static void kputhex(u32 v)
 }
 
 //
-// Just the prefix of LOADER_PARAMETER_BLOCK (arc.h) that we read. ARM is ILP32 /
-// little-endian like the loader, so the layout matches byte-for-byte; KernelStack
-// is at offset 24 (three 8-byte LIST_ENTRYs precede it) - the same offset
-// start.S loads sp from.
-//
-typedef struct _LE {
-    struct _LE *Flink;
-    struct _LE *Blink;
-} LE;
-
-typedef struct _LPB {
-    LE    LoadOrderListHead;
-    LE    MemoryDescriptorListHead;
-    LE    BootDriverListHead;
-    u32   KernelStack;
-    u32   Prcb;
-    u32   Process;
-    u32   Thread;
-    u32   RegistryLength;
-    void *RegistryBase;
-    void *ConfigurationRoot;
-    char *ArcBootDeviceName;
-    char *ArcHalDeviceName;
-    char *NtBootPathName;
-    char *NtHalPathName;
-    char *LoadOptions;
-} LPB;
-
-//
 // KiInitializeKernel's "save the address of the loader parameter block" (INITKR.C).
-// Initialized non-zero so it is emitted in .data, keeping the image .bss-free.
 //
-void *KeLoaderBlock = (void *)0xffffffffu;
+PVOID KeLoaderBlock;
 
 void
-KiSystemStartupC(void *LoaderBlock)
+KiSystemStartupC(void *LoaderBlockPtr)
 {
-    LPB *lpb = (LPB *)LoaderBlock;
-    LE *e;
+    PLOADER_PARAMETER_BLOCK LoaderBlock = (PLOADER_PARAMETER_BLOCK)LoaderBlockPtr;
+    PLIST_ENTRY head, e;
     int descriptors = 0;
 
-    KeLoaderBlock = LoaderBlock;
+    KeLoaderBlock = LoaderBlockPtr;
 
+    //
+    // Serial breadcrumb: confirm the handoff and the integrity of the data the
+    // loader block points at, before touching the framebuffer.
+    //
     kputs("\n\n*** NTOSKRNL (ARM32 / Raspberry Pi 2) - KiSystemStartup ***\n");
     kputs("Reached the kernel via the OS loader's PE-load + handoff.\n\n");
 
     kputs("  LoaderBlock = ");
-    kputhex((u32)(unsigned long)LoaderBlock);
+    kputhex((ULONG)(unsigned long)LoaderBlock);
     kputc('\n');
 
     kputs("  KernelStack = ");
-    kputhex(lpb->KernelStack);
+    kputhex(LoaderBlock->KernelStack);
     kputs("  (sp set here by start.S)\n");
 
     //
@@ -111,20 +90,41 @@ KiSystemStartupC(void *LoaderBlock)
     // non-zero count across the handoff proves the loader block's lists arrived
     // intact - the data contract, not just the control transfer.
     //
-    for (e = lpb->MemoryDescriptorListHead.Flink;
-         e != &lpb->MemoryDescriptorListHead;
-         e = e->Flink) {
+    head = &LoaderBlock->MemoryDescriptorListHead;
+    for (e = head->Flink; e != head; e = e->Flink) {
         if (++descriptors > 4096)
             break;
     }
     kputs("  memory descriptors handed over: ");
-    kputhex((u32)descriptors);
+    kputhex((ULONG)descriptors);
     kputc('\n');
 
-    if (lpb->LoadOptions) {
+    if (LoaderBlock->LoadOptions) {
         kputs("  LoadOptions = \"");
-        kputs(lpb->LoadOptions);
+        kputs((const char *)LoaderBlock->LoadOptions);
         kputs("\"\n");
+    }
+
+    kputs("  OemFontFile = ");
+    kputhex((ULONG)(unsigned long)LoaderBlock->OemFontFile);
+    kputs("   FrameBuffer = ");
+    kputhex(LoaderBlock->Arm.FrameBuffer);
+    kputc('\n');
+
+    //
+    // Real NT HAL display path -> HDMI. HalpInitializeDisplay0 takes the font from
+    // LoaderBlock->OemFontFile and the framebuffer geometry from the loader block,
+    // then HalDisplayString renders through the ported HalpOutputCharacter glyph
+    // blitter (jxdisp.c). This is the "hello world" the user sees on the monitor.
+    //
+    if (HalpInitializeDisplay0(LoaderBlock)) {
+        HalDisplayString((PUCHAR)"Microsoft (R) Windows NT (TM)  -  ARM32 / Raspberry Pi 2\n");
+        HalDisplayString((PUCHAR)"OS Loader handed off to NTOSKRNL via KiSystemStartup.\n");
+        HalDisplayString((PUCHAR)"\n");
+        HalDisplayString((PUCHAR)"hello world\n");
+        kputs("\n  HalDisplayString: rendered \"hello world\" to the framebuffer (HDMI).\n");
+    } else {
+        kputs("\n  HalpInitializeDisplay0: no framebuffer/font from loader - serial only.\n");
     }
 
     kputs("\nhello world\n\n");

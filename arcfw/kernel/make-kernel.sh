@@ -30,17 +30,20 @@ mkdir -p "$OUT"
 
 ${CROSS}gcc $CFLAGS -c start.S  -o "$OUT/k_start.o"
 ${CROSS}gcc $CFLAGS -c kernel.c -o "$OUT/k_kernel.o"
+${CROSS}gcc $CFLAGS -c jxdisp.c -o "$OUT/k_jxdisp.o"
 ${CROSS}gcc $CFLAGS -nostdlib -no-pie -Wl,-T,kernel.ld \
         -Wl,--build-id=none -Wl,--no-warn-rwx-segments -Wl,-z,noexecstack \
-        "$OUT/k_start.o" "$OUT/k_kernel.o" -o "$OUT/kernel.elf"
+        "$OUT/k_start.o" "$OUT/k_kernel.o" "$OUT/k_jxdisp.o" -o "$OUT/kernel.elf"
 
 # The PE carries no zero-fill region (mkpe sets VirtualSize == SizeOfRawData), so a
 # non-empty .bss would be uninitialized garbage at run time. Fail loudly if present.
+# kernel.ld folds .bss/COMMON into .data (emitted as zero bytes in the image), so a
+# correctly built kernel reports 0 here even though jxdisp.c has zero-init globals.
 # (size prints text/data/bss in decimal; the 3rd column of the data line is .bss.)
 bss=$(${CROSS}size "$OUT/kernel.elf" | awk "NR==2 {print \$3}")
 bss=${bss:-0}
 if [ "$bss" -ne 0 ]; then
-    echo "ERROR: kernel .bss is $bss bytes (must be 0 - initialize all globals non-zero)"; exit 1
+    echo "ERROR: kernel .bss is $bss bytes (must be 0 - check kernel.ld .bss->.data fold)"; exit 1
 fi
 
 ${CROSS}objcopy -O binary "$OUT/kernel.elf" "$OUT/kernel.bin"

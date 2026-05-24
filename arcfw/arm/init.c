@@ -25,7 +25,13 @@ VOID RamdiskInit(VOID);
 // ArcWrite byte appears on both the serial line and the monitor.
 int fb_init(void);
 void fbcon_init(void);
-extern unsigned int fb_width, fb_height;
+extern unsigned int *fb_base;
+extern unsigned int fb_width, fb_height, fb_pitch, fb_order;
+
+// OEM font blob embedded by the Makefile (font_blob.o, from arcfw/arm/mkfont.py).
+// Handed to the kernel via LoaderBlock->OemFontFile for its HAL display (jxdisp.c),
+// the way the OS loader supplies the font on MIPS/Alpha.
+extern unsigned char _binary_font_fon_start[];
 
 // USB host bring-up (Phase 3 - read a USB keyboard). Reports over the console.
 int usb_init(void);
@@ -350,6 +356,20 @@ BlArmBootKernel(VOID)
     // (and the data it points at) crossed the handoff intact.
     //
     BlLoaderBlock->LoadOptions = "BOOT_KERNEL ARM hello";
+
+    //
+    // Hand the kernel its console: the OEM font (so the kernel HAL's HalDisplayString
+    // has glyphs) and the VideoCore framebuffer geometry the firmware emulator got from
+    // the mailbox. This is the OemFontFile + ARM video contract the kernel-side
+    // HalpInitializeDisplay0 (arcfw/kernel/jxdisp.c) consumes - the MIPS/Alpha analog
+    // is the OS loader filling OemFontFile + the kernel HAL re-detecting video via ARC.
+    //
+    BlLoaderBlock->OemFontFile = (PVOID)_binary_font_fon_start;
+    BlLoaderBlock->u.Arm.FrameBuffer = (ULONG)(unsigned long)fb_base;
+    BlLoaderBlock->u.Arm.FrameBufferWidth = fb_width;
+    BlLoaderBlock->u.Arm.FrameBufferHeight = fb_height;
+    BlLoaderBlock->u.Arm.FrameBufferPitch = fb_pitch;
+    BlLoaderBlock->u.Arm.FrameBufferPixelOrder = fb_order;
 
     BlPrint("  image @ 0x%lx  entry 0x%lx  kernelstack 0x%lx\n",
             (unsigned long)KernelBase, (unsigned long)KernelEntry,
