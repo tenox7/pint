@@ -1,68 +1,100 @@
 #!/usr/bin/env bash
-# Build the NT kernel and wrap it as a PE the OS loader can load.
+# Build the REAL KE/ARM NT kernel and wrap it as NTOSKRNL.EXE for the OS loader.
 #
-# Output: arcfw/ramdisk/root/OS/NTOSKRNL.EXE - a real PE32 (machine 0x1c0, ARM).
-# Run this BEFORE make-ramdisk.sh so the PE is packaged into the FAT image the
-# loader reads. Pipeline (all in the arc-rpi-build Docker - no host toolchain):
+# Output: arcfw/ramdisk/root/WINNT/System32/{NTOSKRNL.EXE,HAL.DLL}. Run this
+# BEFORE make-ramdisk.sh so the PE is packaged into the FAT image the loader reads.
 #
-#   start.S + kernel.c  --gcc-->  kernel.elf  --objcopy-->  kernel.bin (flat)
-#   kernel.bin          --mkpe.py (PE32 wrapper)-->  NTOSKRNL.EXE
+# The kernel is the genuine NT KiInitializeKernel (ke/initkr.c, ported from
+# KE/MIPS/INITKR.C) plus the real KE/ARM arch glue (ke/{kearm,ctxsw,timindex}.c,
+# ke/{armstart,interlock,ctxsw}.S) and the real portable KE objects compiled
+# as-is for _ARM_ (KERNLDAT/KIINIT/PROCOBJ/THREDOBJ/.../WAIT/QUEUEOBJ). It runs
+# the real PCR/PRCB/idle-process/idle-thread initialization and halts at the
+# ExpInitializeExecutive boundary (the executive is not yet ported). The HAL
+# display (jxdisp.c) renders the init report on the framebuffer.
 #
-# The arm-linux-gnueabihf binutils has no PE backend (ELF only), so mkpe.py
-# hand-builds the PE headers; peldr.c (the real BOOT/LIB PE loader) reads it.
+# Method (see memory nt35-ke-arm-headers): the build mounts the nt35 tree, builds
+# an in-container lowercase header farm of the real NT headers (Docker's mount is
+# case-sensitive), reuses the loader's _ARM_-adjusted inc/ (ntdef.h/ntshim.h/...),
+# generates bugcodes.h from NLS/BUGCODES.MC, and adds _ARM_ to the all-RISC arch
+# gates. Links with --gc-sections rooted at KiSystemStartup. binutils has no PE
+# backend, so mkpe.py hand-builds the PE headers.
 #
 # Usage:  cd ARM32/arcfw/kernel && ./make-kernel.sh
 set -euo pipefail
-
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ARM32ROOT="$(cd ../.. && pwd)"
+NT35="$(cd ../../.. && pwd)"
 IMAGE="${IMAGE:-arc-rpi-build:latest}"
 
-echo ">> building kernel + wrapping as NTOSKRNL.EXE (Docker: $IMAGE)"
-docker run --rm -v "$ARM32ROOT":/work -w /work/arcfw/kernel "$IMAGE" bash -c '
+echo ">> building the real KE/ARM kernel -> NTOSKRNL.EXE (Docker: $IMAGE)"
+docker run --rm -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
 set -e
 CROSS=arm-linux-gnueabihf-
-CFLAGS="-mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic \
-        -fno-builtin -fno-stack-protector -fno-unwind-tables \
-        -fno-asynchronous-unwind-tables -O2 -Wall -Wextra"
-OUT=/work/obj
-mkdir -p "$OUT"
+RISC_SED="/^[[:space:]]*#(if|elif)/{/_MIPS_/{/_ALPHA_/{/_PPC_/s/\$/ || defined(_ARM_)/}}}"
+mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||continue; \
+          b=$(basename "$f"|tr A-Z a-z); tr -d "\032\r" < "$f" | sed -E "$RISC_SED" > "$d/$b"; done; }
+mkfarm /work/PRIVATE/NTOS/INC /tmp/farm/priv
+mkfarm /work/PUBLIC/SDK/INC   /tmp/farm/pub
+mkfarm /work/PUBLIC/SDK/INC/CRT /tmp/farm/crt
+mkfarm /work/PRIVATE/NTOS/KE  /tmp/farm/ke
+{ echo "#ifndef _BUGCODES_"; echo "#define _BUGCODES_";
+  tr -d "\r" < /work/PRIVATE/NTOS/NLS/BUGCODES.MC | awk "/^MessageId=/{ sev=\"Fatal\"; nm=\"\"; id=\"\";
+       for(i=1;i<=NF;i++){ split(\$i,kv,\"=\");
+         if(kv[1]==\"MessageId\"){ v=kv[2]; sub(/^0[xX]/,\"\",v); id=v }
+         if(kv[1]==\"Severity\"){ sev=kv[2] }
+         if(kv[1]==\"SymbolicName\"){ nm=kv[2] } }
+       if(nm!=\"\"){ while(length(id)<4) id=\"0\" id; hi=(sev==\"None\")?\"4000\":\"0000\";
+         printf \"#define %s ((ULONG)0x%s%sL)\n\", nm, hi, id } }";
+  echo "#endif"; } > /tmp/farm/priv/bugcodes.h
 
-${CROSS}gcc $CFLAGS -c start.S  -o "$OUT/k_start.o"
-${CROSS}gcc $CFLAGS -c kernel.c -o "$OUT/k_kernel.o"
-${CROSS}gcc $CFLAGS -c jxdisp.c -o "$OUT/k_jxdisp.o"
-${CROSS}gcc $CFLAGS -nostdlib -no-pie -Wl,-T,kernel.ld \
-        -Wl,--build-id=none -Wl,--no-warn-rwx-segments -Wl,-z,noexecstack \
-        "$OUT/k_start.o" "$OUT/k_kernel.o" "$OUT/k_jxdisp.o" -o "$OUT/kernel.elf"
+INCS="-Iinc -I/work/ARM32/arcfw/inc -I/tmp/farm/ke -I/tmp/farm/priv -I/tmp/farm/pub -I/tmp/farm/crt"
+CFLAGS="-mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fshort-wchar \
+        -D_ARM_ -DNT_UP -DDBG=0 -DFPO=0 -DDEVL=1 -D_EXCEPTION_DISPOSITION_DEFINED \
+        -fno-builtin -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
+        -ffunction-sections -fdata-sections -O1 -w -include /work/ARM32/arcfw/inc/ntshim.h"
+OUT=/tmp/kobj; mkdir -p "$OUT"; rm -f "$OUT"/*.o
 
-# The PE carries no zero-fill region (mkpe sets VirtualSize == SizeOfRawData), so a
-# non-empty .bss would be uninitialized garbage at run time. Fail loudly if present.
-# kernel.ld folds .bss/COMMON into .data (emitted as zero bytes in the image), so a
-# correctly built kernel reports 0 here even though jxdisp.c has zero-init globals.
-# (size prints text/data/bss in decimal; the 3rd column of the data line is .bss.)
-bss=$(${CROSS}size "$OUT/kernel.elf" | awk "NR==2 {print \$3}")
-bss=${bss:-0}
-if [ "$bss" -ne 0 ]; then
-    echo "ERROR: kernel .bss is $bss bytes (must be 0 - check kernel.ld .bss->.data fold)"; exit 1
+# ARM kernel-architecture code (compiled against the real NT kernel headers).
+${CROSS}gcc $CFLAGS $INCS -c ke/armstart.S  -o "$OUT/armstart.o"
+${CROSS}gcc $CFLAGS $INCS -c ke/interlock.S -o "$OUT/interlock.o"
+${CROSS}gcc $CFLAGS $INCS -c ke/ctxsw.S     -o "$OUT/ctxsw_asm.o"
+${CROSS}gcc $CFLAGS $INCS -c ke/trap.S      -o "$OUT/trap.o"
+${CROSS}gcc $CFLAGS $INCS -c ke/seh.S       -o "$OUT/seh_asm.o"
+for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ../ported/wait.c ../ported/queueobj.c; do
+  tr -d "\032\r" < "$c" > /tmp/c.c
+  ${CROSS}gcc $CFLAGS $INCS -c /tmp/c.c -o "$OUT/$(basename ${c%.c}).o"
+done
+
+# Real portable KE objects, compiled as-is for _ARM_.
+KE=/work/PRIVATE/NTOS/KE
+for c in KERNLDAT KIINIT PROCOBJ THREDOBJ THREDSUP DPCOBJ DPCSUP TIMEROBJ TIMERSUP SEMPHOBJ APCOBJ EVENTOBJ WAITSUP; do
+  tr -d "\032\r" < "$KE/$c.C" > /tmp/c.c
+  ${CROSS}gcc $CFLAGS $INCS -c /tmp/c.c -o "$OUT/$(echo $c|tr A-Z a-z).o" \
+    || { echo "CC FAIL $c"; exit 1; }
+done
+
+# HAL display: real NT HalDisplayString (jxdisp.c), built against kernel.h.
+HCF="-mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fno-builtin \
+     -fno-stack-protector -ffunction-sections -fdata-sections -O2 -w"
+${CROSS}gcc $HCF -c jxdisp.c -o "$OUT/jxdisp.o"
+
+echo ">> linking (--gc-sections, entry KiSystemStartup)"
+if ! ${CROSS}ld -T kernel.ld --gc-sections -e KiSystemStartup --no-warn-rwx-segments \
+   "$OUT"/*.o -o "$OUT/kernel.elf" 2>/tmp/lderr; then
+   echo "LINK FAILED - unresolved (the next layer to port):"
+   grep -oE "undefined reference to .[A-Za-z_][A-Za-z0-9_]*" /tmp/lderr | sed "s/.* //" | sort -u
+   exit 1
 fi
-
+${CROSS}size "$OUT/kernel.elf"
+bss=$(${CROSS}size "$OUT/kernel.elf" | awk "NR==2 {print \$3}")
+[ "${bss:-0}" -eq 0 ] || { echo "ERROR: .bss=$bss (kernel.ld must fold bss->data)"; exit 1; }
 ${CROSS}objcopy -O binary "$OUT/kernel.elf" "$OUT/kernel.bin"
-
-# Entry virtual address straight from the ELF header; mkpe derives AddressOfEntryPoint.
 entry=$(${CROSS}readelf -h "$OUT/kernel.elf" | awk "/Entry point/ {print \$NF}")
-echo "   kernel.elf entry = $entry, .bss = $bss bytes, kernel.bin = $(stat -c%s "$OUT/kernel.bin") bytes"
-
-mkdir -p /work/arcfw/ramdisk/root/WINNT/System32
-python3 mkpe.py "$OUT/kernel.bin" /work/arcfw/ramdisk/root/WINNT/System32/NTOSKRNL.EXE \
-        --image-base 0x01000000 --section-rva 0x1000 --entry "$entry" --machine 0x1c0
-
-# Minimal HAL.DLL. BlOsLoader loads hal.dll from the osloader directory (\WINNT\System32)
-# right after the kernel. The kernel imports nothing from the HAL and never calls it
-# (the HAL display code is compiled into the kernel), so this only needs to be a valid ARM
-# PE (machine 0x1c0) that BlLoadImage can map at a base that does not collide with the
-# kernel (0x01000000) - loaded at 0x01100000. Content is a single "bx lr" (never run).
-printf "\x1e\xff\x2f\xe1" > "$OUT/hal.bin"   # ARM bx lr (e12fff1e)
-python3 mkpe.py "$OUT/hal.bin" /work/arcfw/ramdisk/root/WINNT/System32/HAL.DLL \
-        --image-base 0x01100000 --section-rva 0x1000 --entry 0x01101000 --machine 0x1c0
+echo "   kernel.elf entry=$entry, kernel.bin=$(stat -c%s "$OUT/kernel.bin") bytes"
+mkdir -p /work/ARM32/arcfw/ramdisk/root/WINNT/System32
+python3 mkpe.py "$OUT/kernel.bin" /work/ARM32/arcfw/ramdisk/root/WINNT/System32/NTOSKRNL.EXE \
+    --image-base 0x01000000 --section-rva 0x1000 --entry "$entry" --machine 0x1c0
+printf "\x1e\xff\x2f\xe1" > "$OUT/hal.bin"
+python3 mkpe.py "$OUT/hal.bin" /work/ARM32/arcfw/ramdisk/root/WINNT/System32/HAL.DLL \
+    --image-base 0x01100000 --section-rva 0x1000 --entry 0x01101000 --machine 0x1c0
 '
-echo ">> NTOSKRNL.EXE + HAL.DLL written to arcfw/ramdisk/root/WINNT/System32/. Next: make-ramdisk.sh, then build.sh."
+echo ">> NTOSKRNL.EXE + HAL.DLL written. Next: make-ramdisk.sh, then build.sh, then run."
