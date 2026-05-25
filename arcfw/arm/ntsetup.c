@@ -13,9 +13,8 @@
 
 //
 // The kernel's HAL console (arcfw/kernel/jxdisp.c) needs the OEM font + the VideoCore
-// framebuffer geometry via the loader block. Set here (in the shared arch setup) so the
-// boot paths get it: BlOsLoader (and BlArmBootKernel) call BlSetupForNt at osloader.c:779,
-// which has no notion of our ARM framebuffer.
+// framebuffer geometry via the loader block. Set here, in the arch setup BlOsLoader calls
+// at osloader.c:779, which has no notion of our ARM framebuffer.
 //
 extern unsigned int *fb_base;
 extern unsigned int fb_width, fb_height, fb_pitch, fb_order;

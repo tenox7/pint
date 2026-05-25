@@ -11,7 +11,6 @@
 //
 #include "bldr.h"
 #include "string.h"
-#include "ntimage.h"     // PIMAGE_NT_HEADERS for the kernel-entry computation (BOOT_KERNEL)
 
 VOID BlArmInitializeArcEmulator(VOID);
 VOID BlArmFixupMemoryMap(VOID);
@@ -70,53 +69,6 @@ static PCHAR BlArmArgv[] = {
 };
 
 //
-// Handoff test. The loader's endgame is to load code and jump to it. This copies an
-// embedded serial-shell payload (arcfw/payload/) to a fixed RAM address and transfers
-// control, exercising the handoff mechanism independently of the filesystem. A bring-up
-// aid; off by default. See ARCHITECTURE.md for the rationale.
-//
-#define SMOKE_HANDOFF 0
-
-#if SMOKE_HANDOFF
-// 0x00400000 MUST match the link base in build/payload.ld.
-#define PAYLOAD_LOAD_BASE 0x00400000u
-
-extern const unsigned char _binary_payload_bin_start[];
-extern const unsigned char _binary_payload_bin_size[];
-
-static VOID
-BlArmSmokeHandoff(VOID)
-{
-    unsigned char *dst = (unsigned char *)PAYLOAD_LOAD_BASE;
-    const unsigned char *src = _binary_payload_bin_start;
-    // The linker's _size symbol is a VALUE, not a pointer: its address is the size.
-    ULONG size = (ULONG)(unsigned long)_binary_payload_bin_size;
-    ULONG i;
-
-    for (i = 0; i < size; i += 1) {
-        dst[i] = src[i];
-    }
-
-    //
-    // Caches are off (start.S enables no MMU/cache), but make the freshly written
-    // code visible regardless: drain writes, invalidate the I-cache, resync the
-    // pipeline. Keep this if caches are ever enabled.
-    //
-    __asm__ volatile (
-        "dsb\n\t"
-        "mcr p15, 0, %0, c7, c5, 0\n\t"   // ICIALLU - invalidate entire I-cache
-        "dsb\n\t"
-        "isb\n\t"
-        : : "r" (0) : "memory");
-
-    BlPrint("Handing off to payload at 0x%lx (%lu bytes)...\n",
-            (unsigned long)PAYLOAD_LOAD_BASE, (unsigned long)size);
-
-    ((VOID (*)(VOID))PAYLOAD_LOAD_BASE)();   // ARM mode (low bit 0); does not return
-}
-#endif
-
-//
 // Keyboard / console-input demo+test. Once the ARC firmware vector is live, read the
 // console through the real ArcGetReadStatus/ArcRead path and echo each byte until ESC
 // (or a 20 s timeout), then resume booting. Proves a keystroke travels the whole way:
@@ -137,21 +89,12 @@ BlArmSmokeHandoff(VOID)
 #define RUN_ARCDOS 0
 
 //
-// BlArmBootKernel: a direct kernel boot for bring-up - PE-load \WINNT\System32\NTOSKRNL.EXE
-// (BOOT/LIB peldr.c), build the kernel stack, and transfer with r0 = LOADER_PARAMETER_BLOCK,
-// without the HAL/import/NLS/hive/driver steps. Off by default; the boot menu boots NT
-// through BlOsLoader (osloader.c). Set 1 (with BOOT_MENU 0) to use the direct boot.
-//
-#define BOOT_KERNEL 0
-
-//
 // Interactive boot menu (like an ARC firmware boot selection): on startup, let the
 // user pick [1] boot NT (via BlOsLoader) or [2] the arcdos shell, over the
 // console (serial + USB keyboard), with a short countdown to a default. The friendly way
 // to switch WITHOUT recompiling. When BOOT_MENU is 1 (default) the menu runs and the
-// BOOT_KERNEL/RUN_ARCDOS/SMOKE_HANDOFF gates above are bypassed (kept as compile-time
-// overrides). Set BOOT_MENU 0 to boot straight to one fixed path (e.g. headless
-// regression tests: BOOT_MENU 0 + RAMDISK_TEST 1 + BOOT_KERNEL 0 + RUN_ARCDOS 0).
+// RUN_ARCDOS gate above is bypassed. Set BOOT_MENU 0 to boot straight to one fixed path
+// (e.g. headless regression tests: BOOT_MENU 0 + RAMDISK_TEST 1 + RUN_ARCDOS 0).
 //
 #define BOOT_MENU 1
 
@@ -256,123 +199,6 @@ BlArmRamdiskTest(VOID)
             ArcClose(dfid);
         }
     }
-}
-#endif
-
-#if BOOT_KERNEL
-//
-// The Arc disk + path of the kernel image. The partition is opened as a raw block
-// device (data-mode open); BlLoadImage's internal BlOpen then mounts FAT on it and
-// opens the file - the osloadpartition + \System32\ntoskrnl.exe pattern of osloader.c,
-// here pointed at where make-ramdisk.sh packages the kernel. Compiled only for the
-// BOOT_KERNEL direct boot; the menu boots NT via BlOsLoader instead.
-//
-#define KERNEL_DEVICE "multi(0)disk(0)rdisk(0)partition(1)"
-// The kernel lives at the NT path \WINNT\System32\NTOSKRNL.EXE - where BlOsLoader looks
-// (<osloadfilename=\WINNT>\System32\<ntoskrnl.exe>); BOOT_KERNEL loads the same file directly.
-#define KERNEL_FILE   "\\WINNT\\System32\\NTOSKRNL.EXE"
-
-// BlLoaderBlock is built + owned by BlMemoryInitialize (arcfw/ported/blmemory.c).
-extern PLOADER_PARAMETER_BLOCK BlLoaderBlock;
-
-// The kernel entry contract (osloader.c PTRANSFER_ROUTINE / KE/MIPS X4START.S):
-// VOID KiSystemStartup(PLOADER_PARAMETER_BLOCK), arg in r0.
-typedef VOID (*PKERNEL_ENTRY)(PLOADER_PARAMETER_BLOCK);
-
-static VOID
-BlArmBootKernel(VOID)
-{
-    ARC_STATUS Status;
-    ULONG DeviceId;
-    PVOID KernelBase;
-    PIMAGE_NT_HEADERS NtHeaders;
-    PKERNEL_ENTRY KernelEntry;
-
-    //
-    // BlOsLoader prerequisites we are skipping the rest of: build the loader block +
-    // memory-descriptor list + heap (BlMemoryInitialize, osloader.c:242), then the
-    // file table + FS initializers (BlIoInitialize, osloader.c:292). Without
-    // BlMemoryInitialize, BlLoaderBlock is NULL and BlAllocateDescriptor (inside
-    // BlLoadImage) walks a NULL list forever.
-    //
-    Status = BlMemoryInitialize();
-    if (Status != ESUCCESS) {
-        BlPrint("  BlMemoryInitialize failed: 0x%lx\n", (unsigned long)Status);
-        return;
-    }
-    Status = BlIoInitialize();
-    if (Status != ESUCCESS) {
-        BlPrint("  BlIoInitialize failed: 0x%lx\n", (unsigned long)Status);
-        return;
-    }
-
-    BlPrint("\nLoading NT kernel: %s%s\n", KERNEL_DEVICE, KERNEL_FILE);
-
-    Status = ArcOpen(KERNEL_DEVICE, ArcOpenReadOnly, &DeviceId);
-    if (Status != ESUCCESS) {
-        BlPrint("  ArcOpen(%s) failed: 0x%lx\n", KERNEL_DEVICE, (unsigned long)Status);
-        return;
-    }
-
-    //
-    // Load the PE through the BOOT/LIB loader (peldr.c). LoaderSystemCode marks
-    // the image's pages; TARGET_IMAGE (ARM_IMAGE, 0x1c0) is the machine type peldr
-    // requires the PE to declare.
-    //
-    Status = BlLoadImage(DeviceId, LoaderSystemCode, KERNEL_FILE, TARGET_IMAGE, &KernelBase);
-    if (Status != ESUCCESS) {
-        BlPrint("  BlLoadImage failed: 0x%lx\n", (unsigned long)Status);
-        return;
-    }
-
-    NtHeaders = RtlImageNtHeader(KernelBase);
-    if (NtHeaders == NULL) {
-        BlPrint("  loaded image has no PE header\n");
-        return;
-    }
-
-    KernelEntry = (PKERNEL_ENTRY)((ULONG)KernelBase +
-                                  NtHeaders->OptionalHeader.AddressOfEntryPoint);
-
-    //
-    // Arch setup before the jump (osloader.c:779) - allocates the kernel stack the
-    // entry switches to (arcfw/arm/ntsetup.c).
-    //
-    Status = BlSetupForNt(BlLoaderBlock);
-    if (Status != ESUCCESS) {
-        BlPrint("  BlSetupForNt failed: 0x%lx\n", (unsigned long)Status);
-        return;
-    }
-
-    //
-    // Hand the kernel a recognizable options string so it can prove the loader block
-    // (and the data it points at) crossed the handoff intact.
-    //
-    BlLoaderBlock->LoadOptions = "BOOT_KERNEL ARM hello";
-
-    // OemFontFile + the ARM framebuffer fields are now set in BlSetupForNt (shared with
-    // the BlOsLoader [3] path), called just above.
-
-    BlPrint("  image @ 0x%lx  entry 0x%lx  kernelstack 0x%lx\n",
-            (unsigned long)KernelBase, (unsigned long)KernelEntry,
-            (unsigned long)BlLoaderBlock->KernelStack);
-    BlPrint("Transferring control to the kernel...\n");
-
-    //
-    // Make the freshly loaded image visible before executing it. Caches are off
-    // (start.S enables no MMU/cache), so this is correctness insurance, identical to
-    // the M3 smoke handoff.
-    //
-    __asm__ volatile (
-        "dsb\n\t"
-        "mcr p15, 0, %0, c7, c5, 0\n\t"   // ICIALLU - invalidate entire I-cache
-        "dsb\n\t"
-        "isb\n\t"
-        : : "r" (0) : "memory");
-
-    (KernelEntry)(BlLoaderBlock);          // r0 = LoaderBlock; does not return
-
-    BlPrint("  kernel returned unexpectedly - halting\n");
 }
 #endif
 
@@ -527,19 +353,8 @@ BlStartup(
     BlArmConsoleEchoTest();
 #endif
 
-#if SMOKE_HANDOFF
-    BlArmSmokeHandoff();   // jump to the serial-shell payload; does not return
-#endif
-
 #if BOOT_MENU
-    BlArmBootMenu();       // interactive kernel/arcdos/osloader selection; never returns
-#endif
-
-#if BOOT_KERNEL
-    BlArmBootKernel();     // PE-load the kernel and transfer control; returns only on failure
-    BlPrint("\nKernel boot failed; halting.\n");
-    for (;;) {
-    }
+    BlArmBootMenu();       // interactive NT (OS Loader) / arcdos selection; never returns
 #endif
 
 #if RUN_ARCDOS

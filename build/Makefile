@@ -5,7 +5,6 @@ OBJCOPY := $(CROSS)objcopy
 ARMDIR    := ../arcfw/arm
 PORTEDDIR := ../arcfw/ported
 INCDIR    := ../arcfw/inc
-PAYLOADDIR := ../arcfw/payload
 OBJDIR    := ../obj
 
 # Arc disk image source. 0 (default) embeds the FAT image as a blob for QEMU; 1 omits
@@ -41,16 +40,6 @@ TEXT_BASE ?= 0x00008000
 LDFLAGS := -nostdlib -no-pie -Wl,-T,arcfw.ld -Wl,--defsym,TEXT_BASE=$(TEXT_BASE) \
            -Wl,--build-id=none -Wl,--no-warn-rwx-segments -Wl,-z,noexecstack
 
-# Handoff-test payload (the serial shell): a standalone freestanding ARM binary,
-# no NT headers. Built, raw-binary'd, then wrapped as a linkable blob object
-# (_binary_payload_bin_{start,end,size}) embedded in the loader. The loader copies
-# it to its link base and jumps. payload.ld's base MUST match PAYLOAD_LOAD_BASE in
-# arcfw/arm/init.c.
-PCFLAGS  := -mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic \
-            -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
-            -O2 -Wall -Wextra
-PLDFLAGS := -nostdlib -no-pie -Wl,-T,payload.ld -Wl,--build-id=none -Wl,--no-warn-rwx-segments -Wl,-z,noexecstack
-
 ARM_OBJS    := $(OBJDIR)/start.o $(OBJDIR)/uart.o $(OBJDIR)/main.o \
                $(OBJDIR)/clib.o $(OBJDIR)/arcemul.o $(OBJDIR)/memory.o \
                $(OBJDIR)/fsstub.o $(OBJDIR)/stubs.o $(OBJDIR)/init.o \
@@ -72,7 +61,7 @@ CONFIG_OBJS := $(OBJDIR)/cmboot.o $(OBJDIR)/cmchek.o $(OBJDIR)/cmdat.o \
                $(OBJDIR)/cmtree.o $(OBJDIR)/hivebin.o $(OBJDIR)/hivecell.o \
                $(OBJDIR)/hivechek.o $(OBJDIR)/hiveinit.o $(OBJDIR)/hivesum.o \
                $(OBJDIR)/hivemap.o
-OBJS        := $(ARM_OBJS) $(PORTED_OBJS) $(CONFIG_OBJS) $(OBJDIR)/payload_blob.o $(OBJDIR)/font_blob.o
+OBJS        := $(ARM_OBJS) $(PORTED_OBJS) $(CONFIG_OBJS) $(OBJDIR)/font_blob.o
 # Embed the FAT image blob only for the QEMU build; the initramfs build serves the
 # firmware-staged image from RAM, so the ~6 MiB blob is omitted and arcfw.bin is tiny.
 ifeq ($(RAMDISK_INITRAMFS),0)
@@ -123,24 +112,6 @@ $(OBJDIR)/%.o: $(PORTEDDIR)/%.c
 
 $(OBJDIR)/%.o: $(PORTEDDIR)/config/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
-
-# --- handoff-test payload (serial shell) ---
-$(OBJDIR)/p_start.o: $(PAYLOADDIR)/start.S
-	$(CC) $(PCFLAGS) -c $< -o $@
-
-$(OBJDIR)/p_shell.o: $(PAYLOADDIR)/shell.c
-	$(CC) $(PCFLAGS) -c $< -o $@
-
-$(OBJDIR)/payload.elf: $(OBJDIR)/p_start.o $(OBJDIR)/p_shell.o payload.ld
-	$(CC) $(PCFLAGS) $(PLDFLAGS) $(OBJDIR)/p_start.o $(OBJDIR)/p_shell.o -o $@
-
-$(OBJDIR)/payload.bin: $(OBJDIR)/payload.elf
-	$(OBJCOPY) -O binary $< $@
-
-# Wrap the raw payload as a linkable blob; run in $(OBJDIR) so the emitted symbols
-# are the stable _binary_payload_bin_{start,end,size} (no absolute path baked in).
-$(OBJDIR)/payload_blob.o: $(OBJDIR)/payload.bin
-	cd $(OBJDIR) && $(OBJCOPY) -I binary -O elf32-littlearm -B arm payload.bin payload_blob.o
 
 # --- OEM font for the kernel-side HAL display (jxdisp.c) ---
 # mkfont.py turns the 8x8 bitmaps in font8x8.h into an OEM_FONT_FILE_HEADER blob
