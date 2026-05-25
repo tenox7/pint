@@ -37,6 +37,12 @@ mkfarm /work/PUBLIC/SDK/INC/CRT /tmp/f/crt
 mkfarm /work/PRIVATE/NTOS/KE  /tmp/f/ke
 for S in $SUBSYS; do mkfarm /work/PRIVATE/NTOS/$S /tmp/f/$(echo $S|tr A-Z a-z); done
 
+# MM arch gate: mi.h includes a per-arch header (i386/R4000/ALPHA, all dormant
+# for _ARM_) right after it pulls ntos.h. Inject an _ARM_ include of our ARMv7 MM
+# arch header (kernel/inc/miarm.h, -Iinc) just before the i386 gate, so the base
+# NT types (ULONG/PVOID/...) from ntos.h are already in scope.
+[ -f /tmp/f/mm/mi.h ] && sed -i "/^#ifdef i386/i #ifdef _ARM_\n#include <miarm.h>\n#endif" /tmp/f/mm/mi.h
+
 # generated headers: bugcodes.h (real, from BUGCODES.MC) + a minimal version.h.
 { echo "#ifndef _BUGCODES_"; echo "#define _BUGCODES_";
   tr -d "\r" < /work/PRIVATE/NTOS/NLS/BUGCODES.MC | awk "/^MessageId=/{ sev=\"Fatal\"; nm=\"\"; id=\"\";
