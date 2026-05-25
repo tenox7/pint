@@ -406,6 +406,14 @@ VOID
     BOOLEAN is_abnormal
     );
 
+//
+// Current thread environment block. The NTMIPS.H analog is PCR->Teb; our KPCR
+// caches the current thread (Pcr->CurrentThread), whose KTHREAD.Teb holds it.
+// Kernel-only form (this build never defines NTOS_KERNEL_RUNTIME / a user PCR).
+// Used by ntpsapi.h's NtCurrentPeb() and any executive code reading the TEB.
+//
+#define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+
 #endif // defined(_ARM_)
 
 #endif // _NTARM_
