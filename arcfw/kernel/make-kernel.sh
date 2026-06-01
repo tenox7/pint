@@ -24,6 +24,9 @@ set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 IMAGE="${IMAGE:-arc-rpi-build:latest}"
+docker image inspect "$IMAGE" >/dev/null 2>&1 \
+  && docker run --rm "$IMAGE" sh -c 'command -v python3 >/dev/null && command -v perl >/dev/null' 2>/dev/null \
+  || docker build -t "$IMAGE" "$NT35/ARM32/build"
 
 echo ">> building the real KE/ARM kernel -> NTOSKRNL.EXE (Docker: $IMAGE)"
 docker run --rm -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
