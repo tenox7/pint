@@ -1,4 +1,4 @@
-# pint
+# PI NT
 
 Windows NT 3.5 ported to 32-bit ARM (ARMv7-A / Cortex-A7) on the Raspberry Pi 2,
 running on top of the [arcpi](https://github.com/tenox7/arcpi) ARC firmware emulator.
