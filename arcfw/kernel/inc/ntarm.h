@@ -317,19 +317,38 @@ typedef struct _KNONVOLATILE_CONTEXT_POINTERS {
 } KNONVOLATILE_CONTEXT_POINTERS, *PKNONVOLATILE_CONTEXT_POINTERS;
 
 //
-// ARMv7-A short-descriptor second-level (small page) PTE for memory management.
+// HARDWARE_PTE - the valid form of an NT page table entry (the MMPTE.u.Hard
+// overlay). NT's portable Memory Manager manipulates the fields below -
+// Valid/Write/Dirty/Global/CachePolicy/CopyOnWrite/PageFrameNumber - on every
+// architecture, so this field set is mandatory and is identical to MIPS.H. The
+// bit layout is the MIPS R4000 lineage that miarm.h's MM_PTE_*_MASK values and
+// MI_* macros are derived from: this is an NT *software* PTE, NOT the ARMv7-A
+// hardware short-descriptor the MMU walks.
+//
+// ARMv7-A cannot overlay NT's PTE onto its hardware descriptor 1:1: the small-
+// page descriptor has no dirty bit, its write (AP[2]) and global (nG) bits are
+// inverted from NT's, and it has no OS-available bits for copy-on-write. So once
+// the MMU is enabled the KeFillEntryTb-analog builds the real second-level
+// descriptor from this PTE (the runtime page tables - KSEG0_BASE still 0 today):
+//
+//   ARMv7-A small-page descriptor       <-  NT HARDWARE_PTE field
+//   [1:0]  = 0b10 (small page present)      Valid
+//   [3:2]=C,B  [8:6]=TEX  (memory type)     CachePolicy (policy index)
+//   [9]    = AP[2]  (0 => writable)         Write        (inverted)
+//   [11]   = nG     (0 => global)           Global       (inverted)
+//   [31:12]= page base address (20 bits)    PageFrameNumber
+//   (no hardware bit)                       Dirty / CopyOnWrite (software:
+//                                             write-protect + fault-on-write)
 //
 
 typedef struct _HARDWARE_PTE {
-    ULONG NoExecute : 1;
+    ULONG Global : 1;
     ULONG Valid : 1;
-    ULONG Buffered : 1;
-    ULONG Cached : 1;
-    ULONG Access : 2;
-    ULONG TypeExtension : 3;
-    ULONG Shared : 1;
-    ULONG NotGlobal : 1;
-    ULONG PageFrameNumber : 20;
+    ULONG Dirty : 1;
+    ULONG CachePolicy : 3;
+    ULONG PageFrameNumber : 24;
+    ULONG Write : 1;
+    ULONG CopyOnWrite : 1;
 } HARDWARE_PTE, *PHARDWARE_PTE;
 
 //
@@ -340,6 +359,7 @@ typedef struct _HARDWARE_PTE {
 
 #define KUSEG_BASE 0x00000000
 #define KSEG0_BASE 0x80000000
+#define KSEG1_BASE 0xA0000000
 #define KSEG2_BASE 0xC0000000
 
 //

@@ -1,11 +1,13 @@
 /* Link script for the NT kernel (kernel.c).
  *
- * Linked at ImageBase + SectionRVA = 0x01000000 + 0x1000 = 0x01001000. peldr.c
- * maps the single PE section at section RVA 0x1000 above the allocated image base
- * (which equals the PE ImageBase 0x01000000, so no relocation - see peldr.c:409),
- * i.e. at 0x01001000. Linking here makes the kernel's absolute references resolve
- * to where they are actually loaded. mkpe.py derives AddressOfEntryPoint from the
- * ELF entry (= 0x01001000 - ImageBase = 0x1000).
+ * Linked in the high half: ImageBase + SectionRVA = 0x81000000 + 0x1000 =
+ * 0x81001000, where 0x81000000 = KSEG0 (0x80000000) | physical-load (0x01000000).
+ * peldr.c masks the ImageBase (& 0x1fffffff) to a physical page and loads the PE
+ * section at physical 0x01001000; once ke/armstart.S enables the MMU, KSEG0 maps
+ * 0x80000000 -> physical 0, so the kernel's absolute references (all 0x81xxxxxx)
+ * resolve to the loaded image. The armstart head runs position-independent until
+ * that switch. mkpe.py derives AddressOfEntryPoint from the ELF entry
+ * (= 0x81001000 - ImageBase 0x81000000 = 0x1000).
  *
  * 16 MiB clears the loader image + embedded ramdisk blob (QEMU build, image ~7 MiB
  * and growing) and the firmware-staged ramdisk (real-HW build, ends ~14 MiB), so
@@ -24,7 +26,7 @@ ENTRY(_KiSystemStartup)
 
 SECTIONS
 {
-    . = 0x01001000;
+    . = 0x81001000;
 
     .text   : { *(.text.entry) *(.text*) }
     .rodata : { *(.rodata*) }

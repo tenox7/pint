@@ -406,7 +406,17 @@ Return Value:
         // Compute relocation value.
         //
 
-        if ((ULONG)NewImageBase != NtHeaders->OptionalHeader.ImageBase) {
+        //
+        // Compare the physical offsets (mask the KSEG0 tag): the loader runs MMU-off
+        // with KSEG0_BASE 0, so NewImageBase is physical, while a high-half kernel's
+        // preferred ImageBase carries the kernel's KSEG0 tag (0x80000000). When only
+        // that tag differs the image is at its correct physical home and runs at its
+        // KSEG0 VA once paging is on - no relocation is needed. Low-base images
+        // (ImageBase already physical) compare exactly as before.
+        //
+
+        if (((ULONG)NewImageBase & 0x1FFFFFFF) !=
+            (NtHeaders->OptionalHeader.ImageBase & 0x1FFFFFFF)) {
             Status = (ARC_STATUS)LdrRelocateImage(NewImageBase,
                             "OS Loader",
                             ESUCCESS,

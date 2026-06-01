@@ -59,7 +59,7 @@ ${CROSS}gcc $CFLAGS $INCS -c ke/interlock.S -o "$OUT/interlock.o"
 ${CROSS}gcc $CFLAGS $INCS -c ke/ctxsw.S     -o "$OUT/ctxsw_asm.o"
 ${CROSS}gcc $CFLAGS $INCS -c ke/trap.S      -o "$OUT/trap.o"
 ${CROSS}gcc $CFLAGS $INCS -c ke/seh.S       -o "$OUT/seh_asm.o"
-for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ../ported/wait.c ../ported/queueobj.c; do
+for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ../ported/wait.c ../ported/queueobj.c; do
   tr -d "\032\r" < "$c" > /tmp/c.c
   ${CROSS}gcc $CFLAGS $INCS -c /tmp/c.c -o "$OUT/$(basename ${c%.c}).o"
 done
@@ -92,7 +92,7 @@ entry=$(${CROSS}readelf -h "$OUT/kernel.elf" | awk "/Entry point/ {print \$NF}")
 echo "   kernel.elf entry=$entry, kernel.bin=$(stat -c%s "$OUT/kernel.bin") bytes"
 mkdir -p /work/ARM32/arcfw/ramdisk/root/WINNT/System32
 python3 mkpe.py "$OUT/kernel.bin" /work/ARM32/arcfw/ramdisk/root/WINNT/System32/NTOSKRNL.EXE \
-    --image-base 0x01000000 --section-rva 0x1000 --entry "$entry" --machine 0x1c0
+    --image-base 0x81000000 --section-rva 0x1000 --entry "$entry" --machine 0x1c0
 printf "\x1e\xff\x2f\xe1" > "$OUT/hal.bin"
 python3 mkpe.py "$OUT/hal.bin" /work/ARM32/arcfw/ramdisk/root/WINNT/System32/HAL.DLL \
     --image-base 0x01100000 --section-rva 0x1000 --entry 0x01101000 --machine 0x1c0

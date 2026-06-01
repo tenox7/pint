@@ -24,6 +24,7 @@ SUBSYS="${*:-RTL EX OB PS MM IO SE CONFIG LPC}"
 docker run --rm -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
 set -u
 CROSS=arm-linux-gnueabihf-
+CLFILTER=/work/ARM32/arcfw/kernel/castlvalue.pl   # MSVC cast-as-lvalue -> GCC
 SUBSYS="'"$SUBSYS"'"
 RISC_SED="/^[[:space:]]*#(if|elif)/{/_MIPS_/{/_ALPHA_/{/_PPC_/s/\$/ || defined(_ARM_)/}}}"
 mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||continue; \
@@ -42,6 +43,8 @@ for S in $SUBSYS; do mkfarm /work/PRIVATE/NTOS/$S /tmp/f/$(echo $S|tr A-Z a-z); 
 # arch header (kernel/inc/miarm.h, -Iinc) just before the i386 gate, so the base
 # NT types (ULONG/PVOID/...) from ntos.h are already in scope.
 [ -f /tmp/f/mm/mi.h ] && sed -i "/^#ifdef i386/i #ifdef _ARM_\n#include <miarm.h>\n#endif" /tmp/f/mm/mi.h
+# mm/mi.h carries the MI_SET_BIT/MI_CLEAR_BIT (ULONG)ARRAY[..] cast-as-lvalue macros
+[ -f /tmp/f/mm/mi.h ] && perl -p "$CLFILTER" /tmp/f/mm/mi.h > /tmp/mi.cl && mv /tmp/mi.cl /tmp/f/mm/mi.h
 
 # generated headers: bugcodes.h (real, from BUGCODES.MC) + a minimal version.h.
 { echo "#ifndef _BUGCODES_"; echo "#define _BUGCODES_";
@@ -78,7 +81,7 @@ for S in $SUBSYS; do
   for f in /work/PRIVATE/NTOS/$S/*.[Cc]; do
     [ -e "$f" ] || continue
     n=$((n+1)); base=$(basename "${f%.[Cc]}")
-    tr -d "\032\r" < "$f" > /tmp/tu.c
+    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" > /tmp/tu.c
     if ${CROSS}gcc $CFLAGS $INCS -c /tmp/tu.c -o "$OUT/${s}_${base}.o" 2>>/tmp/exerr.txt; then
       ok=$((ok+1))
     fi

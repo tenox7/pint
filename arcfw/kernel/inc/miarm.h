@@ -11,16 +11,18 @@ Abstract:
     Hardware-dependent Memory Manager definitions for ARMv7-A - the per-arch MM
     header (the mi386.h / mir4000.h analog) that mi.h pulls under the _ARM_ gate.
 
-    PORT STATUS (work in progress): this is DERIVED from PRIVATE/NTOS/MM/MIPS/
-    MIR4000.H (the closest 32-bit RISC template) and is currently a COMPILE
-    scaffold - the address-space layout, the MMPTE software forms (Proto/Soft/
-    Trans/Subsect/List), and the MM macros parse and let MM/*.C compile. What is
-    NOT yet ARMv7-correct: the hardware-valid PTE form (HARDWARE_PTE) and the
-    MM_PTE_*_MASK bit semantics are still MIPS R4000's. The next step is to define
-    the HARDWARE_PTE bitfields (Valid/Write/Dirty/Global/CachePolicy/CopyOnWrite/
-    PageFrameNumber) at ARMv7-A small-page PTE bit positions, which is also the
-    basis for the runtime page tables (the MMU/high-half bring-up). See
-    ARM32/TOOLCHAIN-FINDINGS.md and the nt35 roadmap memory.
+    PORT STATUS: DERIVED from PRIVATE/NTOS/MM/MIPS/MIR4000.H (the closest 32-bit
+    RISC template). The address-space layout, the MMPTE software forms (Proto/
+    Soft/Trans/Subsect/List), the MM_PTE_*_MASK values and the MI_* macros parse
+    and let MM/*.C compile. The valid PTE form HARDWARE_PTE is defined in
+    inc/ntarm.h as the NT *software* PTE (the portable Global/Valid/Dirty/
+    CachePolicy/Write/CopyOnWrite/PageFrameNumber field set) with the bit layout
+    these macros expect, plus the ARMv7-A hardware short-descriptor translation
+    the MMU-fill code will apply. NT's PTE cannot overlay the ARMv7 descriptor 1:1
+    (no hardware dirty bit; write/global inverted; no OS-spare bits for CoW), so
+    the runtime page tables are *built* from these PTEs rather than being them -
+    that fill code + the MMU/high-half bring-up (KSEG0_BASE still 0) is the next
+    step. See ARM32/TOOLCHAIN-FINDINGS.md and the nt35 roadmap memory.
 
 Original Author (MIR4000.H):
 
@@ -226,10 +228,11 @@ Revision History:
 #define PTE_SHIFT (2)
 
 //
-// The number of bits in a physical address.
+// The number of bits in a physical address. ARMv7-A short-descriptor (non-LPAE)
+// addresses 32-bit physical space; the R4000 used 36.
 //
 
-#define PHYSICAL_ADDRESS_BITS (36)
+#define PHYSICAL_ADDRESS_BITS (32)
 
 #define MM_MAXIMUM_NUMBER_OF_COLORS (8)
 
@@ -710,7 +713,8 @@ Revision History:
 //
 //--
 
-#define MI_SET_PFN_DELETED(PPFN) (((ULONG)(PPFN)->PteAddress &= 0x7FFFFFFF ))
+#define MI_SET_PFN_DELETED(PPFN) \
+    ((PPFN)->PteAddress = (PMMPTE)((ULONG)(PPFN)->PteAddress & 0x7FFFFFFF))
 
 
 //++
@@ -1448,7 +1452,7 @@ Revision History:
 //
 //--
 
-#define MiGetPdeAddress(va)  ((PMMPTE)(((((ULONG)(va)) >> 22) << 2) + PDE_BASE))
+#define MiGetPdeAddress(va)  ((PMMPTE)(((((ULONG)(va)) >> 20) << 2) + PDE_BASE))
 
 
 
@@ -1497,7 +1501,7 @@ Revision History:
 //
 //--
 
-#define MiGetPdeOffset(va) (((ULONG)(va)) >> 22)
+#define MiGetPdeOffset(va) (((ULONG)(va)) >> 20)
 
 
 //++
@@ -1521,7 +1525,7 @@ Revision History:
 //
 //--
 
-#define MiGetPteOffset(va) ((((ULONG)(va)) << 10) >> 22)
+#define MiGetPteOffset(va) ((((ULONG)(va)) >> 12) & 0xFF)
 
 
 //++
@@ -1909,7 +1913,10 @@ extern MMCOLOR_TABLES MmFreePagesByColor[2][MM_SECONDARY_COLORS];
 extern ULONG MmTotalPagesForPagingFile;
 
 //
-// The hardware PTE is defined in ../inc/mips.h
+// HARDWARE_PTE (the MMPTE.u.Hard valid form) is defined in inc/ntarm.h - the NT
+// software PTE with the portable field set, plus the ARMv7-A hardware-descriptor
+// translation the MMU-fill code applies. The MM_PTE_*_MASK values and MI_* macros
+// below match that bit layout (MIPS R4000 lineage).
 //
 
 //
@@ -1965,19 +1972,13 @@ typedef struct _MMPTE_LIST {
 } MMPTE_LIST;
 
 
-// typedef struct _HARDWARE_PTE {
-//     ULONG Global : 1;
-//     ULONG Valid : 1;
-//     ULONG Dirty : 1;
-//     ULONG CachePolicy : 3;
-//     ULONG PageFrameNumber : 24;
-//     ULONG Write : 1;
-//     ULONG CopyOnWrite : 1;
-// } HARDWARE_PTE, *PHARDWARE_PTE;
-
+// HARDWARE_PTE (the .u.Hard valid form) lives in inc/ntarm.h - same field set
+// and bit layout as the block formerly inlined here, plus the ARMv7-A hardware
+// short-descriptor translation notes.
 
 //
-// A Page Table Entry on a MIPS R4000 has the following definition.
+// A Page Table Entry has the following definition (the .u.Hard valid form is
+// the ARMv7-A NT software PTE from ntarm.h; the other forms are invalid PTEs).
 //
 
 typedef struct _MMPTE {

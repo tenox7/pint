@@ -37,8 +37,23 @@ Environment:
 // try/finally unwind, and the normal path. Set to 0 once the executive runs.
 //
 
+// Disabled now that paging is enabled from ke/armstart.S before KiInitializeKernel:
+// the self-test's fault generator is an unaligned LDR, which data-aborts only with
+// the MMU off (Strongly-ordered memory). The SEH layer is proven (see git history);
+// re-enable with an unmapped-address fault generator if an MMU-on regression check
+// is wanted.
 #ifndef KI_SEH_SELFTEST
-#define KI_SEH_SELFTEST 1
+#define KI_SEH_SELFTEST 0
+#endif
+
+//
+// Boot-time build + verify of the ARMv7-A boot page table (ke/mmuarm.c). MMU-off:
+// constructs and self-checks the descriptors only; the live MMU-on/high-half
+// switch is a later step. Set to 0 once MM owns the page tables.
+//
+
+#ifndef KI_MMU_BUILD_TEST
+#define KI_MMU_BUILD_TEST 1
 #endif
 
 #define UART0   0x3F201000u
@@ -50,6 +65,7 @@ extern VOID HalDisplayString(PUCHAR String);
 extern ULONG HalpInitializeDisplay0(PLOADER_PARAMETER_BLOCK LoaderBlock);
 extern VOID KiArmInitializeVectors(VOID);
 extern VOID KiArmStartClock(VOID);
+extern VOID MiArmReportPaging(VOID);
 
 //
 // Boot processor structures. KiInitializeKernel addresses the PCR through
@@ -146,6 +162,14 @@ static void emit_hex(ULONG v)
     b[10] = 0;
     emit(b);
 }
+
+//
+// Non-static wrappers so the page-table builder (ke/mmuarm.c) shares the one
+// serial+HDMI output path.
+//
+
+void KiEmit(const char *s)   { emit(s); }
+void KiEmitHex(ULONG v)      { emit_hex(v); }
 
 //
 // Platform processor initialization. On ARMv7-A the boot processor is already
@@ -457,6 +481,10 @@ KiArmReportInitialized (
 
 #if KI_SEH_SELFTEST
     KiSehSelfTest();
+#endif
+
+#if KI_MMU_BUILD_TEST
+    MiArmReportPaging();
 #endif
 
     emit("KE/ARM up. Executive (Ex/Mm/Ob/Ps/Io/Se/Cm) not yet ported.\n");
