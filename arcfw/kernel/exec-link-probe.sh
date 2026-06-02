@@ -59,7 +59,7 @@ OUT=/tmp/eobj; mkdir -p "$OUT"; rm -f "$OUT"/*.o
 # ---- 1. the KE/ARM kernel objects (what the kernel already provides) ----
 KINCS="-Iinc -I/work/ARM32/arcfw/inc -I/tmp/f/ke -I/tmp/f/priv -I/tmp/f/pub -I/tmp/f/crt"
 for s in ke/armstart.S ke/interlock.S ke/ctxsw.S ke/trap.S ke/seh.S ke/zwstubs.S; do
-  ${CROSS}gcc $CFLAGS $KINCS -c $s -o "$OUT/k_$(basename ${s%.S}).o" 2>/dev/null
+  ${CROSS}gcc $CFLAGS $KINCS -c $s -o "$OUT/k_$(basename ${s%.S})_asm.o" 2>/dev/null  # _asm: avoid .c/.S basename clash (seh, ctxsw)
 done
 for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ke/exarm.c ke/exglobals.c ke/rtlarm.c ke/portstubs.c ../ported/wait.c ../ported/queueobj.c; do
   tr -d "\032\r" < "$c" > /tmp/c.c

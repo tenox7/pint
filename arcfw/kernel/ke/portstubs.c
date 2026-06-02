@@ -106,3 +106,36 @@ PspQueryDescriptorThread (PETHREAD Thread, PVOID ThreadInformation,
     if (ReturnLength) *ReturnLength = 0;
     return STATUS_NOT_IMPLEMENTED;
 }
+
+//
+// Cache manager - not brought up in Phase 0.
+//
+
+VOID CcZeroEndOfLastPage (IN PFILE_OBJECT FileObject) { }
+
+//
+// FsRtl file locking / size - no file-system drivers in Phase 0.
+//
+
+VOID FsRtlAcquireFileExclusive (IN PFILE_OBJECT FileObject) { }
+VOID FsRtlReleaseFile (IN PFILE_OBJECT FileObject) { }
+NTSTATUS FsRtlGetFileSize (IN PFILE_OBJECT FileObject, IN OUT PLARGE_INTEGER FileSize) { return STATUS_NOT_IMPLEMENTED; }
+NTSTATUS FsRtlSetFileSize (IN PFILE_OBJECT FileObject, IN OUT PLARGE_INTEGER FileSize) { return STATUS_NOT_IMPLEMENTED; }
+BOOLEAN FsRtlIsTotalDeviceFailure (IN NTSTATUS Status) { return FALSE; }
+
+//
+// HAL profiling - no profile timer wired (PROFOBJ.C references these).
+//
+
+ULONG HalSetProfileInterval (IN ULONG Interval) { return Interval; }
+VOID HalStartProfileInterrupt (ULONG Reserved) { }
+VOID HalStopProfileInterrupt (ULONG Reserved) { }
+
+//
+// Ke: ARM has no per-process alignment toggle (alignment faults handled in trap);
+// the balance-set manager (working-set trim thread) is not run during bring-up.
+//
+
+BOOLEAN KeSetAutoAlignmentProcess (IN PKPROCESS Process, IN BOOLEAN Enable) { return FALSE; }
+BOOLEAN KeSetAutoAlignmentThread (IN PKTHREAD Thread, IN BOOLEAN Enable) { return FALSE; }
+VOID KeBalanceSetManager (IN PVOID Context) { }

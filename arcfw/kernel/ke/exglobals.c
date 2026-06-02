@@ -55,6 +55,8 @@ LCID PsDefaultSystemLocaleId = 0;
 ULONG PsMinimumWorkingSet = 20;
 ULONG PsMaximumWorkingSet = 45;
 KSPIN_LOCK PsLoadedModuleSpinLock;
+BOOLEAN PsWatchEnabled = FALSE;
+FAST_MUTEX PspProcessLockMutex;             // ntrtl/ps decl confirms FAST_MUTEX
 
 //
 // Locks the executive expects ntoskrnl to provide (uniprocessor: a zeroed word).
