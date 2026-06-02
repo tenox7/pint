@@ -28,6 +28,7 @@ docker run --rm -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
 set -u
 CROSS=arm-linux-gnueabihf-
 CLFILTER=/work/ARM32/arcfw/kernel/castlvalue.pl   # MSVC cast-as-lvalue -> GCC
+FIXUPS=/work/ARM32/arcfw/kernel/execfixups.sed
 SUBSYS="'"$SUBSYS"'"
 RISC_SED="/^[[:space:]]*#(if|elif)/{/_MIPS_/{/_ALPHA_/{/_PPC_/s/\$/ || defined(_ARM_)/}}}"
 mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||continue; \
@@ -90,7 +91,7 @@ for S in $SUBSYS; do
     grep -qE "[^A-Za-z_]main[ \t]*\(" "$f" && continue  # skip user-mode test programs (T*/U*/REGTEST)
     case "$base" in CTXMIP|CTXALPHA|CTXPPC|CTXI386) continue;; esac   # other-arch context (not ARM)
     n=$((n+1))
-    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" > "/tmp/cl/${s}_${base}.c"
+    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" | sed -f "$FIXUPS" > "/tmp/cl/${s}_${base}.c"
     if ${CROSS}gcc $CFLAGS $INCS -c "/tmp/cl/${s}_${base}.c" -o "$OUT/${s}_${base}.o" 2>>/tmp/exerr.txt; then
       ok=$((ok+1))
     fi

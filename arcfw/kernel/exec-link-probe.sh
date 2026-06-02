@@ -22,6 +22,7 @@ docker run --rm -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
 set -u
 CROSS=arm-linux-gnueabihf-
 CLFILTER=/work/ARM32/arcfw/kernel/castlvalue.pl
+FIXUPS=/work/ARM32/arcfw/kernel/execfixups.sed
 SUBSYS="RTL EX OB PS MM IO SE CONFIG LPC"
 RISC_SED="/^[[:space:]]*#(if|elif)/{/_MIPS_/{/_ALPHA_/{/_PPC_/s/\$/ || defined(_ARM_)/}}}"
 mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||continue; \
@@ -83,7 +84,7 @@ for S in $SUBSYS; do
     grep -q "#include" "$f" || continue                 # skip #include-fragment files (not TUs)
     grep -qE "[^A-Za-z_]main[ \t]*\(" "$f" && continue  # skip user-mode test programs
     case "$base" in CTXMIP|CTXALPHA|CTXPPC|CTXI386) continue;; esac   # other-arch context
-    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" > /tmp/tu.c
+    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" | sed -f "$FIXUPS" > /tmp/tu.c
     ${CROSS}gcc $CFLAGS $INCS -c /tmp/tu.c -o "$OUT/e_${s}_${base}.o" 2>/dev/null
   done
 done

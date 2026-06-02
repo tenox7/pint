@@ -151,62 +151,6 @@ rtl_STDTIME.c:910:7: error: unknown type name 'PSTDTIME_ERROR'
 rtl_STDTIME.c:911:8: error: unknown type name 'PSTDTIME_ERROR'
   911 |    OUT PSTDTIME_ERROR Result48
       |        ^~~~~~~~~~~~~~
-rtl_STRING.c: In function 'RtlUpperChar':
-rtl_STRING.c:63:16: error: lvalue required as left operand of assignment
-   63 |             Ch ^= 0x20;                                                   \
-      |                ^~
-rtl_STRING.c:325:5: note: in expansion of macro 'TO_UPPER'
-  325 |     TO_UPPER((UCHAR)Character);
-      |     ^~~~~~~~
-rtl_STRING.c:80:16: error: lvalue required as left operand of assignment
-   80 |             Ch = NlsUnicodeToAnsiData[(USHORT)wCh];                       \
-      |                ^
-rtl_STRING.c:325:5: note: in expansion of macro 'TO_UPPER'
-  325 |     TO_UPPER((UCHAR)Character);
-      |     ^~~~~~~~
-rtl_STRING.c:96:24: error: lvalue required as left operand of assignment
-   96 |                     Ch = LOBYTE(wCh);                                     \
-      |                        ^
-rtl_STRING.c:325:5: note: in expansion of macro 'TO_UPPER'
-  325 |     TO_UPPER((UCHAR)Character);
-      |     ^~~~~~~~
-rtl_STRING.c: In function 'RtlCompareString':
-rtl_STRING.c:63:16: error: lvalue required as left operand of assignment
-   63 |             Ch ^= 0x20;                                                   \
-      |                ^~
-rtl_STRING.c:385:13: note: in expansion of macro 'TO_UPPER'
-  385 |             TO_UPPER((UCHAR)c1);
-      |             ^~~~~~~~
-rtl_STRING.c:80:16: error: lvalue required as left operand of assignment
-   80 |             Ch = NlsUnicodeToAnsiData[(USHORT)wCh];                       \
-      |                ^
-rtl_STRING.c:385:13: note: in expansion of macro 'TO_UPPER'
-  385 |             TO_UPPER((UCHAR)c1);
-      |             ^~~~~~~~
-rtl_STRING.c:96:24: error: lvalue required as left operand of assignment
-   96 |                     Ch = LOBYTE(wCh);                                     \
-      |                        ^
-rtl_STRING.c:385:13: note: in expansion of macro 'TO_UPPER'
-  385 |             TO_UPPER((UCHAR)c1);
-      |             ^~~~~~~~
-rtl_STRING.c:63:16: error: lvalue required as left operand of assignment
-   63 |             Ch ^= 0x20;                                                   \
-      |                ^~
-rtl_STRING.c:386:13: note: in expansion of macro 'TO_UPPER'
-  386 |             TO_UPPER((UCHAR)c2);
-      |             ^~~~~~~~
-rtl_STRING.c:80:16: error: lvalue required as left operand of assignment
-   80 |             Ch = NlsUnicodeToAnsiData[(USHORT)wCh];                       \
-      |                ^
-rtl_STRING.c:386:13: note: in expansion of macro 'TO_UPPER'
-  386 |             TO_UPPER((UCHAR)c2);
-      |             ^~~~~~~~
-rtl_STRING.c:96:24: error: lvalue required as left operand of assignment
-   96 |                     Ch = LOBYTE(wCh);                                     \
-      |                        ^
-rtl_STRING.c:386:13: note: in expansion of macro 'TO_UPPER'
-  386 |             TO_UPPER((UCHAR)c2);
-      |             ^~~~~~~~
 rtl_TACL.c:52:1: error: unknown type name 'STANDARD_ACE'
    52 | STANDARD_ACE AceListBuffer[2];
       | ^~~~~~~~~~~~
@@ -741,10 +685,50 @@ ex_INTRLOC2.c: In function 'ExArmInterlockedDecrementLong':
 ex_INTRLOC2.c:107:64: error: 'Lock' undeclared (first use in this function)
   107 |     OldValue = (LONG)ExInterlockedAddUlong((PULONG)Addend, -1, Lock);
       |                                                                ^~~~
-ex_POOLHACK.c:36:10: fatal error: ..\mm\mi.h: No such file or directory
-   36 | #include "..\mm\mi.h"
-      |          ^~~~~~~~~~~~
-compilation terminated.
+ex_POOLHACK.c:262:1: error: conflicting types for 'ExUnlockPool'; have 'void(POOL_TYPE,  KIRQL,  BOOLEAN)' {aka 'void(enum _POOL_TYPE,  unsigned char,  unsigned char)'}
+  262 | ExUnlockPool(
+      | ^~~~~~~~~~~~
+In file included from inc/ntos.h:56,
+                 from /tmp/f/ex/exp.h:29,
+                 from ex_POOLHACK.c:35:
+/tmp/f/priv/ex.h:248:1: note: previous declaration of 'ExUnlockPool' with type 'void(POOL_TYPE,  KIRQL)' {aka 'void(enum _POOL_TYPE,  unsigned char)'}
+  248 | ExUnlockPool(
+      | ^~~~~~~~~~~~
+ex_POOLHACK.c: In function 'InitializePool':
+ex_POOLHACK.c:376:52: error: 'EPROCESS' {aka 'struct _EPROCESS'} has no member named 'StatisticsLock'
+  376 |         KeInitializeSpinLock(&PsGetCurrentProcess()->StatisticsLock);
+      |                                                    ^~
+ex_POOLHACK.c:394:31: error: 'PagedPoolMustSucceed' undeclared (first use in this function); did you mean 'NonPagedPoolMustSucceed'?
+  394 |         MustSucceedPoolType = PagedPoolMustSucceed;
+      |                               ^~~~~~~~~~~~~~~~~~~~
+      |                               NonPagedPoolMustSucceed
+ex_POOLHACK.c:394:31: note: each undeclared identifier is reported only once for each function it appears in
+ex_POOLHACK.c: In function 'ExAllocatePool':
+ex_POOLHACK.c:529:30: error: too few arguments to function 'MiRemoveAnyPage'
+  529 |             PageFrameIndex = MiRemoveAnyPage ();
+      |                              ^~~~~~~~~~~~~~~
+In file included from ex_POOLHACK.c:36:
+/tmp/f/mm/mi.h:1512:1: note: declared here
+ 1512 | MiRemoveAnyPage (
+      | ^~~~~~~~~~~~~~~
+ex_POOLHACK.c:533:13: error: too many arguments to function 'MiInitializePfn'
+  533 |             MiInitializePfn (PageFrameIndex, PointerPte, 1L, 1);
+      |             ^~~~~~~~~~~~~~~
+/tmp/f/mm/mi.h:1521:1: note: declared here
+ 1521 | MiInitializePfn (
+      | ^~~~~~~~~~~~~~~
+ex_POOLHACK.c: At top level:
+ex_POOLHACK.c:1498:1: error: conflicting types for 'ExQueryPoolUsage'; have 'void(ULONG *, ULONG *)' {aka 'void(long unsigned int *, long unsigned int *)'}
+ 1498 | ExQueryPoolUsage(
+      | ^~~~~~~~~~~~~~~~
+/tmp/f/priv/ex.h:262:1: note: previous declaration of 'ExQueryPoolUsage' with type 'void(ULONG *, ULONG *, ULONG *, ULONG *, ULONG *, ULONG *)' {aka 'void(long unsigned int *, long unsigned int *, long unsigned int *, long unsigned int *, long unsigned int *, long unsigned int *)'}
+  262 | ExQueryPoolUsage(
+      | ^~~~~~~~~~~~~~~~
+ex_POOLHACK.c: In function 'ExQueryPoolUsage':
+ex_POOLHACK.c:1507:21: error: 'PagedPoolMustSucceed' undeclared (first use in this function); did you mean 'NonPagedPoolMustSucceed'?
+ 1507 |     pd = PoolVector[PagedPoolMustSucceed];
+      |                     ^~~~~~~~~~~~~~~~~~~~
+      |                     NonPagedPoolMustSucceed
 In file included from ex_SYSINFO.c:30:
 /tmp/f/priv/vdmntos.h:29:10: fatal error: ..\..\inc\vdm.h: No such file or directory
    29 | #include "..\..\inc\vdm.h"
@@ -882,10 +866,6 @@ ob_UOB.c:267:5: error: 'SectiinSize' undeclared (first use in this function); di
   267 |     SectiinSize.HighPart = 0;
       |     ^~~~~~~~~~~
       |     SectionSize
-ps_CREATE.c:25:10: fatal error: ..\mm\mi.h: No such file or directory
-   25 | #include "..\mm\mi.h"
-      |          ^~~~~~~~~~~~
-compilation terminated.
 ps_TPS.c: In function 'xx3pstest':
 ps_TPS.c:174:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
   174 |     ThreadContext.IntSp = (ULONG)&Stack1[254];
@@ -979,22 +959,42 @@ mm_SUPER.c:241:5: error: expected declaration specifiers or '...' before ')' tok
 mm_SUPER.c:318:5: error: expected declaration specifiers or '...' before ')' token
   318 |     )
       |     ^
-io_ASSIGN.c:26:10: fatal error: ntiologc.h: No such file or directory
-   26 | #include "ntiologc.h"
-      |          ^~~~~~~~~~~~
-compilation terminated.
+io_ASSIGN.c: In function 'IopLogConflict':
+io_ASSIGN.c:3061:41: error: 'IO_ERR_PORT_RESOURCE_CONFLICT' undeclared (first use in this function)
+ 3061 |                     ErrLog->ErrorCode = IO_ERR_PORT_RESOURCE_CONFLICT;
+      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_ASSIGN.c:3061:41: note: each undeclared identifier is reported only once for each function it appears in
+io_ASSIGN.c:3065:41: error: 'IO_ERR_MEMORY_RESOURCE_CONFLICT' undeclared (first use in this function)
+ 3065 |                     ErrLog->ErrorCode = IO_ERR_MEMORY_RESOURCE_CONFLICT;
+      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_ASSIGN.c:3069:41: error: 'IO_ERR_INTERRUPT_RESOURCE_CONFLICT' undeclared (first use in this function)
+ 3069 |                     ErrLog->ErrorCode = IO_ERR_INTERRUPT_RESOURCE_CONFLICT;
+      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_ASSIGN.c:3073:41: error: 'IO_ERR_DMA_RESOURCE_CONFLICT' undeclared (first use in this function)
+ 3073 |                     ErrLog->ErrorCode = IO_ERR_DMA_RESOURCE_CONFLICT;
+      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
 io_DUMPCTL.c: In function 'IoWriteCrashDump':
 io_DUMPCTL.c:375:2: error: #error ( "unknown processor type" )
   375 | #error( "unknown processor type" )
       |  ^~~~~
-io_IOSUBS.c: In function 'IoSetTopLevelIrp':
-io_IOSUBS.c:7759:48: error: lvalue required as left operand of assignment
- 7759 |     (PIRP) (PsGetCurrentThread())->TopLevelIrp = Irp;
-      |                                                ^
-io_REPORT.c:28:10: fatal error: ntiologc.h: No such file or directory
-   28 | #include "ntiologc.h"
-      |          ^~~~~~~~~~~~
-compilation terminated.
+io_REPORT.c: In function 'IopCheckAndLogConflict':
+io_REPORT.c:1430:21: error: 'IO_ERR_MEMORY_CONFLICT_DETECTED' undeclared (first use in this function)
+ 1430 |         errorCode = IO_ERR_MEMORY_CONFLICT_DETECTED;
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_REPORT.c:1430:21: note: each undeclared identifier is reported only once for each function it appears in
+io_REPORT.c:1436:21: error: 'IO_ERR_PORT_CONFLICT_DETECTED' undeclared (first use in this function)
+ 1436 |         errorCode = IO_ERR_PORT_CONFLICT_DETECTED;
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_REPORT.c:1442:21: error: 'IO_ERR_IRQ_CONFLICT_DETECTED' undeclared (first use in this function)
+ 1442 |         errorCode = IO_ERR_IRQ_CONFLICT_DETECTED;
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_REPORT.c:1448:21: error: 'IO_ERR_DMA_CONFLICT_DETECTED' undeclared (first use in this function)
+ 1448 |         errorCode = IO_ERR_DMA_CONFLICT_DETECTED;
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+io_REPORT.c: In function 'IopTranslateResourceList':
+io_REPORT.c:1697:28: error: 'IO_ERR_CONFIGURATION_ERROR' undeclared (first use in this function)
+ 1697 |                     return IO_ERR_CONFIGURATION_ERROR;
+      |                            ^~~~~~~~~~~~~~~~~~~~~~~~~~
 In file included from /tmp/f/pub/windows.h:107,
                  from se_ADTINIT.c:30:
 /tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'
@@ -1119,20 +1119,6 @@ se_UTTOKEN.c:30:10: fatal error: tsevars.c: No such file or directory
    30 | #include "tsevars.c"    // Common test variables
       |          ^~~~~~~~~~~
 compilation terminated.
-config_HIVESYNC.c: In function 'HvRefreshHive':
-config_HIVESYNC.c:1627:68: error: macro "RtlCheckBit" passed 3 arguments, but takes just 2
- 1627 |             if (RtlCheckBit(&Hive->DirtyVector, p / HSECTOR_SIZE, 1)==1) {
-      |                                                                    ^
-In file included from inc/ntos.h:24,
-                 from /tmp/f/config/cmp.h:29,
-                 from config_HIVESYNC.c:25:
-/tmp/f/pub/ntrtl.h:4025: note: macro "RtlCheckBit" defined here
- 4025 | #define RtlCheckBit(BMH,BP) ((((BMH)->Buffer[(BP) / 32]) >> ((BP) % 32)) & 0x1)
-      | 
-config_HIVESYNC.c:1627:17: error: 'RtlCheckBit' undeclared (first use in this function)
- 1627 |             if (RtlCheckBit(&Hive->DirtyVector, p / HSECTOR_SIZE, 1)==1) {
-      |                 ^~~~~~~~~~~
-config_HIVESYNC.c:1627:17: note: each undeclared identifier is reported only once for each function it appears in
 config_XCMAPI.c:27:10: fatal error: cmapi.c: No such file or directory
    27 | #include "cmapi.c"
       |          ^~~~~~~~~
