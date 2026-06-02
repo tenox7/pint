@@ -62,7 +62,7 @@ ${CROSS}gcc $CFLAGS $INCS -c ke/interlock.S -o "$OUT/interlock.o"
 ${CROSS}gcc $CFLAGS $INCS -c ke/ctxsw.S     -o "$OUT/ctxsw_asm.o"
 ${CROSS}gcc $CFLAGS $INCS -c ke/trap.S      -o "$OUT/trap.o"
 ${CROSS}gcc $CFLAGS $INCS -c ke/seh.S       -o "$OUT/seh_asm.o"
-for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ke/exarm.c ke/exglobals.c ../ported/wait.c ../ported/queueobj.c; do
+for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ke/exarm.c ke/exglobals.c ke/rtlarm.c ../ported/wait.c ../ported/queueobj.c; do
   tr -d "\032\r" < "$c" > /tmp/c.c
   ${CROSS}gcc $CFLAGS $INCS -c /tmp/c.c -o "$OUT/$(basename ${c%.c}).o"
 done
