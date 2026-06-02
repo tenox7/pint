@@ -14,11 +14,12 @@ Abstract:
     closure: the 64-bit large-integer math, the bulk memory ops, and the
     context/exception entry points.
 
-    The four DIVIDE primitives (RtlEnlargedUnsignedDivide / RtlExtended*Divide /
-    RtlLargeIntegerDivide) are deferred: 64-bit division emits a libgcc helper
-    (__aeabi_uldivmod) that this freestanding ld-only link does not provide yet -
-    they come with a software-divmod (or __aeabi) runtime step. Add/sub/shift/
-    multiply are inlined by gcc, so they need no runtime support.
+    The DIVIDE primitives (RtlEnlargedUnsignedDivide / RtlExtended*Divide /
+    RtlLargeIntegerDivide / RtlExtendedMagicDivide) are built on a software
+    64-bit divmod + 64x64->high-64 multiply (RtlpDivMod64 / RtlpUMulHi, from
+    32x32->64 multiplies + shifts only), so they emit no libgcc/__aeabi 64-bit
+    division helper - which this freestanding ld-only link does not provide.
+    Add/sub/shift/multiply are inlined by gcc, so they need no runtime support.
 
 Environment:
 
@@ -110,6 +111,95 @@ RtlExtendedIntegerMultiply (IN LARGE_INTEGER Multiplicand, IN LONG Multiplier)
 {
     LARGE_INTEGER r;
     r.QuadPart = Multiplicand.QuadPart * (LONGLONG)Multiplier;
+    return r;
+}
+
+//
+// Software 64-bit unsigned divmod + 64x64->high-64 multiply, built from 32x32->64
+// multiplies and shifts only - so the divide primitives need no libgcc/__aeabi
+// 64-bit-division helper (this ld-only freestanding link provides none).
+//
+
+static ULONGLONG
+RtlpDivMod64 (ULONGLONG Numerator, ULONGLONG Denominator, ULONGLONG *Remainder)
+{
+    ULONGLONG q = 0, r = 0;
+    int i;
+
+    if (Denominator == 0) {                     // avoid a fault; mimic /0 -> all-ones
+        if (Remainder) *Remainder = 0;
+        return ~(ULONGLONG)0;
+    }
+    for (i = 63; i >= 0; i -= 1) {
+        r = (r << 1) | ((Numerator >> i) & 1);
+        if (r >= Denominator) {
+            r -= Denominator;
+            q |= ((ULONGLONG)1 << i);
+        }
+    }
+    if (Remainder) *Remainder = r;
+    return q;
+}
+
+static ULONGLONG
+RtlpUMulHi (ULONGLONG a, ULONGLONG b)            // high 64 bits of the 128-bit product
+{
+    ULONG al = (ULONG)a, ah = (ULONG)(a >> 32);
+    ULONG bl = (ULONG)b, bh = (ULONG)(b >> 32);
+    ULONGLONG ll = (ULONGLONG)al * bl;
+    ULONGLONG lh = (ULONGLONG)al * bh;
+    ULONGLONG hl = (ULONGLONG)ah * bl;
+    ULONGLONG hh = (ULONGLONG)ah * bh;
+    ULONGLONG mid = (ll >> 32) + (lh & 0xFFFFFFFF) + (hl & 0xFFFFFFFF);
+    return hh + (lh >> 32) + (hl >> 32) + (mid >> 32);
+}
+
+ULONG
+RtlEnlargedUnsignedDivide (IN ULARGE_INTEGER Dividend, IN ULONG Divisor, IN PULONG Remainder)
+{
+    ULONGLONG rem;
+    ULONGLONG q = RtlpDivMod64(Dividend.QuadPart, (ULONGLONG)Divisor, &rem);
+    if (Remainder) *Remainder = (ULONG)rem;
+    return (ULONG)q;
+}
+
+LARGE_INTEGER
+RtlExtendedLargeIntegerDivide (IN LARGE_INTEGER Dividend, IN ULONG Divisor, IN PULONG Remainder)
+{
+    LARGE_INTEGER r;
+    ULONGLONG rem;
+    r.QuadPart = (LONGLONG)RtlpDivMod64((ULONGLONG)Dividend.QuadPart, (ULONGLONG)Divisor, &rem);
+    if (Remainder) *Remainder = (ULONG)rem;
+    return r;
+}
+
+LARGE_INTEGER
+RtlLargeIntegerDivide (IN LARGE_INTEGER Dividend, IN LARGE_INTEGER Divisor, IN PLARGE_INTEGER Remainder)
+{
+    LONGLONG nd = Dividend.QuadPart, dd = Divisor.QuadPart;
+    int neg = (nd < 0) ^ (dd < 0);
+    ULONGLONG un = (nd < 0) ? (ULONGLONG)(-nd) : (ULONGLONG)nd;
+    ULONGLONG ud = (dd < 0) ? (ULONGLONG)(-dd) : (ULONGLONG)dd;
+    ULONGLONG rem;
+    ULONGLONG q = RtlpDivMod64(un, ud, &rem);
+    LARGE_INTEGER r;
+
+    r.QuadPart = neg ? -(LONGLONG)q : (LONGLONG)q;
+    if (Remainder)
+        Remainder->QuadPart = (nd < 0) ? -(LONGLONG)rem : (LONGLONG)rem;
+    return r;
+}
+
+LARGE_INTEGER
+RtlExtendedMagicDivide (IN LARGE_INTEGER Dividend, IN LARGE_INTEGER MagicDivisor, IN CCHAR ShiftCount)
+{
+    //
+    // quotient = high64(Dividend * MagicDivisor) >> ShiftCount - the precomputed
+    // reciprocal-multiply divide (used for time/counter scaling, positive operands).
+    //
+    LARGE_INTEGER r;
+    ULONGLONG hi = RtlpUMulHi((ULONGLONG)Dividend.QuadPart, (ULONGLONG)MagicDivisor.QuadPart);
+    r.QuadPart = (LONGLONG)(hi >> (ShiftCount & 0x3F));
     return r;
 }
 
