@@ -56,6 +56,14 @@ Environment:
 #define KI_MMU_BUILD_TEST 1
 #endif
 
+// KI_RUN_EXECUTIVE: when 1 (the make-execlink.sh full-executive kernel), call
+// the genuine ExpInitializeExecutive Phase 0 after the arch is up. The minimal
+// make-kernel.sh kernel leaves it 0 - ExpInitializeExecutive is not compiled
+// there, so the symbol must not be referenced or that link breaks.
+#ifndef KI_RUN_EXECUTIVE
+#define KI_RUN_EXECUTIVE 0
+#endif
+
 #define UART0   0x3F201000u
 #define UART_DR (*(volatile ULONG *)(UART0 + 0x00))
 #define UART_FR (*(volatile ULONG *)(UART0 + 0x18))
@@ -67,6 +75,9 @@ extern VOID KiArmInitializeVectors(VOID);
 extern VOID KiArmStartClock(VOID);
 extern VOID MiArmReportPaging(VOID);
 extern VOID MiArmInitMachineDependent(PLOADER_PARAMETER_BLOCK LoaderBlock);
+#if KI_RUN_EXECUTIVE
+extern VOID ExpInitializeExecutive(ULONG Number, PLOADER_PARAMETER_BLOCK LoaderBlock);
+#endif
 
 //
 // Boot processor structures. KiInitializeKernel addresses the PCR through
@@ -487,6 +498,22 @@ KiArmReportInitialized (
 #if KI_MMU_BUILD_TEST
     MiArmReportPaging();
     MiArmInitMachineDependent(LoaderBlock);
+#endif
+
+#if KI_RUN_EXECUTIVE
+    //
+    // Hand off to the genuine NT executive. ExpInitializeExecutive (INIT/INIT.C)
+    // runs Phase 0: HAL init, NLS translation tables, ExInitSystem, MmInitSystem,
+    // ObInitSystem, SeInitSystem, PsInitSystem - the real executive subsystems,
+    // bottoming out at the link-closure stubs. Interrupts are still masked (we
+    // have not lowered IRQL or started the clock yet), which is exactly the Phase 0
+    // contract. This is the KE/MIPS INITKR.C call, the next milestone boundary.
+    //
+    emit("------------------------------------------------------------------\n");
+    emit("Calling the genuine ExpInitializeExecutive (Phase 0)...\n\n");
+    ExpInitializeExecutive(0, LoaderBlock);
+    emit("\nExpInitializeExecutive (Phase 0) RETURNED to KE/ARM.\n");
+    emit("------------------------------------------------------------------\n\n");
 #endif
 
     emit("KE/ARM up. Executive (Ex/Mm/Ob/Ps/Io/Se/Cm) not yet ported.\n");
