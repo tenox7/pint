@@ -37,6 +37,7 @@ mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||conti
           b=$(basename "$f"|tr A-Z a-z); tr -d "\032\r" < "$f" | sed -E "$RISC_SED" > "$d/$b"; done; }
 mkfarm /work/PRIVATE/NTOS/INC /tmp/farm/priv
 mkfarm /work/PUBLIC/SDK/INC   /tmp/farm/pub
+sed -i -E "s/BOOLEAN[[:space:]]+\*(NlsMb(Oem)?CodePageTag)/BOOLEAN \1/" /tmp/farm/pub/ntrtl.h  # ntrtl.h decl disagrees w/ its .c users (BOOLEAN flag)
 mkfarm /work/PUBLIC/SDK/INC/CRT /tmp/farm/crt
 mkfarm /work/PRIVATE/NTOS/KE  /tmp/farm/ke
 { echo "#ifndef _BUGCODES_"; echo "#define _BUGCODES_";

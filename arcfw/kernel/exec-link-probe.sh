@@ -30,6 +30,7 @@ mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||conti
 mkfarm /work/PRIVATE/NTOS/INC /tmp/f/priv
 mkfarm /work/PRIVATE/INC      /tmp/f/pinc
 mkfarm /work/PUBLIC/SDK/INC   /tmp/f/pub
+sed -i -E "s/BOOLEAN[[:space:]]+\*(NlsMb(Oem)?CodePageTag)/BOOLEAN \1/" /tmp/f/pub/ntrtl.h  # ntrtl.h decl disagrees w/ its .c users
 mkfarm /work/PUBLIC/SDK/INC/CRT /tmp/f/crt
 mkfarm /work/PRIVATE/NTOS/KE  /tmp/f/ke
 for S in $SUBSYS; do mkfarm /work/PRIVATE/NTOS/$S /tmp/f/$(echo $S|tr A-Z a-z); done

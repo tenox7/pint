@@ -79,8 +79,8 @@ BOOLEAN KdDebuggerEnabled = FALSE;
 // NULL until then - code paths that dereference them run after NLS init).
 //
 
-BOOLEAN *NlsMbCodePageTag = NULL;       // ntrtl.h declares these as BOOLEAN* (into NLS data)
-BOOLEAN *NlsMbOemCodePageTag = NULL;
+BOOLEAN NlsMbCodePageTag = FALSE;       // FALSE -> single-byte ANSI (the .c users' BOOLEAN view;
+BOOLEAN NlsMbOemCodePageTag = FALSE;    // the farm sed fixes ntrtl.h's stray BOOLEAN* to match)
 PUSHORT NlsLeadByteInfo = NULL;
 PUSHORT Nls844UnicodeUpcaseTable = NULL;
 PUSHORT Nls844UnicodeLowercaseTable = NULL;

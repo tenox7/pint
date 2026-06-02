@@ -37,6 +37,7 @@ mkfarm(){ s=$1; d=$2; mkdir -p "$d"; for f in "$s"/*.[Hh]; do [ -e "$f" ]||conti
 mkfarm /work/PRIVATE/NTOS/INC /tmp/f/priv
 mkfarm /work/PRIVATE/INC      /tmp/f/pinc   # shared private hdrs (seopaque.h, ntrmlsa.h, ...)
 mkfarm /work/PUBLIC/SDK/INC   /tmp/f/pub
+sed -i -E "s/BOOLEAN[[:space:]]+\*(NlsMb(Oem)?CodePageTag)/BOOLEAN \1/" /tmp/f/pub/ntrtl.h  # ntrtl.h decl disagrees w/ its .c users
 mkfarm /work/PUBLIC/SDK/INC/CRT /tmp/f/crt
 mkfarm /work/PRIVATE/NTOS/KE  /tmp/f/ke
 for S in $SUBSYS; do mkfarm /work/PRIVATE/NTOS/$S /tmp/f/$(echo $S|tr A-Z a-z); done
@@ -111,9 +112,11 @@ echo
 echo "=== worst failing files by error count (the real compile-tail TODO) ==="
 grep -oE "/tmp/cl/[A-Za-z0-9_]+\.c" /tmp/exerr.txt | sort | uniq -c | sort -rn | head -18 | sed "s/^/   /"
 echo
-echo "=== FIRST 12 errors of the worst NON-TEST offender (root diagnosis) ==="
-worst=$(grep -oE "/tmp/cl/[A-Za-z0-9_]+\.c" /tmp/exerr.txt | grep -vE "_(T[A-Z]|U[A-Z]|REGTEST|INTRLOC2)" | sort | uniq -c | sort -rn | head -1 | grep -oE "/tmp/cl/[A-Za-z0-9_]+\.c")
-[ -n "$worst" ] && echo "   ($worst)" && grep -F "$worst" /tmp/exerr.txt | grep "error:" | head -12 | sed "s/^/   /"
+echo "=== errors of specific real files (set DUMPFILE to a basename, default NLSXLAT) ==="
+for df in ${DUMPFILE:-NLSXLAT STRING MESSAGE GENERR}; do
+  echo "  -- $df --"
+  grep -E "/tmp/cl/[a-z]+_${df}\.c" /tmp/exerr.txt | grep "error:" | head -8 | sed "s#/tmp/cl/[a-z]*_##;s/^/   /"
+done
 echo
 echo "=== objects staged: $(ls /tmp/eobj/*.o 2>/dev/null | wc -l) in /tmp/eobj ==="
 '
