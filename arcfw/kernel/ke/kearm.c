@@ -66,6 +66,7 @@ extern ULONG HalpInitializeDisplay0(PLOADER_PARAMETER_BLOCK LoaderBlock);
 extern VOID KiArmInitializeVectors(VOID);
 extern VOID KiArmStartClock(VOID);
 extern VOID MiArmReportPaging(VOID);
+extern VOID MiArmInitMachineDependent(PLOADER_PARAMETER_BLOCK LoaderBlock);
 
 //
 // Boot processor structures. KiInitializeKernel addresses the PCR through
@@ -485,6 +486,7 @@ KiArmReportInitialized (
 
 #if KI_MMU_BUILD_TEST
     MiArmReportPaging();
+    MiArmInitMachineDependent(LoaderBlock);
 #endif
 
     emit("KE/ARM up. Executive (Ex/Mm/Ob/Ps/Io/Se/Cm) not yet ported.\n");

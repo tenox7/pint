@@ -300,3 +300,604 @@ MiArmReportPaging (
 
     KiEmit("\nKernel runs in the high half. Clock + HDMI + idle loop follow.\n\n");
 }
+
+//
+// ===========================================================================
+//  MiInitMachineDependent (ARMv7) - the MM init body.
+//
+//  Brought up incrementally and SELF-CONTAINED, the way the rest of mmuarm.c
+//  proves each ARM page-table mechanism in the running kernel before the
+//  portable executive (Ex/Ob/Ps/Mm) is linked. Adapted from the genuine
+//  PRIVATE/NTOS/MM/MIPS/INITMIPS.C MiInitMachineDependent:
+//
+//    1. walk LoaderBlock->MemoryDescriptorListHead -> physical page counts +
+//       the largest free run;
+//    2. carve + build the PFN database in the KSEG0 direct map;
+//    3. thread the free physical pages onto the free list (the NT
+//       MiInsertPageInList discipline: Flink/Blink are PFN *indices*);
+//    4. the data-abort -> fill path (ke/trap.S) consumes that free list.
+//
+//  MMPTE / MMPFN / MI_PFN_ELEMENT / the MiGet* macros live in miarm.h + mi.h,
+//  which are NOT in this kernel build's include chain (only HARDWARE_PTE and
+//  the address constants from arm.h/ntarm.h are). So the PFN structures and
+//  the free-list discipline are mirrored here field-for-field from the real NT
+//  definitions - a drop-in once the executive is linked and owns them.
+// ===========================================================================
+//
+
+//
+// The NT MMPFN (24 bytes), mirrored field-for-field (MI.H _MMPFN / _MMPFNENTRY)
+// so the future executive link is a drop-in. Free-list links are PFN INDICES,
+// not pointers; MM_EMPTY_LIST terminates a list. PageLocation occupies bits
+// 8..10 of the u3 word, exactly as MMPFNENTRY packs it.
+//
+
+#define MM_EMPTY_LIST 0xFFFFFFFFu
+
+//
+// PageLocation values (ZeroedPageList / FreePageList / BadPageList /
+// ActiveAndValid ...) come from the _MMLISTS enum in the in-chain mm.h.
+//
+
+typedef struct _ARM_MMPFN {
+    ULONG  Flink;               // u1.Flink   (free-list next, PFN index)
+    ULONG  PteAddress;          // PMMPTE that maps this page
+    ULONG  Blink;               // u2.Blink   (free-list prev, PFN index)
+    USHORT ReferenceCount;
+    USHORT ValidPteCount;
+    ULONG  OriginalPte;
+    ULONG  u3;                  // MMPFNENTRY: PageLocation in bits 8..10
+} ARM_MMPFN, *PARM_MMPFN;
+
+typedef struct _ARM_PFNLIST {
+    ULONG Total;
+    ULONG Flink;                // head PFN index (MM_EMPTY_LIST if empty)
+    ULONG Blink;                // tail PFN index
+} ARM_PFNLIST;
+
+//
+// MiArm* prefixes (not the real Mm* names) because mm.h - which IS in this
+// build's chain - already declares MmNumberOfPhysicalPages / Mm{Lowest,Highest}
+// PhysicalPage extern; these are our self-contained bring-up structures that
+// mirror the real ones field-for-field, not the linked executive globals.
+//
+
+static PARM_MMPFN MiArmPfnDb;
+static ULONG MiArmPhysPages;
+static ULONG MiArmLowestPage = 0xFFFFFFFFu;
+static ULONG MiArmHighestPage;
+static ARM_PFNLIST MiArmFreeList = { 0, MM_EMPTY_LIST, MM_EMPTY_LIST };
+static ARM_PFNLIST MiArmBadList  = { 0, MM_EMPTY_LIST, MM_EMPTY_LIST };
+
+#define MI_PFN(idx) (&MiArmPfnDb[(idx)])
+
+//
+// PageLocation lives in bits 8..10 of the u3 word (MMPFNENTRY layout).
+//
+
+static VOID
+MiArmSetLocation (
+    PARM_MMPFN p,
+    ULONG Location
+    )
+{
+    p->u3 = (p->u3 & ~(7u << 8)) | ((Location & 7u) << 8);
+}
+
+//
+// MiInsertPageInList / MiRemoveAnyPage discipline (PFNLIST.C): thread/unthread
+// a page by PFN INDEX through the database (Flink/Blink are indices, not
+// pointers; MM_EMPTY_LIST terminates). Insert at tail, remove at head.
+//
+
+static VOID
+MiArmInsertPageInList (
+    ARM_PFNLIST *List,
+    ULONG PageFrameIndex
+    )
+{
+    PARM_MMPFN p = MI_PFN(PageFrameIndex);
+    ULONG last = List->Blink;
+
+    if (last == MM_EMPTY_LIST)
+        List->Flink = PageFrameIndex;
+    else
+        MI_PFN(last)->Flink = PageFrameIndex;
+
+    List->Blink = PageFrameIndex;
+    p->Flink = MM_EMPTY_LIST;
+    p->Blink = last;
+    p->ReferenceCount = 0;
+    MiArmSetLocation(p, (List == &MiArmBadList) ? BadPageList : FreePageList);
+    List->Total += 1;
+}
+
+static ULONG
+MiArmRemovePageFromList (
+    ARM_PFNLIST *List
+    )
+{
+    ULONG pfn = List->Flink;
+    PARM_MMPFN p;
+
+    if (pfn == MM_EMPTY_LIST)
+        return 0;
+
+    p = MI_PFN(pfn);
+    List->Flink = p->Flink;
+    if (p->Flink == MM_EMPTY_LIST)
+        List->Blink = MM_EMPTY_LIST;
+    else
+        MI_PFN(p->Flink)->Blink = MM_EMPTY_LIST;
+
+    List->Total -= 1;
+    p->Flink = 0;
+    p->Blink = 0;
+    p->ReferenceCount = 1;
+    MiArmSetLocation(p, ActiveAndValid);
+    return pfn;
+}
+
+//
+// The KSEG0 direct map covers only PA 0..0x20000000 (512 MB), but RPi2 RAM is
+// 896 MB, so a free PFN above the window cannot be reached as KSEG0 + (pfn<<12).
+// Every page this bring-up touches that way (L2 tables, demand-fill pages) must
+// be in-window, so allocate them through this guard: the free list is FIFO and
+// low-first, so the head stays well under 512 MB here; peek before popping so a
+// (theoretical) high head is refused rather than handed out and faulted on. The
+// real MM uses the INITMIPS PfnInKseg0-vs-virtual split for pages above KSEG0.
+//
+
+#define MI_KSEG0_PAGE_LIMIT (0x20000000u >> PAGE_SHIFT)
+
+static ULONG
+MiArmAllocKseg0Page (
+    VOID
+    )
+{
+    if (MiArmFreeList.Flink == MM_EMPTY_LIST ||
+        MiArmFreeList.Flink >= MI_KSEG0_PAGE_LIMIT)
+        return 0;
+    return MiArmRemovePageFromList(&MiArmFreeList);
+}
+
+static VOID
+MiArmZeroPages (
+    PVOID Va,
+    ULONG Bytes
+    )
+{
+    volatile ULONG *p = (volatile ULONG *)Va;
+    ULONG n = Bytes >> 2;
+
+    while (n--)
+        *p++ = 0;
+}
+
+static VOID MiArmTlbiAll (VOID)
+{
+    __asm__ __volatile__("mcr p15,0,%0,c8,c7,0 ; dsb ; isb" :: "r"(0) : "memory");
+}
+
+static VOID MiArmTlbiMva (ULONG Va)
+{
+    __asm__ __volatile__("mcr p15,0,%0,c8,c7,1 ; dsb ; isb"
+                         :: "r"(Va & 0xFFFFF000) : "memory");
+}
+
+//
+// ---------------------------------------------------------------------------
+//  The general ARMv7 page-table self-map (Task: MiGetPteAddress works across
+//  the system region, not just the one demo megabyte).
+//
+//  x86/MIPS use a uniform recursive self-map (1024-entry 4 KB tables at both
+//  levels + a PDE that points at itself). ARMv7 short descriptors split 4096
+//  1 MB L1 entries (16 KB table) from 256 4 KB L2 entries (1 KB table), so the
+//  recursion is hand-built:
+//
+//    PTE window:  MiGetPteAddress(va) = PTE_BASE + (va>>12)*4 (4 MB at 0xC0000000)
+//                 -> megabyte M's L2 table is exposed at PTE_BASE + M*0x400.
+//                 The window is itself 4 megabytes (L1[0xC00..0xC03]); each is an
+//                 L2-of-L2 (MiArmWindowL2[w]) whose entries map the physical pages
+//                 holding the real L2 tables. L2 tables pack 4-per-page (1 KB
+//                 each), so 4 source megabytes (M&~3..M|3) share one window page.
+//
+//    PDE window:  MiGetPdeAddress(va) = PDE_BASE + (va>>20)*4 (16 KB at 0xC0400000)
+//                 -> the 16 KB L1 directory itself, via MiArmPdeWinL2[0..3].
+//
+//  L2 tables are allocated from the PFN free list (real physical pages); for the
+//  bring-up the free-list head hands out low pages (< 16 MB), so their KSEG0 VA
+//  (0x80000000 + phys) is inside the 512 MB KSEG0 window.
+// ---------------------------------------------------------------------------
+//
+
+static ULONG MiArmWindowL2[4][256] __attribute__((aligned(1024))); // L1[0xC00..0xC03]
+static ULONG MiArmPdeWinL2[256]    __attribute__((aligned(1024))); // L1[0xC04] -> the L1
+static ULONG MiArmL2GroupPage[1024];   // (M>>2) -> phys page of 4 packed L2 tables, 0=none
+
+//
+// Wire the four PTE-window L2-of-L2 tables into L1[0xC00..0xC03] and expose the
+// 16 KB L1 directory at PDE_BASE. Supersedes the one-shot demo wirings made by
+// MiArmReportPaging / MiArmSelfMapDemo (those already printed their results).
+//
+
+static VOID
+MiArmBuildSelfMap (
+    VOID
+    )
+{
+    ULONG w, j, l1phys;
+
+    for (w = 0; w < 4; w += 1) {
+        for (j = 0; j < 256; j += 1)
+            MiArmWindowL2[w][j] = 0;
+        MiArmL1[0xC00 + w] =
+            (((ULONG)MiArmWindowL2[w] - KSEG0) & 0xFFFFFC00) | 0x1;
+    }
+
+    l1phys = (ULONG)MiArmL1 - KSEG0;            // 16 KB directory = 4 pages
+    for (j = 0; j < 256; j += 1)
+        MiArmPdeWinL2[j] = (j < 4)
+            ? (((l1phys + (j << PAGE_SHIFT)) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW)
+            : 0;
+    MiArmL1[0xC04] = (((ULONG)MiArmPdeWinL2 - KSEG0) & 0xFFFFFC00) | 0x1;
+
+    MiArmTlbiAll();
+}
+
+//
+// Return the KSEG0 VA of megabyte M's 1 KB L2 table, allocating its packed
+// storage page (4 L2s per page) and wiring it into the PTE window on first use.
+//
+
+static ULONG
+MiArmL2Va (
+    ULONG M
+    )
+{
+    ULONG group = M >> 2;
+    ULONG phys = MiArmL2GroupPage[group];
+
+    if (phys == 0) {
+        ULONG pfn = MiArmAllocKseg0Page();
+        phys = pfn << PAGE_SHIFT;
+        MiArmL2GroupPage[group] = phys;
+        MiArmZeroPages((PVOID)(KSEG0 + phys), PAGE_SIZE);
+        MiArmWindowL2[M >> 10][(M >> 2) & 0xFF] =
+            (phys & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;   // expose in the PTE window
+        MiArmTlbiAll();
+    }
+    return KSEG0 + phys + ((M & 3) << 10);
+}
+
+static const char *
+MiArmMemTypeName (
+    ULONG t
+    )
+{
+    switch (t) {
+    case LoaderExceptionBlock:    return "ExceptionBlock";
+    case LoaderSystemBlock:       return "SystemBlock";
+    case LoaderFree:              return "Free";
+    case LoaderBad:               return "Bad";
+    case LoaderLoadedProgram:     return "LoadedProgram";
+    case LoaderFirmwareTemporary: return "FirmwareTemp";
+    case LoaderFirmwarePermanent: return "FirmwarePerm";
+    case LoaderOsloaderHeap:      return "OsloaderHeap";
+    case LoaderOsloaderStack:     return "OsloaderStack";
+    case LoaderSystemCode:        return "SystemCode";
+    case LoaderHalCode:           return "HalCode";
+    case LoaderBootDriver:        return "BootDriver";
+    case LoaderMemoryData:        return "MemoryData";
+    case LoaderNlsData:           return "NlsData";
+    case LoaderRegistryData:      return "RegistryData";
+    default:                      return "other";
+    }
+}
+
+//
+// MiGetPteAddress / MiGetPdeAddress (the ARMv7 forms from miarm.h, inlined here
+// since miarm.h is not in this build's chain).
+//
+
+#define MI_PTE_VA(va) (PTE_BASE + ((((ULONG)(va)) >> 12) << 2))
+#define MI_PDE_VA(va) (PDE_BASE + ((((ULONG)(va)) >> 20) << 2))
+
+//
+// Demonstrate, on a safe KSEG0 megabyte the kernel does not run from, the two
+// MiInitMachineDependent mechanisms MM needs: (1) remap a 1 MB section as 256
+// per-page (4 KB) PTEs without changing what it maps, and (2) the L2 is wired
+// into the self-map so editing a PTE through its MiGetPteAddress window VA
+// changes the live mapping - exactly what MmAccessFault does at runtime.
+//
+
+static VOID
+MiArmRemapDemo (
+    VOID
+    )
+{
+    ULONG testVa = 0x90000000;                      // KSEG0 + 0x10000000 (free RAM)
+    ULONG M = testVa >> 20;
+    ULONG basePhys = (M - (KSEG0 >> 20)) << 20;     // PA the section maps (0x10000000)
+    volatile ULONG *l2;
+    ULONG j, before, afterRemap, pteWin, pde, freshPfn, afterEdit;
+
+    KiEmit("\nARMv7 4 KB remap + self-map edit:\n");
+
+    *(volatile ULONG *)testVa = 0xCAFEF00Du;        // scratch sentinel via the 1 MB section
+    before = *(volatile ULONG *)testVa;
+
+    l2 = (volatile ULONG *)MiArmL2Va(M);            // megabyte M's L2 (allocated + windowed)
+    for (j = 0; j < L2_ENTRIES; j += 1)             // mirror the section: 256 x 4 KB pages
+        l2[j] = ((basePhys + (j << PAGE_SHIFT)) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+
+    MiArmL1[M] = (((ULONG)l2 - KSEG0) & 0xFFFFFC00) | 0x1;   // section -> L2 pointer
+    MiArmTlbiMva(testVa);
+    afterRemap = *(volatile ULONG *)testVa;         // same physical page -> sentinel survives
+
+    pteWin = MI_PTE_VA(testVa);
+    pde = MI_PDE_VA(testVa);
+
+    freshPfn = MiArmAllocKseg0Page();
+    *(volatile ULONG *)(KSEG0 + (freshPfn << PAGE_SHIFT)) = 0xDEADBEEFu;
+    *(volatile ULONG *)pteWin =                     // edit page 0's PTE through the window VA
+        ((freshPfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+    MiArmTlbiMva(testVa);
+    afterEdit = *(volatile ULONG *)testVa;          // now resolves to the fresh page
+
+    KiEmit("  test VA                     : "); KiEmitHex(testVa);
+    KiEmit("\n  sentinel via 1MB section    : "); KiEmitHex(before);
+    KiEmit("\n  after remap to 4KB pages    : "); KiEmitHex(afterRemap);
+    KiEmit(afterRemap == 0xCAFEF00Du ? "  OK - same physical page\n" : "  *** FAIL ***\n");
+    KiEmit("  MiGetPdeAddress(VA)         : "); KiEmitHex(pde);
+    KiEmit(" -> L1 entry "); KiEmitHex(*(volatile ULONG *)pde);
+    KiEmit("\n  MiGetPteAddress(VA)         : "); KiEmitHex(pteWin);
+    KiEmit(" -> PTE "); KiEmitHex(*(volatile ULONG *)pteWin);
+    KiEmit("\n  edited that PTE, read VA    : "); KiEmitHex(afterEdit);
+    KiEmit(afterEdit == 0xDEADBEEFu ? "  OK - self-map edit took effect\n" : "  *** FAIL ***\n");
+}
+
+//
+// ---------------------------------------------------------------------------
+//  The data-abort -> page-fault fill path (the MmAccessFault analog).
+//
+//  ke/trap.S's data-abort handler tail-calls MiArmTryFillFault(DFAR) before the
+//  SEH-dispatch / bug-check path; if it maps a page it returns 1 and the handler
+//  retries the faulting instruction. This is the ARMv7 equivalent of MM faulting
+//  in a demand-zero page: remove a free PFN, zero it, write the L2 descriptor,
+//  invalidate the TLB entry. ARMv7 is hardware-walked, so writing the descriptor
+//  + TLBIMVA is the whole fill (no software TLB load like MIPS KeFillEntryTb).
+// ---------------------------------------------------------------------------
+//
+
+static ULONG MiArmFillBase;             // demand-fill window [base, end), 0 = disabled
+static ULONG MiArmFillEnd;
+static ULONG MiArmFillCount;            // pages filled on fault (for the demo report)
+
+ULONG
+MiArmTryFillFault (
+    ULONG FaultVa
+    )
+{
+    volatile ULONG *l2;
+    ULONG pfn;
+
+    if (MiArmFillBase == 0 || FaultVa < MiArmFillBase || FaultVa >= MiArmFillEnd)
+        return 0;                                   // not ours - let the trap path run
+
+    pfn = MiArmAllocKseg0Page();
+    if (pfn == 0)
+        return 0;                                   // out of memory -> genuine fault
+
+    MiArmZeroPages((PVOID)(KSEG0 + (pfn << PAGE_SHIFT)), PAGE_SIZE);   // demand-zero
+    l2 = (volatile ULONG *)MiArmL2Va(FaultVa >> 20);                   // L2 pre-built in setup
+    l2[(FaultVa >> 12) & 0xFF] =
+        ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+    MiArmTlbiMva(FaultVa);
+    MiArmFillCount += 1;
+    return 1;                                        // retry the faulting instruction
+}
+
+static VOID
+MiArmFaultFillDemo (
+    VOID
+    )
+{
+    ULONG testVa = 0xE0000000;                      // a fresh, all-fault megabyte
+    volatile ULONG *l2;
+    ULONG before, v1, v2, v3;
+
+    KiEmit("\nARMv7 demand-fill fault path (the MmAccessFault analog):\n");
+
+    l2 = (volatile ULONG *)MiArmL2Va(testVa >> 20);          // all-fault L2 (zeroed)
+    MiArmL1[testVa >> 20] = (((ULONG)l2 - KSEG0) & 0xFFFFFC00) | 0x1;
+    MiArmTlbiAll();
+
+    MiArmFillBase = testVa;
+    MiArmFillEnd = testVa + 0x100000;
+    MiArmFillCount = 0;
+    before = MiArmFreeList.Total;
+
+    v1 = *(volatile ULONG *)testVa;                 // page 0: data abort -> fill -> retry -> read
+    *(volatile ULONG *)testVa = 0x5AA55AA5u;
+    v2 = *(volatile ULONG *)testVa;
+    *(volatile ULONG *)(testVa + 0x4000) = 0x1234u; // page 4: a second fault-fill
+    v3 = *(volatile ULONG *)(testVa + 0x4000);
+
+    KiEmit("  fill window                 : "); KiEmitHex(MiArmFillBase);
+    KiEmit(" .. "); KiEmitHex(MiArmFillEnd);
+    KiEmit("\n  read page 0 (faulted in)    : "); KiEmitHex(v1);
+    KiEmit(v1 == 0 ? "  OK - demand-zero page\n" : "  *** not zero ***\n");
+    KiEmit("  write + read back           : "); KiEmitHex(v2);
+    KiEmit(v2 == 0x5AA55AA5u ? "  OK\n" : "  *** FAIL ***\n");
+    KiEmit("  page 4 write + read back    : "); KiEmitHex(v3);
+    KiEmit(v3 == 0x1234u ? "  OK\n" : "  *** FAIL ***\n");
+    KiEmit("  pages filled on fault       : "); KiEmitHex(MiArmFillCount);
+    KiEmit("\n  free pages consumed         : "); KiEmitHex(before - MiArmFreeList.Total);
+    KiEmit("\n");
+
+    MiArmFillBase = 0;                              // close the demand-fill window
+}
+
+//
+// Step 1: walk the loader's memory-descriptor list, accumulate the physical
+// page counts, and pick the largest free run (the INITMIPS.C opening). Read
+// only - this is where we learn the real RPi2/QEMU + peldr layout before
+// carving anything (the kernel image is loaded inside this map).
+//
+
+VOID
+MiArmInitMachineDependent (
+    IN PLOADER_PARAMETER_BLOCK LoaderBlock
+    )
+{
+    PLIST_ENTRY next, head;
+    PMEMORY_ALLOCATION_DESCRIPTOR md = NULL;
+    PMEMORY_ALLOCATION_DESCRIPTOR freeDesc = NULL;
+    ULONG mostFree = 0;
+
+    KiEmit("\nMiInitMachineDependent (ARMv7) - MM init body:\n");
+    KiEmit("  loader memory-descriptor list:\n");
+
+    head = &LoaderBlock->MemoryDescriptorListHead;
+    for (next = head->Flink; next != head; next = md->ListEntry.Flink) {
+        md = CONTAINING_RECORD(next, MEMORY_ALLOCATION_DESCRIPTOR, ListEntry);
+
+        KiEmit("    ");
+        KiEmit(MiArmMemTypeName((ULONG)md->MemoryType));
+        KiEmit(" base="); KiEmitHex(md->BasePage);
+        KiEmit(" count="); KiEmitHex(md->PageCount);
+        KiEmit(" end="); KiEmitHex(md->BasePage + md->PageCount);
+        KiEmit("\n");
+
+        MiArmPhysPages += md->PageCount;
+        if (md->BasePage < MiArmLowestPage)
+            MiArmLowestPage = md->BasePage;
+        if (md->BasePage + md->PageCount > MiArmHighestPage)
+            MiArmHighestPage = md->BasePage + md->PageCount - 1;
+        if (md->MemoryType == LoaderFree && md->PageCount > mostFree) {
+            mostFree = md->PageCount;
+            freeDesc = md;
+        }
+    }
+
+    KiEmit("  total physical pages : "); KiEmitHex(MiArmPhysPages);
+    KiEmit("\n  lowest physical page : "); KiEmitHex(MiArmLowestPage);
+    KiEmit("\n  highest physical page: "); KiEmitHex(MiArmHighestPage);
+    KiEmit("\n  largest free run     : ");
+    if (freeDesc) {
+        KiEmit("base="); KiEmitHex(freeDesc->BasePage);
+        KiEmit(" count="); KiEmitHex(freeDesc->PageCount);
+        KiEmit(" (KSEG0 VA "); KiEmitHex(KSEG0_BASE + (freeDesc->BasePage << PAGE_SHIFT));
+        KiEmit(")");
+    } else {
+        KiEmit("(none)");
+    }
+    KiEmit("\n");
+
+    if (freeDesc == NULL || MiArmPhysPages < 1024) {
+        KiEmit("  *** too little physical memory - INSTALL_MORE_MEMORY ***\n");
+        return;
+    }
+
+    //
+    // Step 2: build the PFN database in the KSEG0 direct map (the INITMIPS.C
+    // PfnInKseg0 path). Carve it from the LOW end of the largest free run -
+    // which the layout above proves sits above the kernel/HAL/registry/NLS -
+    // so its KSEG0 VA (0x80000000 + (page<<12)) is inside the 512 MB KSEG0
+    // window and clobbers nothing in use. (INITMIPS carves from the high end;
+    // the low end is what keeps ARM's 512 MB KSEG0 reachable when RAM is
+    // 896 MB > 512 MB and the run's top is above the window.)
+    //
+
+    {
+        ULONG pfnBytes = (MiArmHighestPage + 1) * sizeof(ARM_MMPFN);
+        ULONG PfnAllocation = (pfnBytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
+        ULONG carveStart = freeDesc->BasePage;
+        ULONG carveEnd = carveStart + PfnAllocation;
+        ULONG p, e, a, b, c;
+
+        MiArmPfnDb = (PARM_MMPFN)(KSEG0_BASE + (carveStart << PAGE_SHIFT));
+        MiArmZeroPages(MiArmPfnDb, PfnAllocation << PAGE_SHIFT);
+
+        //
+        // Step 3: walk the descriptors again and populate the PFN database -
+        // free physical pages onto the free list, bad pages onto the bad list,
+        // everything else marked active (the INITMIPS.C MemoryType switch). The
+        // carved PFN-database pages and page zero stay active (never handed out).
+        //
+
+        for (next = head->Flink; next != head; next = md->ListEntry.Flink) {
+            md = CONTAINING_RECORD(next, MEMORY_ALLOCATION_DESCRIPTOR, ListEntry);
+            p = md->BasePage;
+            e = md->BasePage + md->PageCount;
+
+            for (; p < e; p += 1) {
+                PARM_MMPFN pfn = MI_PFN(p);
+
+                if ((p >= carveStart && p < carveEnd) || p == 0) {
+                    pfn->ReferenceCount = 1;            // PFN DB / page zero: keep
+                    MiArmSetLocation(pfn, ActiveAndValid);
+                    continue;
+                }
+
+                switch (md->MemoryType) {
+                case LoaderBad:
+                    MiArmInsertPageInList(&MiArmBadList, p);
+                    break;
+                case LoaderFree:
+                case LoaderLoadedProgram:
+                case LoaderFirmwareTemporary:
+                case LoaderOsloaderStack:
+                    MiArmInsertPageInList(&MiArmFreeList, p);
+                    break;
+                default:
+                    pfn->ReferenceCount = 1;            // in use: kernel/HAL/stack/...
+                    MiArmSetLocation(pfn, ActiveAndValid);
+                    break;
+                }
+            }
+        }
+
+        KiEmit("  PFN database VA      : ");
+        KiEmitHex((ULONG)MiArmPfnDb);
+        KiEmit(" .. ");
+        KiEmitHex((ULONG)MiArmPfnDb + pfnBytes);
+        KiEmit("\n  PFN entry size       : ");
+        KiEmitHex(sizeof(ARM_MMPFN));
+        KiEmit("\n  PFN pages (in KSEG0) : ");
+        KiEmitHex(PfnAllocation);
+        KiEmit("\n  free pages on list   : ");
+        KiEmitHex(MiArmFreeList.Total);
+        KiEmit("\n  bad pages on list    : ");
+        KiEmitHex(MiArmBadList.Total);
+
+        //
+        // Verify the free list is real: remove three pages (MiRemoveAnyPage),
+        // confirm they are distinct, non-zero, and inside described RAM.
+        //
+
+        a = MiArmRemovePageFromList(&MiArmFreeList);
+        b = MiArmRemovePageFromList(&MiArmFreeList);
+        c = MiArmRemovePageFromList(&MiArmFreeList);
+        KiEmit("\n  alloc 3 from list    : ");
+        KiEmitHex(a); KiEmit(" "); KiEmitHex(b); KiEmit(" "); KiEmitHex(c);
+        KiEmit((a && b && c && a != b && b != c && a != c &&
+                a <= MiArmHighestPage && b <= MiArmHighestPage && c <= MiArmHighestPage)
+               ? "  OK - distinct, in range\n"
+               : "  *** FAIL ***\n");
+        KiEmit("  free pages remaining : ");
+        KiEmitHex(MiArmFreeList.Total);
+        KiEmit("\n");
+    }
+
+    //
+    // Steps 4+5: the free list now exists, so build the general self-map and
+    // demonstrate the 4 KB remap + self-map edit (the mechanisms MmAccessFault
+    // and MiInitMachineDependent's per-page work depend on).
+    //
+
+    MiArmBuildSelfMap();
+    MiArmRemapDemo();
+    MiArmFaultFillDemo();
+}

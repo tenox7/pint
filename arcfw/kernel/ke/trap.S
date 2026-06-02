@@ -30,9 +30,24 @@ KiArmVectorTable:
 @ drop to SVC mode (the banked sp = the faulting kernel stack) and resume at the
 @ _SEH_TRY via KiSehLongjmp - genuine fault recovery. Status is held in callee-
 @ saved r4-r6 so it survives the call and is still available for the report path.
+@ The retry path uses SPSR_abt (movs pc,lr restores CPSR from it). That is safe
+@ without saving SPSR_abt because no exception can nest inside MiArmTryFillFault:
+@ the CPU masks async aborts (CPSR.A) and IRQ (CPSR.I) on abort entry, and the
+@ fill routine touches only KSEG0-mapped memory (the PFN database / L2 tables /
+@ the demand-zero page), so it cannot take a synchronous abort. If it is ever
+@ extended to touch faultable memory, save/restore SPSR_abt around the bl.
 KiDataAbortEntry:
-    sub     lr, lr, #8
+    sub     lr, lr, #8                  @ lr = faulting instruction (retry point)
     ldr     sp, =KiArmTrapStackTop
+    push    {r0-r12, lr}                @ save faulting context + retry pc (56 bytes, 8-aligned)
+    mrc     p15, 0, r0, c6, c0, 0       @ DFAR (fault address) -> arg0
+    bl      MiArmTryFillFault           @ MM demand-fill: r0 = 1 if mapped (retry), 0 otherwise
+    cmp     r0, #0
+    beq     .LDataNotFilled
+    pop     {r0-r12, lr}                @ restore faulting context
+    movs    pc, lr                      @ retry the faulting instruction (restores CPSR from SPSR)
+.LDataNotFilled:
+    pop     {r0-r12, lr}                @ lr = faulting pc; sp back at trap top
     mrc     p15, 0, r4, c5, c0, 0       @ DFSR
     mrc     p15, 0, r5, c6, c0, 0       @ DFAR (fault address)
     mov     r6, lr                      @ faulting pc
