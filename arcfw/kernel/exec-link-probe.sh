@@ -61,7 +61,7 @@ KINCS="-Iinc -I/work/ARM32/arcfw/inc -I/tmp/f/ke -I/tmp/f/priv -I/tmp/f/pub -I/t
 for s in ke/armstart.S ke/interlock.S ke/ctxsw.S ke/trap.S ke/seh.S; do
   ${CROSS}gcc $CFLAGS $KINCS -c $s -o "$OUT/k_$(basename ${s%.S}).o" 2>/dev/null
 done
-for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ke/exarm.c ../ported/wait.c ../ported/queueobj.c; do
+for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ke/exarm.c ke/exglobals.c ../ported/wait.c ../ported/queueobj.c; do
   tr -d "\032\r" < "$c" > /tmp/c.c
   ${CROSS}gcc $CFLAGS $KINCS -c /tmp/c.c -o "$OUT/k_$(basename ${c%.c}).o" 2>/dev/null
 done
@@ -77,7 +77,11 @@ done
 for S in $SUBSYS; do
   s=$(echo $S|tr A-Z a-z); INCS="-I/tmp/f/$s $COMMON"
   for f in /work/PRIVATE/NTOS/$S/*.[Cc]; do
-    [ -e "$f" ] || continue; base=$(basename "${f%.[Cc]}")
+    [ -e "$f" ] || continue
+    base=$(basename "${f%.[Cc]}")
+    grep -q "#include" "$f" || continue                 # skip #include-fragment files (not TUs)
+    grep -qE "[^A-Za-z_]main[ \t]*\(" "$f" && continue  # skip user-mode test programs
+    case "$base" in CTXMIP|CTXALPHA|CTXPPC|CTXI386) continue;; esac   # other-arch context
     tr -d "\032\r" < "$f" | perl -p "$CLFILTER" > /tmp/tu.c
     ${CROSS}gcc $CFLAGS $INCS -c /tmp/tu.c -o "$OUT/e_${s}_${base}.o" 2>/dev/null
   done

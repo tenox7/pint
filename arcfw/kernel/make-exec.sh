@@ -76,6 +76,7 @@ CFLAGS="-mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fshort-w
 ALLSUB=""; for S in $SUBSYS; do ALLSUB="$ALLSUB -I/tmp/f/$(echo $S|tr A-Z a-z)"; done
 COMMON="-Iinc -I/work/ARM32/arcfw/inc $ALLSUB -I/tmp/f/ke -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/pub -I/tmp/f/crt"
 OUT=/tmp/eobj; mkdir -p "$OUT"; rm -f "$OUT"/*.o; rm -f /tmp/exerr.txt
+mkdir -p /tmp/cl   # per-file staged TUs (real basename in the error path -> attribution)
 
 TOK=0; TOT=0
 for S in $SUBSYS; do
@@ -83,9 +84,13 @@ for S in $SUBSYS; do
   ok=0; n=0
   for f in /work/PRIVATE/NTOS/$S/*.[Cc]; do
     [ -e "$f" ] || continue
-    n=$((n+1)); base=$(basename "${f%.[Cc]}")
-    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" > /tmp/tu.c
-    if ${CROSS}gcc $CFLAGS $INCS -c /tmp/tu.c -o "$OUT/${s}_${base}.o" 2>>/tmp/exerr.txt; then
+    base=$(basename "${f%.[Cc]}")
+    grep -q "#include" "$f" || continue                 # skip #include-fragment files (not TUs)
+    grep -qE "[^A-Za-z_]main[ \t]*\(" "$f" && continue  # skip user-mode test programs (T*/U*/REGTEST)
+    case "$base" in CTXMIP|CTXALPHA|CTXPPC|CTXI386) continue;; esac   # other-arch context (not ARM)
+    n=$((n+1))
+    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" > "/tmp/cl/${s}_${base}.c"
+    if ${CROSS}gcc $CFLAGS $INCS -c "/tmp/cl/${s}_${base}.c" -o "$OUT/${s}_${base}.o" 2>>/tmp/exerr.txt; then
       ok=$((ok+1))
     fi
   done
@@ -102,6 +107,13 @@ echo
 echo "=== top UNKNOWN TYPE NAMES (leverage map for the unknown-type bucket) ==="
 grep -hoE "error: unknown type name '\''[A-Za-z_][A-Za-z0-9_]*'\''" /tmp/exerr.txt \
   | grep -oE "'\''[A-Za-z_][A-Za-z0-9_]*'\''" | sort | uniq -c | sort -rn | head -25 | sed "s/^/   /"
+echo
+echo "=== worst failing files by error count (the real compile-tail TODO) ==="
+grep -oE "/tmp/cl/[A-Za-z0-9_]+\.c" /tmp/exerr.txt | sort | uniq -c | sort -rn | head -18 | sed "s/^/   /"
+echo
+echo "=== FIRST 12 errors of the worst NON-TEST offender (root diagnosis) ==="
+worst=$(grep -oE "/tmp/cl/[A-Za-z0-9_]+\.c" /tmp/exerr.txt | grep -vE "_(T[A-Z]|U[A-Z]|REGTEST|INTRLOC2)" | sort | uniq -c | sort -rn | head -1 | grep -oE "/tmp/cl/[A-Za-z0-9_]+\.c")
+[ -n "$worst" ] && echo "   ($worst)" && grep -F "$worst" /tmp/exerr.txt | grep "error:" | head -12 | sed "s/^/   /"
 echo
 echo "=== objects staged: $(ls /tmp/eobj/*.o 2>/dev/null | wc -l) in /tmp/eobj ==="
 '
