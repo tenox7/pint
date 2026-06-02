@@ -247,6 +247,12 @@ KeFillEntryTb (IN PHARDWARE_PTE Pte, IN PVOID Virtual, IN BOOLEAN Invalid)
     ExpTlbiMva(Virtual);
 }
 
+VOID
+KeFillLargeEntryTb (IN PHARDWARE_PTE Pte, IN PVOID Virtual, IN ULONG PageSize)
+{
+    ExpTlbiMva(Virtual);
+}
+
 HARDWARE_PTE
 KeFlushSingleTb (IN PVOID Virtual, IN BOOLEAN Invalid, IN BOOLEAN AllProcessors,
                  IN PHARDWARE_PTE PtePointer, IN HARDWARE_PTE PteValue)

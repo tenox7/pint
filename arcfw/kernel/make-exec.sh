@@ -99,5 +99,9 @@ echo "=== top remaining failure reasons (the executive-port TODO) ==="
 grep -hoE "error: .*" /tmp/exerr.txt | sed -E "s/(0x[0-9a-f]+|'\''[^'\'']*'\'')/X/g" \
   | sort | uniq -c | sort -rn | head -12 | sed "s/^/   /"
 echo
+echo "=== top UNKNOWN TYPE NAMES (leverage map for the unknown-type bucket) ==="
+grep -hoE "error: unknown type name '\''[A-Za-z_][A-Za-z0-9_]*'\''" /tmp/exerr.txt \
+  | grep -oE "'\''[A-Za-z_][A-Za-z0-9_]*'\''" | sort | uniq -c | sort -rn | head -25 | sed "s/^/   /"
+echo
 echo "=== objects staged: $(ls /tmp/eobj/*.o 2>/dev/null | wc -l) in /tmp/eobj ==="
 '
