@@ -61,10 +61,13 @@ KINCS="-Iinc -I/work/ARM32/arcfw/inc -I/tmp/f/ke -I/tmp/f/priv -I/tmp/f/pub -I/t
 for s in ke/armstart.S ke/interlock.S ke/ctxsw.S ke/trap.S ke/seh.S; do
   ${CROSS}gcc $CFLAGS $KINCS -c $s -o "$OUT/k_$(basename ${s%.S}).o" 2>/dev/null
 done
-for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ../ported/wait.c ../ported/queueobj.c; do
+for c in ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c ke/exarm.c ../ported/wait.c ../ported/queueobj.c; do
   tr -d "\032\r" < "$c" > /tmp/c.c
   ${CROSS}gcc $CFLAGS $KINCS -c /tmp/c.c -o "$OUT/k_$(basename ${c%.c}).o" 2>/dev/null
 done
+# the HAL display half (HalDisplayString / HalpInitializeDisplay0), built like make-kernel.sh
+${CROSS}gcc -mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fno-builtin \
+   -fno-stack-protector -ffunction-sections -fdata-sections -O2 -w -c jxdisp.c -o "$OUT/k_jxdisp.o" 2>/dev/null
 for c in KERNLDAT KIINIT PROCOBJ THREDOBJ THREDSUP DPCOBJ DPCSUP TIMEROBJ TIMERSUP SEMPHOBJ APCOBJ EVENTOBJ WAITSUP; do
   tr -d "\032\r" < /work/PRIVATE/NTOS/KE/$c.C > /tmp/c.c
   ${CROSS}gcc $CFLAGS $KINCS -c /tmp/c.c -o "$OUT/k_$(echo $c|tr A-Z a-z).o" 2>/dev/null
