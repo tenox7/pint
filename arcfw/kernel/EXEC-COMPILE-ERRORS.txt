@@ -1,0 +1,1296 @@
+rtl_ERROR.c: In function 'RtlNtStatusToDosErrorNoTeb':
+rtl_ERROR.c:109:30: error: 'RtlpRunTable' undeclared (first use in this function)
+  109 |         if ((ULONG)Status >= RtlpRunTable[Entry + 1].BaseCode) {
+      |                              ^~~~~~~~~~~~
+rtl_ERROR.c:109:30: note: each undeclared identifier is reported only once for each function it appears in
+rtl_ERROR.c:120:35: error: 'RtlpStatusTable' undeclared (first use in this function)
+  120 |                     return (ULONG)RtlpStatusTable[Index];
+      |                                   ^~~~~~~~~~~~~~~
+rtl_ERROR.c:130:53: error: 'RUN_ENTRY' undeclared (first use in this function); did you mean 'OWNER_ENTRY'?
+  130 |     } while (Entry < (sizeof(RtlpRunTable) / sizeof(RUN_ENTRY)));
+      |                                                     ^~~~~~~~~
+      |                                                     OWNER_ENTRY
+In file included from rtl_FMTTIME.c:27:
+/tmp/f/rtl/stdtimep.h:404:7: error: unknown type name 'PSTDTIME_ERROR'
+  404 |    IN PSTDTIME_ERROR num48,
+      |       ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:411:8: error: unknown type name 'PSTDTIME_ERROR'
+  411 |    OUT PSTDTIME_ERROR num48
+      |        ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:426:7: error: unknown type name 'PSTDTIME_ERROR'
+  426 |    IN PSTDTIME_ERROR First48,
+      |       ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:427:7: error: unknown type name 'PSTDTIME_ERROR'
+  427 |    IN PSTDTIME_ERROR Second48,
+      |       ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:428:7: error: unknown type name 'PSTDTIME_ERROR'
+  428 |    IN PSTDTIME_ERROR Result48
+      |       ^~~~~~~~~~~~~~
+rtl_FMTTIME.c:75:7: error: unknown type name 'PSTANDARD_TIME'
+   75 |    IN PSTANDARD_TIME StdTime,
+      |       ^~~~~~~~~~~~~~
+rtl_GENERR.c: In function 'main':
+rtl_GENERR.c:1020:5: error: unknown type name 'FILE'
+ 1020 |     FILE *OutFile;
+      |     ^~~~
+rtl_GENERR.c:31:1: note: 'FILE' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+   30 | #include "stdlib.h"
+  +++ |+#include <stdio.h>
+   31 | 
+rtl_GENERR.c:1039:17: error: 'stderr' undeclared (first use in this function)
+ 1039 |         fprintf(stderr, "GENERR: Cannot open %s for writing.\n", OutName);
+      |                 ^~~~~~
+rtl_GENERR.c:1039:17: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+rtl_GENERR.c:1039:17: note: each undeclared identifier is reported only once for each function it appears in
+rtl_LDRDEBUG.c: In function 'RtlQueryModuleInformation':
+rtl_LDRDEBUG.c:116:55: error: invalid operands to binary - (have 'PUCHAR' {aka 'unsigned char *'} and 'PCHAR' {aka 'char *'})
+  116 |             ModuleInfo->OffsetToFileName = (USHORT)(s - AnsiString.Buffer);
+      |                                                       ^ ~~~~~~~~~~~~~~~~~
+      |                                                                   |
+      |                                                                   PCHAR {aka char *}
+rtl_LDRDEBUG.c:162:59: error: invalid operands to binary - (have 'PUCHAR' {aka 'unsigned char *'} and 'PCHAR' {aka 'char *'})
+  162 |                 ModuleInfo->OffsetToFileName = (USHORT)(s - AnsiString.Buffer);
+      |                                                           ^ ~~~~~~~~~~~~~~~~~
+      |                                                                       |
+      |                                                                       PCHAR {aka char *}
+rtl_LZNT1.c:653:1: error: conflicting types for 'RtlDecompressFragmentLZNT1'; have 'NTSTATUS(UCHAR *, ULONG,  UCHAR *, ULONG,  ULONG,  ULONG *, struct _LZNT1_FRAGMENT_WORKSPACE *)' {aka 'long int(unsigned char *, long unsigned int,  unsigned char *, long unsigned int,  long unsigned int,  long unsigned int *, struct _LZNT1_FRAGMENT_WORKSPACE *)'}
+  653 | RtlDecompressFragmentLZNT1 (
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from rtl_LZNT1.c:21:
+/tmp/f/rtl/ntrtlp.h:327:1: note: previous declaration of 'RtlDecompressFragmentLZNT1' with type 'NTSTATUS(UCHAR *, ULONG,  UCHAR *, ULONG,  ULONG,  ULONG *, void *)' {aka 'long int(unsigned char *, long unsigned int,  unsigned char *, long unsigned int,  long unsigned int,  long unsigned int *, void *)'}
+  327 | RtlDecompressFragmentLZNT1 (
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~
+rtl_LZNT1.c:1793:1: error: conflicting types for 'LZNT1FindMatchMaximum'; have 'ULONG(UCHAR *, struct _LZNT1_MAXIMUM_WORKSPACE *)' {aka 'long unsigned int(unsigned char *, struct _LZNT1_MAXIMUM_WORKSPACE *)'}
+ 1793 | LZNT1FindMatchMaximum (
+      | ^~~~~~~~~~~~~~~~~~~~~
+rtl_LZNT1.c:103:1: note: previous declaration of 'LZNT1FindMatchMaximum' with type 'ULONG(UCHAR *, void *)' {aka 'long unsigned int(unsigned char *, void *)'}
+  103 | LZNT1FindMatchMaximum (
+      | ^~~~~~~~~~~~~~~~~~~~~
+rtl_MESSAGE.c: In function 'RtlFormatMessage':
+rtl_MESSAGE.c:193:76: error: lvalue required as increment operand
+  193 |                             rgInserts[ MaxInsert++ ] = *((PULONG)Arguments)++;
+      |                                                                            ^~
+rtl_MESSAGE.c:196:75: error: expected expression before 'ULONG'
+  196 |                             rgInserts[ MaxInsert++ ] = va_arg(*Arguments, ULONG);
+      |                                                                           ^~~~~
+rtl_MESSAGE.c:205:94: error: lvalue required as increment operand
+  205 |                             PrintParameter1 = rgInserts[ MaxInsert++ ] = *((PULONG)Arguments)++;
+      |                                                                                              ^~
+rtl_MESSAGE.c:208:94: error: expected expression before 'ULONG'
+  208 |                             PrintParameter1 = rgInserts[ MaxInsert++ ] = va_arg( *Arguments, ULONG );
+      |                                                                                              ^~~~~
+rtl_MESSAGE.c:213:98: error: lvalue required as increment operand
+  213 |                                 PrintParameter2 = rgInserts[ MaxInsert++ ] = *((PULONG)Arguments)++;
+      |                                                                                                  ^~
+rtl_MESSAGE.c:216:98: error: expected expression before 'ULONG'
+  216 |                                 PrintParameter2 = rgInserts[ MaxInsert++ ] = va_arg( *Arguments, ULONG );
+      |                                                                                                  ^~~~~
+In file included from /tmp/f/pub/windows.h:107,
+                 from rtl_RXACT.c:208:
+/tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'
+  226 | typedef PLDT_ENTRY LPLDT_ENTRY;
+      |         ^~~~~~~~~~
+In file included from rtl_STDTIME.c:63:
+/tmp/f/rtl/stdtimep.h:404:7: error: unknown type name 'PSTDTIME_ERROR'
+  404 |    IN PSTDTIME_ERROR num48,
+      |       ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:411:8: error: unknown type name 'PSTDTIME_ERROR'
+  411 |    OUT PSTDTIME_ERROR num48
+      |        ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:426:7: error: unknown type name 'PSTDTIME_ERROR'
+  426 |    IN PSTDTIME_ERROR First48,
+      |       ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:427:7: error: unknown type name 'PSTDTIME_ERROR'
+  427 |    IN PSTDTIME_ERROR Second48,
+      |       ^~~~~~~~~~~~~~
+/tmp/f/rtl/stdtimep.h:428:7: error: unknown type name 'PSTDTIME_ERROR'
+  428 |    IN PSTDTIME_ERROR Result48
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:92:8: error: unknown type name 'PSTANDARD_TIME'
+   92 |    OUT PSTANDARD_TIME StdTime
+      |        ^~~~~~~~~~~~~~
+rtl_STDTIME.c:192:7: error: unknown type name 'PSTANDARD_TIME'
+  192 |    IN PSTANDARD_TIME StdTime,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:333:8: error: unknown type name 'PSTANDARD_TIME'
+  333 |    OUT PSTANDARD_TIME StdTime
+      |        ^~~~~~~~~~~~~~
+rtl_STDTIME.c:383:7: error: unknown type name 'PSTANDARD_TIME'
+  383 |    IN PSTANDARD_TIME StdTime,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:497:7: error: unknown type name 'PSTANDARD_TIME'
+  497 |    IN PSTANDARD_TIME StdTime1,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:498:7: error: unknown type name 'PSTANDARD_TIME'
+  498 |    IN PSTANDARD_TIME StdTime2,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:499:8: error: unknown type name 'PSTANDARD_TIME'
+  499 |    OUT PSTANDARD_TIME Result
+      |        ^~~~~~~~~~~~~~
+rtl_STDTIME.c:611:7: error: unknown type name 'PSTANDARD_TIME'
+  611 |    IN PSTANDARD_TIME StdTime1,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:612:7: error: unknown type name 'PSTANDARD_TIME'
+  612 |    IN PSTANDARD_TIME StdTime2,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:613:8: error: unknown type name 'PSTANDARD_TIME'
+  613 |    OUT PSTANDARD_TIME Result
+      |        ^~~~~~~~~~~~~~
+rtl_STDTIME.c:772:7: error: unknown type name 'PSTDTIME_ERROR'
+  772 |    IN PSTDTIME_ERROR num48,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:810:8: error: unknown type name 'PSTDTIME_ERROR'
+  810 |    OUT PSTDTIME_ERROR num48
+      |        ^~~~~~~~~~~~~~
+rtl_STDTIME.c:909:7: error: unknown type name 'PSTDTIME_ERROR'
+  909 |    IN PSTDTIME_ERROR First48,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:910:7: error: unknown type name 'PSTDTIME_ERROR'
+  910 |    IN PSTDTIME_ERROR Second48,
+      |       ^~~~~~~~~~~~~~
+rtl_STDTIME.c:911:8: error: unknown type name 'PSTDTIME_ERROR'
+  911 |    OUT PSTDTIME_ERROR Result48
+      |        ^~~~~~~~~~~~~~
+rtl_STRING.c: In function 'RtlUpperChar':
+rtl_STRING.c:63:16: error: lvalue required as left operand of assignment
+   63 |             Ch ^= 0x20;                                                   \
+      |                ^~
+rtl_STRING.c:325:5: note: in expansion of macro 'TO_UPPER'
+  325 |     TO_UPPER((UCHAR)Character);
+      |     ^~~~~~~~
+rtl_STRING.c:80:16: error: lvalue required as left operand of assignment
+   80 |             Ch = NlsUnicodeToAnsiData[(USHORT)wCh];                       \
+      |                ^
+rtl_STRING.c:325:5: note: in expansion of macro 'TO_UPPER'
+  325 |     TO_UPPER((UCHAR)Character);
+      |     ^~~~~~~~
+rtl_STRING.c:96:24: error: lvalue required as left operand of assignment
+   96 |                     Ch = LOBYTE(wCh);                                     \
+      |                        ^
+rtl_STRING.c:325:5: note: in expansion of macro 'TO_UPPER'
+  325 |     TO_UPPER((UCHAR)Character);
+      |     ^~~~~~~~
+rtl_STRING.c: In function 'RtlCompareString':
+rtl_STRING.c:63:16: error: lvalue required as left operand of assignment
+   63 |             Ch ^= 0x20;                                                   \
+      |                ^~
+rtl_STRING.c:385:13: note: in expansion of macro 'TO_UPPER'
+  385 |             TO_UPPER((UCHAR)c1);
+      |             ^~~~~~~~
+rtl_STRING.c:80:16: error: lvalue required as left operand of assignment
+   80 |             Ch = NlsUnicodeToAnsiData[(USHORT)wCh];                       \
+      |                ^
+rtl_STRING.c:385:13: note: in expansion of macro 'TO_UPPER'
+  385 |             TO_UPPER((UCHAR)c1);
+      |             ^~~~~~~~
+rtl_STRING.c:96:24: error: lvalue required as left operand of assignment
+   96 |                     Ch = LOBYTE(wCh);                                     \
+      |                        ^
+rtl_STRING.c:385:13: note: in expansion of macro 'TO_UPPER'
+  385 |             TO_UPPER((UCHAR)c1);
+      |             ^~~~~~~~
+rtl_STRING.c:63:16: error: lvalue required as left operand of assignment
+   63 |             Ch ^= 0x20;                                                   \
+      |                ^~
+rtl_STRING.c:386:13: note: in expansion of macro 'TO_UPPER'
+  386 |             TO_UPPER((UCHAR)c2);
+      |             ^~~~~~~~
+rtl_STRING.c:80:16: error: lvalue required as left operand of assignment
+   80 |             Ch = NlsUnicodeToAnsiData[(USHORT)wCh];                       \
+      |                ^
+rtl_STRING.c:386:13: note: in expansion of macro 'TO_UPPER'
+  386 |             TO_UPPER((UCHAR)c2);
+      |             ^~~~~~~~
+rtl_STRING.c:96:24: error: lvalue required as left operand of assignment
+   96 |                     Ch = LOBYTE(wCh);                                     \
+      |                        ^
+rtl_STRING.c:386:13: note: in expansion of macro 'TO_UPPER'
+  386 |             TO_UPPER((UCHAR)c2);
+      |             ^~~~~~~~
+rtl_TACL.c:52:1: error: unknown type name 'STANDARD_ACE'
+   52 | STANDARD_ACE AceListBuffer[2];
+      | ^~~~~~~~~~~~
+rtl_TACL.c: In function 'main':
+rtl_TACL.c:68:5: error: unknown type name 'PMASK_GUID_PAIRS'
+   68 |     PMASK_GUID_PAIRS GuidMasks = (PMASK_GUID_PAIRS)GuidMaskBuffer;
+      |     ^~~~~~~~~~~~~~~~
+rtl_TACL.c:68:35: error: 'PMASK_GUID_PAIRS' undeclared (first use in this function)
+   68 |     PMASK_GUID_PAIRS GuidMasks = (PMASK_GUID_PAIRS)GuidMaskBuffer;
+      |                                   ^~~~~~~~~~~~~~~~
+rtl_TACL.c:68:35: note: each undeclared identifier is reported only once for each function it appears in
+rtl_TACL.c:68:52: error: expected ',' or ';' before 'GuidMaskBuffer'
+   68 |     PMASK_GUID_PAIRS GuidMasks = (PMASK_GUID_PAIRS)GuidMaskBuffer;
+      |                                                    ^~~~~~~~~~~~~~
+rtl_TACL.c:94:21: error: request for member 'Header' in something not a structure or union
+   94 |     AceListBuffer[0].Header.AceType = ACCESS_ALLOWED_ACE_TYPE;
+      |                     ^
+rtl_TACL.c:95:21: error: request for member 'Header' in something not a structure or union
+   95 |     AceListBuffer[0].Header.AceSize = sizeof(STANDARD_ACE);
+      |                     ^
+rtl_TACL.c:95:46: error: 'STANDARD_ACE' undeclared (first use in this function)
+   95 |     AceListBuffer[0].Header.AceSize = sizeof(STANDARD_ACE);
+      |                                              ^~~~~~~~~~~~
+rtl_TACL.c:96:21: error: request for member 'Header' in something not a structure or union
+   96 |     AceListBuffer[0].Header.AceFlags = 0;
+      |                     ^
+rtl_TACL.c:97:21: error: request for member 'Mask' in something not a structure or union
+   97 |     AceListBuffer[0].Mask = 0x22222222;
+      |                     ^
+rtl_TACL.c:98:31: error: request for member 'Guid' in something not a structure or union
+   98 |     CopyGuid(&AceListBuffer[0].Guid, &FredGuid);
+      |                               ^
+rtl_TACL.c:98:39: error: 'FredGuid' undeclared (first use in this function)
+   98 |     CopyGuid(&AceListBuffer[0].Guid, &FredGuid);
+      |                                       ^~~~~~~~
+rtl_TACL.c:100:21: error: request for member 'Header' in something not a structure or union
+  100 |     AceListBuffer[1].Header.AceType = ACCESS_ALLOWED_ACE_TYPE;
+      |                     ^
+rtl_TACL.c:101:21: error: request for member 'Header' in something not a structure or union
+  101 |     AceListBuffer[1].Header.AceSize = sizeof(STANDARD_ACE);
+      |                     ^
+rtl_TACL.c:102:21: error: request for member 'Header' in something not a structure or union
+  102 |     AceListBuffer[1].Header.AceFlags = 0;
+      |                     ^
+rtl_TACL.c:103:21: error: request for member 'Mask' in something not a structure or union
+  103 |     AceListBuffer[1].Mask = 0x44444444;
+      |                     ^
+rtl_TACL.c:104:31: error: request for member 'Guid' in something not a structure or union
+  104 |     CopyGuid(&AceListBuffer[1].Guid, &WilmaGuid);
+      |                               ^
+rtl_TACL.c:104:39: error: 'WilmaGuid' undeclared (first use in this function)
+  104 |     CopyGuid(&AceListBuffer[1].Guid, &WilmaGuid);
+      |                                       ^~~~~~~~~
+rtl_TACL.c:117:21: error: request for member 'Header' in something not a structure or union
+  117 |     AceListBuffer[0].Header.AceType = SYSTEM_AUDIT_ACE_TYPE;
+      |                     ^
+rtl_TACL.c:118:21: error: request for member 'Header' in something not a structure or union
+  118 |     AceListBuffer[0].Header.AceSize = sizeof(STANDARD_ACE);
+      |                     ^
+rtl_TACL.c:119:21: error: request for member 'Header' in something not a structure or union
+  119 |     AceListBuffer[0].Header.AceFlags = 0;
+      |                     ^
+rtl_TACL.c:120:21: error: request for member 'Mask' in something not a structure or union
+  120 |     AceListBuffer[0].Mask = 0x11111111;
+      |                     ^
+rtl_TACL.c:121:31: error: request for member 'Guid' in something not a structure or union
+  121 |     CopyGuid(&AceListBuffer[0].Guid, &PebbleGuid);
+      |                               ^
+rtl_TACL.c:121:39: error: 'PebbleGuid' undeclared (first use in this function)
+  121 |     CopyGuid(&AceListBuffer[0].Guid, &PebbleGuid);
+      |                                       ^~~~~~~~~~
+rtl_TACL.c:134:21: error: request for member 'Header' in something not a structure or union
+  134 |     AceListBuffer[0].Header.AceType = ACCESS_DENIED_ACE_TYPE;
+      |                     ^
+rtl_TACL.c:135:21: error: request for member 'Header' in something not a structure or union
+  135 |     AceListBuffer[0].Header.AceSize = sizeof(STANDARD_ACE);
+      |                     ^
+rtl_TACL.c:136:21: error: request for member 'Header' in something not a structure or union
+  136 |     AceListBuffer[0].Header.AceFlags = 0;
+      |                     ^
+rtl_TACL.c:137:21: error: request for member 'Mask' in something not a structure or union
+  137 |     AceListBuffer[0].Mask = 0x33333333;
+      |                     ^
+rtl_TACL.c:138:31: error: request for member 'Guid' in something not a structure or union
+  138 |     CopyGuid(&AceListBuffer[0].Guid, &DinoGuid);
+      |                               ^
+rtl_TACL.c:138:39: error: 'DinoGuid' undeclared (first use in this function)
+  138 |     CopyGuid(&AceListBuffer[0].Guid, &DinoGuid);
+      |                                       ^~~~~~~~
+rtl_TACL.c:151:21: error: request for member 'Header' in something not a structure or union
+  151 |     AceListBuffer[0].Header.AceType = ACCESS_DENIED_ACE_TYPE;
+      |                     ^
+rtl_TACL.c:152:21: error: request for member 'Header' in something not a structure or union
+  152 |     AceListBuffer[0].Header.AceSize = sizeof(STANDARD_ACE);
+      |                     ^
+rtl_TACL.c:153:21: error: request for member 'Header' in something not a structure or union
+  153 |     AceListBuffer[0].Header.AceFlags = 0;
+      |                     ^
+rtl_TACL.c:154:21: error: request for member 'Mask' in something not a structure or union
+  154 |     AceListBuffer[0].Mask = 0x55555555;
+      |                     ^
+rtl_TACL.c:155:31: error: request for member 'Guid' in something not a structure or union
+  155 |     CopyGuid(&AceListBuffer[0].Guid, &FlintstoneGuid);
+      |                               ^
+rtl_TACL.c:155:39: error: 'FlintstoneGuid' undeclared (first use in this function)
+  155 |     CopyGuid(&AceListBuffer[0].Guid, &FlintstoneGuid);
+      |                                       ^~~~~~~~~~~~~~
+rtl_TACL.c:169:9: error: unknown type name 'PSTANDARD_ACE'
+  169 |         PSTANDARD_ACE Ace;
+      |         ^~~~~~~~~~~~~
+rtl_TACL.c:175:17: error: invalid type argument of '->' (have 'int')
+  175 |         if ((Ace->Header.AceType != ACCESS_DENIED_ACE_TYPE) ||
+      |                 ^~
+rtl_TACL.c:176:17: error: invalid type argument of '->' (have 'int')
+  176 |             (Ace->Mask != 0x33333333)) {
+      |                 ^~
+rtl_TACL.c:226:14: error: invalid type argument of '->' (have 'int')
+  226 |     GuidMasks->PairCount = 11;
+      |              ^~
+rtl_TACL.c:227:24: error: invalid type argument of '->' (have 'int')
+  227 |     CopyGuid(&GuidMasks->MaskGuid[ 0].Guid, &FredGuid);
+      |                        ^~
+rtl_TACL.c:228:24: error: invalid type argument of '->' (have 'int')
+  228 |     CopyGuid(&GuidMasks->MaskGuid[ 1].Guid, &WilmaGuid);
+      |                        ^~
+rtl_TACL.c:229:24: error: invalid type argument of '->' (have 'int')
+  229 |     CopyGuid(&GuidMasks->MaskGuid[ 2].Guid, &PebbleGuid);
+      |                        ^~
+rtl_TACL.c:230:24: error: invalid type argument of '->' (have 'int')
+  230 |     CopyGuid(&GuidMasks->MaskGuid[ 3].Guid, &DinoGuid);
+      |                        ^~
+rtl_TACL.c:231:24: error: invalid type argument of '->' (have 'int')
+  231 |     CopyGuid(&GuidMasks->MaskGuid[ 4].Guid, &BarneyGuid);
+      |                        ^~
+rtl_TACL.c:231:46: error: 'BarneyGuid' undeclared (first use in this function)
+  231 |     CopyGuid(&GuidMasks->MaskGuid[ 4].Guid, &BarneyGuid);
+      |                                              ^~~~~~~~~~
+rtl_TACL.c:232:24: error: invalid type argument of '->' (have 'int')
+  232 |     CopyGuid(&GuidMasks->MaskGuid[ 5].Guid, &BettyGuid);
+      |                        ^~
+rtl_TACL.c:232:46: error: 'BettyGuid' undeclared (first use in this function)
+  232 |     CopyGuid(&GuidMasks->MaskGuid[ 5].Guid, &BettyGuid);
+      |                                              ^~~~~~~~~
+rtl_TACL.c:233:24: error: invalid type argument of '->' (have 'int')
+  233 |     CopyGuid(&GuidMasks->MaskGuid[ 6].Guid, &BambamGuid);
+      |                        ^~
+rtl_TACL.c:233:46: error: 'BambamGuid' undeclared (first use in this function)
+  233 |     CopyGuid(&GuidMasks->MaskGuid[ 6].Guid, &BambamGuid);
+      |                                              ^~~~~~~~~~
+rtl_TACL.c:234:24: error: invalid type argument of '->' (have 'int')
+  234 |     CopyGuid(&GuidMasks->MaskGuid[ 7].Guid, &FlintstoneGuid);
+      |                        ^~
+rtl_TACL.c:235:24: error: invalid type argument of '->' (have 'int')
+  235 |     CopyGuid(&GuidMasks->MaskGuid[ 8].Guid, &RubbleGuid);
+      |                        ^~
+rtl_TACL.c:235:46: error: 'RubbleGuid' undeclared (first use in this function)
+  235 |     CopyGuid(&GuidMasks->MaskGuid[ 8].Guid, &RubbleGuid);
+      |                                              ^~~~~~~~~~
+rtl_TACL.c:236:24: error: invalid type argument of '->' (have 'int')
+  236 |     CopyGuid(&GuidMasks->MaskGuid[ 9].Guid, &AdultGuid);
+      |                        ^~
+rtl_TACL.c:236:46: error: 'AdultGuid' undeclared (first use in this function)
+  236 |     CopyGuid(&GuidMasks->MaskGuid[ 9].Guid, &AdultGuid);
+      |                                              ^~~~~~~~~
+rtl_TACL.c:237:24: error: invalid type argument of '->' (have 'int')
+  237 |     CopyGuid(&GuidMasks->MaskGuid[10].Guid, &ChildGuid);
+      |                        ^~
+rtl_TACL.c:237:46: error: 'ChildGuid' undeclared (first use in this function)
+  237 |     CopyGuid(&GuidMasks->MaskGuid[10].Guid, &ChildGuid);
+      |                                              ^~~~~~~~~
+rtl_TACL.c:241:19: error: invalid type argument of '->' (have 'int')
+  241 |     if ((GuidMasks->MaskGuid[ 0].Mask != 0x22222222) ||
+      |                   ^~
+rtl_TACL.c:242:19: error: invalid type argument of '->' (have 'int')
+  242 |         (GuidMasks->MaskGuid[ 1].Mask != 0x44444444) ||
+      |                   ^~
+rtl_TACL.c:243:19: error: invalid type argument of '->' (have 'int')
+  243 |         (GuidMasks->MaskGuid[ 2].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:244:19: error: invalid type argument of '->' (have 'int')
+  244 |         (GuidMasks->MaskGuid[ 3].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:245:19: error: invalid type argument of '->' (have 'int')
+  245 |         (GuidMasks->MaskGuid[ 4].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:246:19: error: invalid type argument of '->' (have 'int')
+  246 |         (GuidMasks->MaskGuid[ 5].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:247:19: error: invalid type argument of '->' (have 'int')
+  247 |         (GuidMasks->MaskGuid[ 6].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:248:19: error: invalid type argument of '->' (have 'int')
+  248 |         (GuidMasks->MaskGuid[ 7].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:249:19: error: invalid type argument of '->' (have 'int')
+  249 |         (GuidMasks->MaskGuid[ 8].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:250:19: error: invalid type argument of '->' (have 'int')
+  250 |         (GuidMasks->MaskGuid[ 9].Mask != 0x00000000) ||
+      |                   ^~
+rtl_TACL.c:251:19: error: invalid type argument of '->' (have 'int')
+  251 |         (GuidMasks->MaskGuid[10].Mask != 0x00000000)) {
+      |                   ^~
+rtl_TACL.c:253:53: error: invalid type argument of '->' (have 'int')
+  253 |         DbgPrint("Fred gets       %8lx\n", GuidMasks->MaskGuid[ 0].Mask);
+      |                                                     ^~
+rtl_TACL.c:254:53: error: invalid type argument of '->' (have 'int')
+  254 |         DbgPrint("Wilma gets      %8lx\n", GuidMasks->MaskGuid[ 1].Mask);
+      |                                                     ^~
+rtl_TACL.c:255:53: error: invalid type argument of '->' (have 'int')
+  255 |         DbgPrint("Pebble gets     %8lx\n", GuidMasks->MaskGuid[ 2].Mask);
+      |                                                     ^~
+rtl_TACL.c:256:53: error: invalid type argument of '->' (have 'int')
+  256 |         DbgPrint("Dino gets       %8lx\n", GuidMasks->MaskGuid[ 3].Mask);
+      |                                                     ^~
+rtl_TACL.c:257:53: error: invalid type argument of '->' (have 'int')
+  257 |         DbgPrint("Barney gets     %8lx\n", GuidMasks->MaskGuid[ 4].Mask);
+      |                                                     ^~
+rtl_TACL.c:258:53: error: invalid type argument of '->' (have 'int')
+  258 |         DbgPrint("Betty gets      %8lx\n", GuidMasks->MaskGuid[ 5].Mask);
+      |                                                     ^~
+rtl_TACL.c:259:53: error: invalid type argument of '->' (have 'int')
+  259 |         DbgPrint("Banbam gets     %8lx\n", GuidMasks->MaskGuid[ 6].Mask);
+      |                                                     ^~
+rtl_TACL.c:260:53: error: invalid type argument of '->' (have 'int')
+  260 |         DbgPrint("Flintstone gets %8lx\n", GuidMasks->MaskGuid[ 7].Mask);
+      |                                                     ^~
+rtl_TACL.c:261:53: error: invalid type argument of '->' (have 'int')
+  261 |         DbgPrint("Rubble gets     %8lx\n", GuidMasks->MaskGuid[ 8].Mask);
+      |                                                     ^~
+rtl_TACL.c:262:53: error: invalid type argument of '->' (have 'int')
+  262 |         DbgPrint("Adult gets      %8lx\n", GuidMasks->MaskGuid[ 9].Mask);
+      |                                                     ^~
+rtl_TACL.c:263:53: error: invalid type argument of '->' (have 'int')
+  263 |         DbgPrint("Child gets      %8lx\n", GuidMasks->MaskGuid[10].Mask);
+      |                                                     ^~
+rtl_TACL.c:270:14: error: invalid type argument of '->' (have 'int')
+  270 |     GuidMasks->PairCount = 2;
+      |              ^~
+rtl_TACL.c:271:14: error: invalid type argument of '->' (have 'int')
+  271 |     GuidMasks->MaskGuid[0].Mask = 0x55555555;
+      |              ^~
+rtl_TACL.c:272:24: error: invalid type argument of '->' (have 'int')
+  272 |     CopyGuid(&GuidMasks->MaskGuid[0].Guid, &BarneyGuid);
+      |                        ^~
+rtl_TACL.c:273:14: error: invalid type argument of '->' (have 'int')
+  273 |     GuidMasks->MaskGuid[1].Mask = 0xaaaa5555;
+      |              ^~
+rtl_TACL.c:274:24: error: invalid type argument of '->' (have 'int')
+  274 |     CopyGuid(&GuidMasks->MaskGuid[1].Guid, &RubbleGuid);
+      |                        ^~
+In file included from inc/nt.h:30,
+                 from rtl_TACL.c:35:
+rtl_TACL.c:280:51: error: 'AclPosixEnvironment' undeclared (first use in this function)
+  280 |     if (!NT_SUCCESS(RtlMakeAclFromMask(GuidMasks, AclPosixEnvironment, BarneyAcl, 128, 1))) {
+      |                                                   ^~~~~~~~~~~~~~~~~~~
+/work/ARM32/arcfw/inc/ntdef.h:324:40: note: in definition of macro 'NT_SUCCESS'
+  324 | #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+      |                                        ^~~~~~
+rtl_TACL.c:291:51: error: 'AclOs2Environment' undeclared (first use in this function)
+  291 |     if (!NT_SUCCESS(RtlMakeAclFromMask(GuidMasks, AclOs2Environment, BettyAcl, 128, 1))) {
+      |                                                   ^~~~~~~~~~~~~~~~~
+/work/ARM32/arcfw/inc/ntdef.h:324:40: note: in definition of macro 'NT_SUCCESS'
+  324 | #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+      |                                        ^~~~~~
+rtl_TPREFIX.c: In function 'main':
+rtl_TPREFIX.c:191:20: error: too many arguments to function 'PfxFindPrefix'
+  191 |         PfxEntry = PfxFindPrefix( &PrefixTable, &String, FALSE );
+      |                    ^~~~~~~~~~~~~
+In file included from rtl_TPREFIX.c:25:
+/tmp/f/pub/ntrtl.h:2265:1: note: declared here
+ 2265 | PfxFindPrefix (
+      | ^~~~~~~~~~~~~
+rtl_TPREFIX.c:195:24: error: too many arguments to function 'PfxFindPrefix'
+  195 |             PfxEntry = PfxFindPrefix( &PrefixTable, &String, TRUE );
+      |                        ^~~~~~~~~~~~~
+/tmp/f/pub/ntrtl.h:2265:1: note: declared here
+ 2265 | PfxFindPrefix (
+      | ^~~~~~~~~~~~~
+rtl_TRACE.c: In function 'RtlTraceEvent':
+rtl_TRACE.c:145:46: error: expected expression before 'ULONG'
+  145 |         p->Arguments[ i ] = va_arg( arglist, ULONG );
+      |                                              ^~~~~
+rtl_TRANDOM.c:28:1: error: expected '=', ',', ';', 'asm' or '__attribute__' before 'main'
+   28 | main(
+      | ^~~~
+rtl_TRTL.c:21:10: fatal error: os2.h: No such file or directory
+   21 | #include <os2.h>
+      |          ^~~~~~~
+compilation terminated.
+rtl_TSPLAY.c:49:1: error: expected '=', ',', ';', 'asm' or '__attribute__' before 'main'
+   49 | main(
+      | ^~~~
+rtl_TTRI.c:52:1: error: expected '=', ',', ';', 'asm' or '__attribute__' before 'main'
+   52 | main(
+      | ^~~~
+rtl_UEXEC.c: In function 'main':
+rtl_UEXEC.c:46:21: error: 'RTL_USER_PROC_PARAMS_DEBUGFLAG' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+   46 |     PCH Parameters[ RTL_USER_PROC_PARAMS_DEBUGFLAG+2 ];
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     RTL_USER_PROC_PARAMS_NORMALIZED
+rtl_UEXEC.c:46:21: note: each undeclared identifier is reported only once for each function it appears in
+rtl_UEXEC.c:48:17: error: 'RTL_USER_PROC_PARAMS_IMAGEFILE' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+   48 |     Parameters[ RTL_USER_PROC_PARAMS_IMAGEFILE ] =
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                 RTL_USER_PROC_PARAMS_NORMALIZED
+rtl_UEXEC.c:51:17: error: 'RTL_USER_PROC_PARAMS_CMDLINE' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+   51 |     Parameters[ RTL_USER_PROC_PARAMS_CMDLINE ] =
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                 RTL_USER_PROC_PARAMS_NORMALIZED
+In file included from inc/nt.h:52,
+                 from rtl_UEXEC.c:21:
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/pub/ntpsapi.h:542:25: note: in expansion of macro 'NtCurrentTeb'
+  542 | #define NtCurrentPeb() (NtCurrentTeb()->ProcessEnvironmentBlock)
+      |                         ^~~~~~~~~~~~
+/tmp/f/pub/ntrtl.h:1075:27: note: in expansion of macro 'NtCurrentPeb'
+ 1075 | #define RtlProcessHeap() (NtCurrentPeb()->ProcessHeap)
+      |                           ^~~~~~~~~~~~
+rtl_UEXEC.c:59:14: note: in expansion of macro 'RtlProcessHeap'
+   59 |     MyHeap = RtlProcessHeap();
+      |              ^~~~~~~~~~~~~~
+rtl_UEXEC2.c: In function 'main':
+rtl_UEXEC2.c:37:5: error: unknown type name 'PEB_SM_DATA'; did you mean 'PEB_LDR_DATA'?
+   37 |     PEB_SM_DATA PebSessionInformation;
+      |     ^~~~~~~~~~~
+      |     PEB_LDR_DATA
+In file included from inc/nt.h:52,
+                 from rtl_UEXEC2.c:21:
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/pub/ntpsapi.h:542:25: note: in expansion of macro 'NtCurrentTeb'
+  542 | #define NtCurrentPeb() (NtCurrentTeb()->ProcessEnvironmentBlock)
+      |                         ^~~~~~~~~~~~
+rtl_UEXEC2.c:45:11: note: in expansion of macro 'NtCurrentPeb'
+   45 |     Peb = NtCurrentPeb();
+      |           ^~~~~~~~~~~~
+inc/ntarm.h:435:32: note: each undeclared identifier is reported only once for each function it appears in
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/pub/ntpsapi.h:542:25: note: in expansion of macro 'NtCurrentTeb'
+  542 | #define NtCurrentPeb() (NtCurrentTeb()->ProcessEnvironmentBlock)
+      |                         ^~~~~~~~~~~~
+rtl_UEXEC2.c:45:11: note: in expansion of macro 'NtCurrentPeb'
+   45 |     Peb = NtCurrentPeb();
+      |           ^~~~~~~~~~~~
+rtl_UEXEC2.c:53:14: error: 'struct _PEB' has no member named 'Sm'
+   53 |     if ( !Peb->Sm.StandardInput.FileHandle ) {
+      |              ^~
+rtl_UEXEC2.c:100:30: error: request for member 'Length' in something not a structure or union
+  100 |         PebSessionInformation.Length = sizeof(PebSessionInformation);
+      |                              ^
+rtl_UEXEC2.c:101:30: error: request for member 'StandardInput' in something not a structure or union
+  101 |         PebSessionInformation.StandardInput.FileHandle = FileHandle;
+      |                              ^
+rtl_UEXEC2.c:102:30: error: request for member 'StandardInput' in something not a structure or union
+  102 |         PebSessionInformation.StandardInput.Context = (PVOID) FileInformation.IndexNumber;
+      |                              ^
+rtl_UEXEC2.c:102:9: error: cannot convert to a pointer type
+  102 |         PebSessionInformation.StandardInput.Context = (PVOID) FileInformation.IndexNumber;
+      |         ^~~~~~~~~~~~~~~~~~~~~
+rtl_UEXEC2.c:129:18: error: 'struct _PEB' has no member named 'Sm'
+  129 |         if ( !Peb->Sm.StandardOutput.FileHandle ) {
+      |                  ^~
+rtl_UEXEC2.c:136:24: error: 'struct _PEB' has no member named 'Sm'
+  136 |                     Peb->Sm.StandardInput.FileHandle,
+      |                        ^~
+rtl_UEXEC2.c:150:34: error: request for member 'Length' in something not a structure or union
+  150 |             PebSessionInformation.Length = sizeof(PebSessionInformation);
+      |                                  ^
+rtl_UEXEC2.c:151:34: error: request for member 'StandardInput' in something not a structure or union
+  151 |             PebSessionInformation.StandardInput.FileHandle = (HANDLE)PEB_STDIO_HANDLE_SUBSYS;
+      |                                  ^
+rtl_UEXEC2.c:152:34: error: request for member 'StandardOutput' in something not a structure or union
+  152 |             PebSessionInformation.StandardOutput.FileHandle = Peb->Sm.StandardInput.FileHandle;
+      |                                  ^
+rtl_UEXEC2.c:152:66: error: 'struct _PEB' has no member named 'Sm'
+  152 |             PebSessionInformation.StandardOutput.FileHandle = Peb->Sm.StandardInput.FileHandle;
+      |                                                                  ^~
+rtl_UEXEC2.c:153:34: error: request for member 'StandardOutput' in something not a structure or union
+  153 |             PebSessionInformation.StandardOutput.Context = (PVOID) FileInformation.IndexNumber;
+      |                                  ^
+rtl_UEXEC2.c:153:13: error: cannot convert to a pointer type
+  153 |             PebSessionInformation.StandardOutput.Context = (PVOID) FileInformation.IndexNumber;
+      |             ^~~~~~~~~~~~~~~~~~~~~
+rtl_UEXEC2.c:182:22: error: 'struct _PEB' has no member named 'Sm'
+  182 |             if ( !Peb->Sm.StandardError.FileHandle ) {
+      |                      ^~
+rtl_UEXEC2.c:189:28: error: 'struct _PEB' has no member named 'Sm'
+  189 |                         Peb->Sm.StandardOutput.FileHandle,
+      |                            ^~
+rtl_UEXEC2.c:203:38: error: request for member 'Length' in something not a structure or union
+  203 |                 PebSessionInformation.Length = sizeof(PebSessionInformation);
+      |                                      ^
+rtl_UEXEC2.c:204:38: error: request for member 'StandardInput' in something not a structure or union
+  204 |                 PebSessionInformation.StandardInput.FileHandle = (HANDLE)PEB_STDIO_HANDLE_SUBSYS;
+      |                                      ^
+rtl_UEXEC2.c:205:38: error: request for member 'StandardOutput' in something not a structure or union
+  205 |                 PebSessionInformation.StandardOutput.FileHandle = (HANDLE)PEB_STDIO_HANDLE_PM;
+      |                                      ^
+rtl_UEXEC2.c:206:38: error: request for member 'StandardError' in something not a structure or union
+  206 |                 PebSessionInformation.StandardError.FileHandle = Peb->Sm.StandardOutput.FileHandle;
+      |                                      ^
+rtl_UEXEC2.c:206:69: error: 'struct _PEB' has no member named 'Sm'
+  206 |                 PebSessionInformation.StandardError.FileHandle = Peb->Sm.StandardOutput.FileHandle;
+      |                                                                     ^~
+rtl_UEXEC2.c:207:38: error: request for member 'StandardError' in something not a structure or union
+  207 |                 PebSessionInformation.StandardError.Context = (PVOID) FileInformation.IndexNumber;
+      |                                      ^
+rtl_UEXEC2.c:207:17: error: cannot convert to a pointer type
+  207 |                 PebSessionInformation.StandardError.Context = (PVOID) FileInformation.IndexNumber;
+      |                 ^~~~~~~~~~~~~~~~~~~~~
+rtl_UEXEC2.c:241:28: error: 'struct _PEB' has no member named 'Sm'
+  241 |                         Peb->Sm.StandardError.FileHandle,
+      |                            ^~
+rtl_URTL.c: In function 'DumpIt':
+rtl_URTL.c:44:51: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'ArgumentCount'
+   44 |     DbgPrint("DumpIt: ArgumentCount %lx\n",ArgBase->ArgumentCount);
+      |                                                   ^~
+rtl_URTL.c:45:51: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'Arguments'
+   45 |     DbgPrint("DumpIt: Arguments     %lx\n",ArgBase->Arguments    );
+      |                                                   ^~
+rtl_URTL.c:46:51: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'VariableCount'
+   46 |     DbgPrint("DumpIt: VariableCount %lx\n",ArgBase->VariableCount);
+      |                                                   ^~
+rtl_URTL.c:47:51: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'Variables'
+   47 |     DbgPrint("DumpIt: Variables     %lx\n",ArgBase->Variables    );
+      |                                                   ^~
+rtl_URTL.c:48:51: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'ParameterCount'
+   48 |     DbgPrint("DumpIt: ParameterCount%lx\n",ArgBase->ParameterCount);
+      |                                                   ^~
+rtl_URTL.c:49:51: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'Parameters'
+   49 |     DbgPrint("DumpIt: Parameters    %lx\n",ArgBase->Parameters    );
+      |                                                   ^~
+rtl_URTL.c:51:17: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'ArgumentCount'
+   51 |     if ( ArgBase->ArgumentCount ) {
+      |                 ^~
+rtl_URTL.c:52:40: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'Arguments'
+   52 |         Vector = (PSTRING)((PCH)ArgBase->Arguments + Base);
+      |                                        ^~
+rtl_URTL.c:53:20: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'ArgumentCount'
+   53 |         i = ArgBase->ArgumentCount;
+      |                    ^~
+rtl_URTL.c:60:17: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'VariableCount'
+   60 |     if ( ArgBase->VariableCount ) {
+      |                 ^~
+rtl_URTL.c:61:40: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'Variables'
+   61 |         Vector = (PSTRING)((PCH)ArgBase->Variables + Base);
+      |                                        ^~
+rtl_URTL.c:62:20: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'VariableCount'
+   62 |         i = ArgBase->VariableCount;
+      |                    ^~
+rtl_URTL.c:69:17: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'ParameterCount'
+   69 |     if ( ArgBase->ParameterCount ) {
+      |                 ^~
+rtl_URTL.c:70:42: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'Parameters'
+   70 |         ParmVector = (PCH *)((PCH)ArgBase->Parameters + Base);
+      |                                          ^~
+rtl_URTL.c:71:20: error: 'struct _RTL_USER_PROCESS_PARAMETERS' has no member named 'ParameterCount'
+   71 |         i = ArgBase->ParameterCount;
+      |                    ^~
+rtl_URTL.c: In function 'main':
+rtl_URTL.c:122:21: error: 'RTL_USER_PROC_PARAMS_DEBUGFLAG' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+  122 |     PCH Parameters[ RTL_USER_PROC_PARAMS_DEBUGFLAG+2 ];
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     RTL_USER_PROC_PARAMS_NORMALIZED
+rtl_URTL.c:122:21: note: each undeclared identifier is reported only once for each function it appears in
+rtl_URTL.c:128:17: error: 'RTL_USER_PROC_PARAMS_IMAGEFILE' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+  128 |     Parameters[ RTL_USER_PROC_PARAMS_IMAGEFILE ] =
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                 RTL_USER_PROC_PARAMS_NORMALIZED
+rtl_URTL.c:131:17: error: 'RTL_USER_PROC_PARAMS_CMDLINE' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+  131 |     Parameters[ RTL_USER_PROC_PARAMS_CMDLINE ] =
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                 RTL_USER_PROC_PARAMS_NORMALIZED
+In file included from inc/nt.h:52,
+                 from rtl_URTL.c:21:
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/pub/ntpsapi.h:542:25: note: in expansion of macro 'NtCurrentTeb'
+  542 | #define NtCurrentPeb() (NtCurrentTeb()->ProcessEnvironmentBlock)
+      |                         ^~~~~~~~~~~~
+/tmp/f/pub/ntrtl.h:1075:27: note: in expansion of macro 'NtCurrentPeb'
+ 1075 | #define RtlProcessHeap() (NtCurrentPeb()->ProcessHeap)
+      |                           ^~~~~~~~~~~~
+rtl_URTL.c:139:14: note: in expansion of macro 'RtlProcessHeap'
+  139 |     MyHeap = RtlProcessHeap();
+      |              ^~~~~~~~~~~~~~
+rtl_UTXCPT2.c: In function 'ExceptionTest':
+rtl_UTXCPT2.c:182:9: error: incompatible implicit declaration of function 'foo'
+  182 |         foo(STATUS_ACCESS_VIOLATION);
+      |         ^~~
+rtl_UTXCPT2.c:142:14: note: previous implicit declaration of 'foo' with type 'void(NTSTATUS)' {aka 'void(long int)'}
+  142 |         VOID foo(IN NTSTATUS Status);
+      |              ^~~
+rtl_UTXCPT2.c:190:13: error: incompatible implicit declaration of function 'foo'
+  190 |             foo(STATUS_SUCCESS);
+      |             ^~~
+rtl_UTXCPT2.c:142:14: note: previous implicit declaration of 'foo' with type 'void(NTSTATUS)' {aka 'void(long int)'}
+  142 |         VOID foo(IN NTSTATUS Status);
+      |              ^~~
+rtl_UTXCPT2.c:214:13: error: incompatible implicit declaration of function 'foo'
+  214 |             foo(STATUS_ACCESS_VIOLATION);
+      |             ^~~
+rtl_UTXCPT2.c:142:14: note: previous implicit declaration of 'foo' with type 'void(NTSTATUS)' {aka 'void(long int)'}
+  142 |         VOID foo(IN NTSTATUS Status);
+      |              ^~~
+rtl_UTXCPT2.c: In function 'eret':
+rtl_UTXCPT2.c:350:13: error: incompatible implicit declaration of function 'foo'
+  350 |             foo(Status);
+      |             ^~~
+rtl_UTXCPT2.c:142:14: note: previous implicit declaration of 'foo' with type 'void(NTSTATUS)' {aka 'void(long int)'}
+  142 |         VOID foo(IN NTSTATUS Status);
+      |              ^~~
+rtl_UTXCPT2.c: In function 'bar':
+rtl_UTXCPT2.c:369:9: error: incompatible implicit declaration of function 'foo'
+  369 |         foo(Status);
+      |         ^~~
+rtl_UTXCPT2.c:142:14: note: previous implicit declaration of 'foo' with type 'void(NTSTATUS)' {aka 'void(long int)'}
+  142 |         VOID foo(IN NTSTATUS Status);
+      |              ^~~
+ex_INTRLOC2.c: In function 'ExArmInterlockedIncrementLong':
+ex_INTRLOC2.c:62:63: error: 'Lock' undeclared (first use in this function)
+   62 |     OldValue = (LONG)ExInterlockedAddUlong((PULONG)Addend, 1, Lock);
+      |                                                               ^~~~
+ex_INTRLOC2.c:62:63: note: each undeclared identifier is reported only once for each function it appears in
+ex_INTRLOC2.c: In function 'ExArmInterlockedDecrementLong':
+ex_INTRLOC2.c:107:64: error: 'Lock' undeclared (first use in this function)
+  107 |     OldValue = (LONG)ExInterlockedAddUlong((PULONG)Addend, -1, Lock);
+      |                                                                ^~~~
+ex_POOLHACK.c:36:10: fatal error: ..\mm\mi.h: No such file or directory
+   36 | #include "..\mm\mi.h"
+      |          ^~~~~~~~~~~~
+compilation terminated.
+In file included from ex_SYSINFO.c:30:
+/tmp/f/priv/vdmntos.h:29:10: fatal error: ..\..\inc\vdm.h: No such file or directory
+   29 | #include "..\..\inc\vdm.h"
+      |          ^~~~~~~~~~~~~~~~~
+compilation terminated.
+ex_TEX.c: In function 'DoEventTest':
+ex_TEX.c:99:34: error: 'L' undeclared (first use in this function)
+   99 |     RtlInitUnicodeString(&Name1, L "\\Event1");
+      |                                  ^
+ex_TEX.c:99:34: note: each undeclared identifier is reported only once for each function it appears in
+ex_TEX.c:99:35: error: expected ')' before string constant
+   99 |     RtlInitUnicodeString(&Name1, L "\\Event1");
+      |                         ~         ^~~~~~~~~~~
+      |                                   )
+ex_TEX.c:100:35: error: expected ')' before string constant
+  100 |     RtlInitUnicodeString(&Name2, L "\\Event2");
+      |                         ~         ^~~~~~~~~~~
+      |                                   )
+ex_TEX.c: In function 'DoHandleTest':
+ex_TEX.c:1173:20: error: too many arguments to function 'ExCreateHandleTable'
+ 1173 |     HandleTable1 = ExCreateHandleTable( (PEPROCESS)NULL, 0L, 0L, 0L, MUTEX_LEVEL_PS_CID_TABLE, FALSE );
+      |                    ^~~~~~~~~~~~~~~~~~~
+In file included from inc/ntos.h:56,
+                 from /tmp/f/ex/exp.h:29,
+                 from ex_TEX.c:21:
+/tmp/f/priv/ex.h:629:1: note: declared here
+  629 | ExCreateHandleTable(
+      | ^~~~~~~~~~~~~~~~~~~
+ex_TEX.c:1174:20: error: too many arguments to function 'ExCreateHandleTable'
+ 1174 |     HandleTable4 = ExCreateHandleTable( (PEPROCESS)NULL, 16L, 8L, 2L, MUTEX_LEVEL_OB_TABLE, TRUE );
+      |                    ^~~~~~~~~~~~~~~~~~~
+/tmp/f/priv/ex.h:629:1: note: declared here
+  629 | ExCreateHandleTable(
+      | ^~~~~~~~~~~~~~~~~~~
+ex_TEX.c:1224:53: error: macro "ExUnlockHandleTable" passed 2 arguments, but takes just 1
+ 1224 |         ExUnlockHandleTable( HandleTable1, LockFlag );
+      |                                                     ^
+/tmp/f/priv/ex.h:747: note: macro "ExUnlockHandleTable" defined here
+  747 | #define ExUnlockHandleTable(_T)                                      \
+      | 
+ex_TEX.c:1224:9: error: 'ExUnlockHandleTable' undeclared (first use in this function); did you mean 'ExEnumHandleTable'?
+ 1224 |         ExUnlockHandleTable( HandleTable1, LockFlag );
+      |         ^~~~~~~~~~~~~~~~~~~
+      |         ExEnumHandleTable
+ex_TEX.c:1233:53: error: macro "ExUnlockHandleTable" passed 2 arguments, but takes just 1
+ 1233 |         ExUnlockHandleTable( HandleTable4, LockFlag );
+      |                                                     ^
+/tmp/f/priv/ex.h:747: note: macro "ExUnlockHandleTable" defined here
+  747 | #define ExUnlockHandleTable(_T)                                      \
+      | 
+ex_TEX.c:1243:9: error: too few arguments to function 'ExDestroyHandle'
+ 1243 |         ExDestroyHandle( HandleTable1, HandlesForTable1[ i ] );
+      |         ^~~~~~~~~~~~~~~
+/tmp/f/priv/ex.h:721:1: note: declared here
+  721 | ExDestroyHandle(
+      | ^~~~~~~~~~~~~~~
+ex_TEX.c:1244:9: error: too few arguments to function 'ExDestroyHandle'
+ 1244 |         ExDestroyHandle( HandleTable4, HandlesForTable4[ i ] );
+      |         ^~~~~~~~~~~~~~~
+/tmp/f/priv/ex.h:721:1: note: declared here
+  721 | ExDestroyHandle(
+      | ^~~~~~~~~~~~~~~
+ex_TEX.c: In function 'DoInfoTest':
+ex_TEX.c:1283:27: error: 'SYSTEM_BASIC_INFORMATION' {aka 'struct _SYSTEM_BASIC_INFORMATION'} has no member named 'TimerResolutionInMicroSeconds'
+ 1283 |                  BasicInfo.TimerResolutionInMicroSeconds
+      |                           ^
+ex_TEX.c:1303:42: error: 'SYSTEM_PROCESSOR_INFORMATION' {aka 'struct _SYSTEM_PROCESSOR_INFORMATION'} has no member named 'ProcessorStepping'
+ 1303 |                      'A' + (ProcessorInfo.ProcessorStepping >> 16),
+      |                                          ^
+ex_TEX.c:1304:35: error: 'SYSTEM_PROCESSOR_INFORMATION' {aka 'struct _SYSTEM_PROCESSOR_INFORMATION'} has no member named 'ProcessorStepping'
+ 1304 |                      ProcessorInfo.ProcessorStepping & 0xFFFF
+      |                                   ^
+ex_TEX.c: In function 'DoPartyTest':
+ex_TEX.c:1480:22: error: 'PARTY_DUMP_OBJECT_BY_HANDLE' undeclared (first use in this function)
+ 1480 |     NtPartyByNumber( PARTY_DUMP_OBJECT_BY_HANDLE, Handle, NULL );
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+ex_TEX.c: At top level:
+ex_TEX.c:2260:1: error: expected '=', ',', ';', 'asm' or '__attribute__' before 'main'
+ 2260 | main(
+      | ^~~~
+ob_TOB.c: In function 'obtest':
+ob_TOB.c:414:5: error: too few arguments to function 'ObReferenceObjectByName'
+  414 |     ObReferenceObjectByName(
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+In file included from inc/ntos.h:60,
+                 from /tmp/f/ob/obp.h:21,
+                 from ob_TOB.c:21:
+/tmp/f/priv/ob.h:419:1: note: declared here
+  419 | ObReferenceObjectByName(
+      | ^~~~~~~~~~~~~~~~~~~~~~~
+ob_TOB.c:424:5: error: too few arguments to function 'ObReferenceObjectByName'
+  424 |     ObReferenceObjectByName(
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/f/priv/ob.h:419:1: note: declared here
+  419 | ObReferenceObjectByName(
+      | ^~~~~~~~~~~~~~~~~~~~~~~
+ob_TOB.c: At top level:
+ob_TOB.c:597:1: error: expected '=', ',', ';', 'asm' or '__attribute__' before 'main'
+  597 | main(
+      | ^~~~
+ob_UOB.c: In function 'DumpObjectDirs':
+ob_UOB.c:124:26: error: too few arguments to function 'NtQuerySymbolicLinkObject'
+  124 |                 Status = NtQuerySymbolicLinkObject( LinkHandle,
+      |                          ^~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from inc/nt.h:61,
+                 from ob_UOB.c:25:
+/tmp/f/pub/ntobapi.h:286:1: note: declared here
+  286 | NtQuerySymbolicLinkObject(
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~
+ob_UOB.c: In function 'main':
+ob_UOB.c:161:22: error: 'PARTY_SET_GLOBAL_FLAG' undeclared (first use in this function)
+  161 |     NtPartyByNumber( PARTY_SET_GLOBAL_FLAG,
+      |                      ^~~~~~~~~~~~~~~~~~~~~
+ob_UOB.c:161:22: note: each undeclared identifier is reported only once for each function it appears in
+ob_UOB.c:170:9: error: 'Parameters' undeclared (first use in this function)
+  170 |         Parameters[ RTL_USER_PROC_PARAMS_IMAGEFILE ] = argv[ 0 ];
+      |         ^~~~~~~~~~
+ob_UOB.c:170:21: error: 'RTL_USER_PROC_PARAMS_IMAGEFILE' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+  170 |         Parameters[ RTL_USER_PROC_PARAMS_IMAGEFILE ] = argv[ 0 ];
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     RTL_USER_PROC_PARAMS_NORMALIZED
+ob_UOB.c:172:21: error: 'RTL_USER_PROC_PARAMS_CMDLINE' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+  172 |         Parameters[ RTL_USER_PROC_PARAMS_CMDLINE ] = " CHILD";
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     RTL_USER_PROC_PARAMS_NORMALIZED
+ob_UOB.c:174:21: error: 'RTL_USER_PROC_PARAMS_DEBUGFLAG' undeclared (first use in this function); did you mean 'RTL_USER_PROC_PARAMS_NORMALIZED'?
+  174 |         Parameters[ RTL_USER_PROC_PARAMS_DEBUGFLAG ] =
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     RTL_USER_PROC_PARAMS_NORMALIZED
+ob_UOB.c:179:9: error: 'Arguments' undeclared (first use in this function)
+  179 |         Arguments[ 0 ] = argv[ 0 ];
+      |         ^~~~~~~~~
+ob_UOB.c: In function 'TestParent':
+ob_UOB.c:267:5: error: 'SectiinSize' undeclared (first use in this function); did you mean 'SectionSize'?
+  267 |     SectiinSize.HighPart = 0;
+      |     ^~~~~~~~~~~
+      |     SectionSize
+ps_CREATE.c:25:10: fatal error: ..\mm\mi.h: No such file or directory
+   25 | #include "..\mm\mi.h"
+      |          ^~~~~~~~~~~~
+compilation terminated.
+ps_TPS.c: In function 'xx3pstest':
+ps_TPS.c:174:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
+  174 |     ThreadContext.IntSp = (ULONG)&Stack1[254];
+      |                  ^
+ps_TPS.c:175:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntFp'
+  175 |     ThreadContext.IntFp = (ULONG)&Stack1[254];
+      |                  ^
+ps_TPS.c:176:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntR16'
+  176 |     ThreadContext.IntR16 = (ULONG)&ev;
+      |                  ^
+ps_TPS.c:178:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Fir'
+  178 |     ThreadContext.Fir = (ULONG) NullTestThread2;
+      |                  ^
+ps_TPS.c: In function 'TermTest':
+ps_TPS.c:389:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  389 |     TebS1.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c:393:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  393 |     TebS2.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c:417:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
+  417 |     ThreadContext.IntSp = (ULONG)&Stack2[254];
+      |                  ^
+ps_TPS.c:488:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
+  488 |     ThreadContext.IntSp = (ULONG)&Stack1[254];
+      |                  ^
+ps_TPS.c:490:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Fir'
+  490 |     ThreadContext.Fir = (ULONG) UmTestThread;
+      |                  ^
+ps_TPS.c:506:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
+  506 |     ThreadContext.IntSp = (ULONG)&Stack2[254];
+      |                  ^
+ps_TPS.c:565:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
+  565 |     ThreadContext.IntSp = (ULONG)&Stack1[254];
+      |                  ^
+ps_TPS.c:567:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Fir'
+  567 |     ThreadContext.Fir = (ULONG) UmTestThread;
+      |                  ^
+ps_TPS.c:588:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'IntSp'
+  588 |     ThreadContext.IntSp = (ULONG)&Stack2[254];
+      |                  ^
+ps_TPS.c:589:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Fir'
+  589 |     ThreadContext.Fir = (ULONG) UmTestThreadx;
+      |                  ^
+ps_TPS.c: In function 'StateTest':
+ps_TPS.c:662:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  662 |     TebS1.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c:666:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  666 |     TebS2.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c:760:25: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Fir'
+  760 |     CurrentThreadContext.Fir = (ULONG)UmTestThreadx;
+      |                         ^
+ps_TPS.c: In function 'SuspendTest':
+ps_TPS.c:811:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  811 |     TebS1.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c:815:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  815 |     TebS2.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c:893:25: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Fir'
+  893 |     CurrentThreadContext.Fir = (ULONG)UmTestThreadx;
+      |                         ^
+ps_TPS.c: In function 'UmTest':
+ps_TPS.c:958:10: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+  958 |     TebS1.EnvironmentPointer = NULL;
+      |          ^
+ps_TPS.c: In function 'QrtTest':
+ps_TPS.c:1178:18: error: 'CONTEXT' {aka 'struct _CONTEXT'} has no member named 'Psr'
+ 1178 |     ThreadContext.Psr |= 0x20;
+      |                  ^
+ps_TPS.c:1182:9: error: 'INITIAL_TEB' {aka 'struct _INITIAL_TEB'} has no member named 'EnvironmentPointer'
+ 1182 |     ITeb.EnvironmentPointer = NULL;
+      |         ^
+ps_TPS.c: In function 'OpenptTest':
+ps_TPS.c:1921:17: error: 'EPROCESS' {aka 'struct _EPROCESS'} has no member named 'TerminationEvent'
+ 1921 |         &Process->TerminationEvent,
+      |                 ^~
+mm_MAPVIEW.c: In function 'MiMapViewOfImageSection':
+mm_MAPVIEW.c:1733:13: error: expected statement before ')' token
+ 1733 |             ) {
+      |             ^
+mm_MODWRITE.c: In function 'MiCheckForCrashDump':
+mm_MODWRITE.c:801:18: error: void value not ignored as it ought to be
+  801 |         Block[8] =
+      |                  ^
+mm_SUPER.c:241:5: error: expected declaration specifiers or '...' before ')' token
+  241 |     )
+      |     ^
+mm_SUPER.c:318:5: error: expected declaration specifiers or '...' before ')' token
+  318 |     )
+      |     ^
+io_ASSIGN.c:26:10: fatal error: ntiologc.h: No such file or directory
+   26 | #include "ntiologc.h"
+      |          ^~~~~~~~~~~~
+compilation terminated.
+io_DUMPCTL.c: In function 'IoWriteCrashDump':
+io_DUMPCTL.c:375:2: error: #error ( "unknown processor type" )
+  375 | #error( "unknown processor type" )
+      |  ^~~~~
+io_IOSUBS.c: In function 'IoSetTopLevelIrp':
+io_IOSUBS.c:7759:48: error: lvalue required as left operand of assignment
+ 7759 |     (PIRP) (PsGetCurrentThread())->TopLevelIrp = Irp;
+      |                                                ^
+io_REPORT.c:28:10: fatal error: ntiologc.h: No such file or directory
+   28 | #include "ntiologc.h"
+      |          ^~~~~~~~~~~~
+compilation terminated.
+In file included from /tmp/f/pub/windows.h:107,
+                 from se_ADTINIT.c:30:
+/tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'
+  226 | typedef PLDT_ENTRY LPLDT_ENTRY;
+      |         ^~~~~~~~~~
+se_CTACCESS.c:34:10: fatal error: tsecomm.c: No such file or directory
+   34 | #include "tsecomm.c"    // Mode dependent macros and routines.
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_CTSEACC.c:35:10: fatal error: tsecomm.c: No such file or directory
+   35 | #include "tsecomm.c"    // Mode dependent macros and routines.
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_CTSERTL.c:29:10: fatal error: tsecomm.c: No such file or directory
+   29 | #include "tsecomm.c"
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_CTTOKEN.c:35:10: fatal error: tsecomm.c: No such file or directory
+   35 | #include "tsecomm.c"    // Mode dependent macros and routines.
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_DUMPUSER.c:30:10: fatal error: os2.h: No such file or directory
+   30 | #include <os2.h>
+      |          ^~~~~~~
+compilation terminated.
+se_TSE.c:36:10: fatal error: ttoken.c: No such file or directory
+   36 | #include "ttoken.c"
+      |          ^~~~~~~~~~
+compilation terminated.
+se_TSEUM.c:31:10: fatal error: ttoken.c: No such file or directory
+   31 | #include "ttoken.c"
+      |          ^~~~~~~~~~
+compilation terminated.
+se_TSEVARS.c:26:10: fatal error: tsecomm.c: No such file or directory
+   26 | #include "tsecomm.c"    // Mode dependent macros and routines.
+      |          ^~~~~~~~~~~
+compilation terminated.
+In file included from /tmp/f/pub/windows.h:107,
+                 from /tmp/f/pinc/ntrpcp.h:42,
+                 from se_TTOKEND.c:43:
+/tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'
+  226 | typedef PLDT_ENTRY LPLDT_ENTRY;
+      |         ^~~~~~~~~~
+se_TTSEACC.c:33:10: fatal error: tsevars.c: No such file or directory
+   33 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_TTSERTL.c:39:10: fatal error: tsevars.c: No such file or directory
+   39 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UIPERS.c:31:10: fatal error: tsevars.c: No such file or directory
+   31 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+In file included from inc/nt.h:52,
+                 from se_UIPRIV.c:30:
+se_UIPRIV.c: In function 'OpenAppropriateToken':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+se_UIPRIV.c:185:18: note: in expansion of macro 'NtCurrentTeb'
+  185 |     CurrentTeb = NtCurrentTeb();
+      |                  ^~~~~~~~~~~~
+inc/ntarm.h:435:32: note: each undeclared identifier is reported only once for each function it appears in
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+se_UIPRIV.c:185:18: note: in expansion of macro 'NtCurrentTeb'
+  185 |     CurrentTeb = NtCurrentTeb();
+      |                  ^~~~~~~~~~~~
+se_UIPRIV.c: In function 'EnableAllPrivileges':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/pub/ntpsapi.h:542:25: note: in expansion of macro 'NtCurrentTeb'
+  542 | #define NtCurrentPeb() (NtCurrentTeb()->ProcessEnvironmentBlock)
+      |                         ^~~~~~~~~~~~
+/tmp/f/pub/ntrtl.h:1075:27: note: in expansion of macro 'NtCurrentPeb'
+ 1075 | #define RtlProcessHeap() (NtCurrentPeb()->ProcessHeap)
+      |                           ^~~~~~~~~~~~
+se_UIPRIV.c:268:33: note: in expansion of macro 'RtlProcessHeap'
+  268 |     NewState = RtlAllocateHeap( RtlProcessHeap(), 0, ReturnLength );
+      |                                 ^~~~~~~~~~~~~~
+se_UIPRIV.c: In function 'ResetAllPrivileges':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/pub/ntpsapi.h:542:25: note: in expansion of macro 'NtCurrentTeb'
+  542 | #define NtCurrentPeb() (NtCurrentTeb()->ProcessEnvironmentBlock)
+      |                         ^~~~~~~~~~~~
+/tmp/f/pub/ntrtl.h:1075:27: note: in expansion of macro 'NtCurrentPeb'
+ 1075 | #define RtlProcessHeap() (NtCurrentPeb()->ProcessHeap)
+      |                           ^~~~~~~~~~~~
+se_UIPRIV.c:369:33: note: in expansion of macro 'RtlProcessHeap'
+  369 |     NewState = RtlAllocateHeap( RtlProcessHeap(), 0, ReturnLength );
+      |                                 ^~~~~~~~~~~~~~
+se_UTACCESS.c:28:10: fatal error: tsevars.c: No such file or directory
+   28 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UTLNPQOS.c:53:10: fatal error: tsecomm.c: No such file or directory
+   53 | #include "tsecomm.c"     // Common routines
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UTLPCQOS.c:31:10: fatal error: tsecomm.c: No such file or directory
+   31 | #include "tsecomm.c"     // Common routines
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UTSEACC.c:30:10: fatal error: tsevars.c: No such file or directory
+   30 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UTSEQOS.c:29:10: fatal error: tsecomm.c: No such file or directory
+   29 | #include "tsecomm.c"     // Common routines
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UTSERTL.c:29:10: fatal error: tsevars.c: No such file or directory
+   29 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+se_UTTOKEN.c:30:10: fatal error: tsevars.c: No such file or directory
+   30 | #include "tsevars.c"    // Common test variables
+      |          ^~~~~~~~~~~
+compilation terminated.
+config_HIVESYNC.c: In function 'HvRefreshHive':
+config_HIVESYNC.c:1627:68: error: macro "RtlCheckBit" passed 3 arguments, but takes just 2
+ 1627 |             if (RtlCheckBit(&Hive->DirtyVector, p / HSECTOR_SIZE, 1)==1) {
+      |                                                                    ^
+In file included from inc/ntos.h:24,
+                 from /tmp/f/config/cmp.h:29,
+                 from config_HIVESYNC.c:25:
+/tmp/f/pub/ntrtl.h:4025: note: macro "RtlCheckBit" defined here
+ 4025 | #define RtlCheckBit(BMH,BP) ((((BMH)->Buffer[(BP) / 32]) >> ((BP) % 32)) & 0x1)
+      | 
+config_HIVESYNC.c:1627:17: error: 'RtlCheckBit' undeclared (first use in this function)
+ 1627 |             if (RtlCheckBit(&Hive->DirtyVector, p / HSECTOR_SIZE, 1)==1) {
+      |                 ^~~~~~~~~~~
+config_HIVESYNC.c:1627:17: note: each undeclared identifier is reported only once for each function it appears in
+config_XCMAPI.c:27:10: fatal error: cmapi.c: No such file or directory
+   27 | #include "cmapi.c"
+      |          ^~~~~~~~~
+compilation terminated.
+config_XCMDAT.c:28:10: fatal error: cmdat.c: No such file or directory
+   28 | #include "cmdat.c"
+      |          ^~~~~~~~~
+compilation terminated.
+config_XCMPARSE.c:27:10: fatal error: cmparse2.c: No such file or directory
+   27 | #include "cmparse2.c"
+      |          ^~~~~~~~~~~~
+compilation terminated.
+In file included from /tmp/f/pub/windows.h:107,
+                 from /tmp/f/lpc/ulpc.h:25,
+                 from lpc_UCLIENT.c:21:
+/tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'
+  226 | typedef PLDT_ENTRY LPLDT_ENTRY;
+      |         ^~~~~~~~~~
+/tmp/f/lpc/ulpc.h: In function 'CheckTlpcMsg':
+/tmp/f/lpc/ulpc.h:116:18: error: 'stderr' undeclared (first use in this function)
+  116 |         fprintf( stderr, " - FAILED.  Status == %X\n", Status );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h:28:1: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+   27 | #include <stdio.h>
+  +++ |+#include <stdio.h>
+   28 | #include <string.h>
+/tmp/f/lpc/ulpc.h:116:18: note: each undeclared identifier is reported only once for each function it appears in
+  116 |         fprintf( stderr, " - FAILED.  Status == %X\n", Status );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h: In function 'ShowHandleOrStatus':
+/tmp/f/lpc/ulpc.h:178:18: error: 'stderr' undeclared (first use in this function)
+  178 |         fprintf( stderr, " - Handle = 0x%lx\n", Handle );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h:178:18: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+/tmp/f/lpc/ulpc.h: In function 'ShowStatus':
+/tmp/f/lpc/ulpc.h:194:18: error: 'stderr' undeclared (first use in this function)
+  194 |         fprintf( stderr, " - success\n" );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h:194:18: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+In file included from inc/nt.h:52,
+                 from /tmp/f/lpc/ulpc.h:22:
+/tmp/f/lpc/ulpc.h: In function 'SendRequest':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/lpc/ulpc.h:220:16: note: in expansion of macro 'NtCurrentTeb'
+  220 |     PTEB Teb = NtCurrentTeb();
+      |                ^~~~~~~~~~~~
+/tmp/f/lpc/ulpc.h:222:14: error: 'stderr' undeclared (first use in this function)
+  222 |     fprintf( stderr, "%.*sEnter SendRequest, %lx.%lx",
+      |              ^~~~~~
+/tmp/f/lpc/ulpc.h:222:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+/tmp/f/lpc/ulpc.h: In function 'EnterThread':
+/tmp/f/lpc/ulpc.h:323:14: error: 'stderr' undeclared (first use in this function)
+  323 |     fprintf( stderr, "Entering %s thread, Context = 0x%lx\n",
+      |              ^~~~~~
+/tmp/f/lpc/ulpc.h:323:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+lpc_UCLIENT.c: In function 'ClientThread':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+lpc_UCLIENT.c:40:16: note: in expansion of macro 'NtCurrentTeb'
+   40 |     PTEB Teb = NtCurrentTeb();
+      |                ^~~~~~~~~~~~
+lpc_UCLIENT.c:73:22: error: 'stderr' undeclared (first use in this function)
+   73 |             fprintf( stderr, "CloseHandle( 0x%lx ) failed - %u\n", PortHandle, GetLastError() );
+      |                      ^~~~~~
+lpc_UCLIENT.c:22:1: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+   21 | #include "ulpc.h"
+  +++ |+#include <stdio.h>
+   22 | 
+lpc_UCLIENT.c: In function 'Usage':
+lpc_UCLIENT.c:92:14: error: 'stderr' undeclared (first use in this function)
+   92 |     fprintf( stderr, "usage: UCLIENT ClientNumber [#threads]\n" );
+      |              ^~~~~~
+lpc_UCLIENT.c:92:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+lpc_UCLIENT.c: In function 'main':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+lpc_UCLIENT.c:115:16: note: in expansion of macro 'NtCurrentTeb'
+  115 |     PTEB Teb = NtCurrentTeb();
+      |                ^~~~~~~~~~~~
+lpc_UCLIENT.c:120:14: error: 'stderr' undeclared (first use in this function)
+  120 |     fprintf( stderr, "Entering UCLIENT User Mode LPC Test Program\n" );
+      |              ^~~~~~
+lpc_UCLIENT.c:120:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+In file included from /tmp/f/pub/windows.h:107,
+                 from /tmp/f/lpc/ulpc.h:25,
+                 from lpc_USERVER.c:21:
+/tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'
+  226 | typedef PLDT_ENTRY LPLDT_ENTRY;
+      |         ^~~~~~~~~~
+/tmp/f/lpc/ulpc.h: In function 'CheckTlpcMsg':
+/tmp/f/lpc/ulpc.h:116:18: error: 'stderr' undeclared (first use in this function)
+  116 |         fprintf( stderr, " - FAILED.  Status == %X\n", Status );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h:28:1: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+   27 | #include <stdio.h>
+  +++ |+#include <stdio.h>
+   28 | #include <string.h>
+/tmp/f/lpc/ulpc.h:116:18: note: each undeclared identifier is reported only once for each function it appears in
+  116 |         fprintf( stderr, " - FAILED.  Status == %X\n", Status );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h: In function 'ShowHandleOrStatus':
+/tmp/f/lpc/ulpc.h:178:18: error: 'stderr' undeclared (first use in this function)
+  178 |         fprintf( stderr, " - Handle = 0x%lx\n", Handle );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h:178:18: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+/tmp/f/lpc/ulpc.h: In function 'ShowStatus':
+/tmp/f/lpc/ulpc.h:194:18: error: 'stderr' undeclared (first use in this function)
+  194 |         fprintf( stderr, " - success\n" );
+      |                  ^~~~~~
+/tmp/f/lpc/ulpc.h:194:18: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+In file included from inc/nt.h:52,
+                 from /tmp/f/lpc/ulpc.h:22:
+/tmp/f/lpc/ulpc.h: In function 'SendRequest':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+/tmp/f/lpc/ulpc.h:220:16: note: in expansion of macro 'NtCurrentTeb'
+  220 |     PTEB Teb = NtCurrentTeb();
+      |                ^~~~~~~~~~~~
+/tmp/f/lpc/ulpc.h:222:14: error: 'stderr' undeclared (first use in this function)
+  222 |     fprintf( stderr, "%.*sEnter SendRequest, %lx.%lx",
+      |              ^~~~~~
+/tmp/f/lpc/ulpc.h:222:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+/tmp/f/lpc/ulpc.h: In function 'EnterThread':
+/tmp/f/lpc/ulpc.h:323:14: error: 'stderr' undeclared (first use in this function)
+  323 |     fprintf( stderr, "Entering %s thread, Context = 0x%lx\n",
+      |              ^~~~~~
+/tmp/f/lpc/ulpc.h:323:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+lpc_USERVER.c: In function 'ServerHandleConnectionRequest':
+lpc_USERVER.c:53:14: error: 'stderr' undeclared (first use in this function)
+   53 |     fprintf( stderr, "\nConnection Request Received from CLIENT_ID 0x%08lx.0x%08lx:\n",
+      |              ^~~~~~
+lpc_USERVER.c:22:1: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+   21 | #include "ulpc.h"
+  +++ |+#include <stdio.h>
+   22 | 
+lpc_USERVER.c: In function 'ServerThread':
+inc/ntarm.h:435:32: error: 'PCR' undeclared (first use in this function); did you mean 'KPCR'?
+  435 | #define NtCurrentTeb() ((PTEB)(PCR->CurrentThread->Teb))
+      |                                ^~~
+lpc_USERVER.c:183:16: note: in expansion of macro 'NtCurrentTeb'
+  183 |     PTEB Teb = NtCurrentTeb();
+      |                ^~~~~~~~~~~~
+lpc_USERVER.c:201:18: error: 'stderr' undeclared (first use in this function)
+  201 |         fprintf( stderr, "%s waiting for message...\n", ThreadName );
+      |                  ^~~~~~
+lpc_USERVER.c:201:18: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+lpc_USERVER.c: In function 'Usage':
+lpc_USERVER.c:265:14: error: 'stderr' undeclared (first use in this function)
+  265 |     fprintf( stderr, "usage: USERVER #threads\n" );
+      |              ^~~~~~
+lpc_USERVER.c:265:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?
+lpc_USERVER.c: In function 'main':
+lpc_USERVER.c:284:14: error: 'stderr' undeclared (first use in this function)
+  284 |     fprintf( stderr, "Entering USERVER User Mode LPC Test Program\n" );
+      |              ^~~~~~
+lpc_USERVER.c:284:14: note: 'stderr' is defined in header '<stdio.h>'; did you forget to '#include <stdio.h>'?

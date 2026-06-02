@@ -118,5 +118,7 @@ for df in ${DUMPFILE:-NLSXLAT STRING MESSAGE GENERR}; do
   grep -E "/tmp/cl/[a-z]+_${df}\.c" /tmp/exerr.txt | grep "error:" | head -8 | sed "s#/tmp/cl/[a-z]*_##;s/^/   /"
 done
 echo
+sed -E "s#/tmp/cl/##" /tmp/exerr.txt > /work/ARM32/arcfw/kernel/EXEC-COMPILE-ERRORS.txt
+echo "=== full per-file compile errors -> EXEC-COMPILE-ERRORS.txt ($(grep -c "error:" /tmp/exerr.txt) errors) ==="
 echo "=== objects staged: $(ls /tmp/eobj/*.o 2>/dev/null | wc -l) in /tmp/eobj ==="
 '
