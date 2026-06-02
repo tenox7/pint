@@ -48,10 +48,19 @@ for S in $SUBSYS; do mkfarm /work/PRIVATE/NTOS/$S /tmp/f/$(echo $S|tr A-Z a-z); 
        if(nm!=\"\"){ while(length(id)<4) id=\"0\" id; hi=(sev==\"None\")?\"4000\":\"0000\";
          printf \"#define %s ((ULONG)0x%s%sL)\n\", nm, hi, id } }";
   echo "#endif"; } > /tmp/f/priv/bugcodes.h
+{ echo "#ifndef _NTIOLOGC_"; echo "#define _NTIOLOGC_";
+  tr -d "\r" < /work/PRIVATE/NTOS/DD/NLSMSG/NTIOLOGC.MC | awk "/^MessageId=/{ id=\"\"; sev=\"Error\"; nm=\"\";
+       for(i=1;i<=NF;i++){ split(\$i,kv,\"=\");
+         if(kv[1]==\"MessageId\"){ v=kv[2]; sub(/^0[xX]/,\"\",v); id=v }
+         if(kv[1]==\"Severity\"){ sev=kv[2] }
+         if(kv[1]==\"SymbolicName\"){ nm=kv[2] } }
+       if(nm!=\"\"){ hi=(sev==\"Error\")?\"C\":(sev==\"Warning\")?\"8\":(sev==\"Informational\")?\"4\":\"0\";
+         while(length(id)<4) id=\"0\" id; printf \"#define %s ((ULONG)0x%s004%sL)\n\", nm, hi, id } }";
+  echo "#endif"; } > /tmp/f/priv/ntiologc.h
 printf "#ifndef _V_\n#define _V_\n#define VER_PRODUCTBUILD 782\n#endif\n" > /tmp/f/priv/version.h
 
 CFLAGS="-mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fshort-wchar \
-        -D_ARM_ -DNT_UP -DDBG=0 -DFPO=0 -DDEVL=1 -D_EXCEPTION_DISPOSITION_DEFINED \
+        -D_ARM_ -DIMAGE_FILE_MACHINE_ARM=0x1c0 -DNT_UP -DDBG=0 -DFPO=0 -DDEVL=1 -D_EXCEPTION_DISPOSITION_DEFINED \
         -fno-builtin -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
         -ffunction-sections -fdata-sections -O1 -w -include /work/ARM32/arcfw/inc/ntshim.h"
 ALLSUB=""; for S in $SUBSYS; do ALLSUB="$ALLSUB -I/tmp/f/$(echo $S|tr A-Z a-z)"; done

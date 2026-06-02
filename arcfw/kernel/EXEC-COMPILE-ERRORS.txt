@@ -945,56 +945,12 @@ ps_TPS.c: In function 'OpenptTest':
 ps_TPS.c:1921:17: error: 'EPROCESS' {aka 'struct _EPROCESS'} has no member named 'TerminationEvent'
  1921 |         &Process->TerminationEvent,
       |                 ^~
-mm_MAPVIEW.c: In function 'MiMapViewOfImageSection':
-mm_MAPVIEW.c:1733:13: error: expected statement before ')' token
- 1733 |             ) {
-      |             ^
-mm_MODWRITE.c: In function 'MiCheckForCrashDump':
-mm_MODWRITE.c:801:18: error: void value not ignored as it ought to be
-  801 |         Block[8] =
-      |                  ^
 mm_SUPER.c:241:5: error: expected declaration specifiers or '...' before ')' token
   241 |     )
       |     ^
 mm_SUPER.c:318:5: error: expected declaration specifiers or '...' before ')' token
   318 |     )
       |     ^
-io_ASSIGN.c: In function 'IopLogConflict':
-io_ASSIGN.c:3061:41: error: 'IO_ERR_PORT_RESOURCE_CONFLICT' undeclared (first use in this function)
- 3061 |                     ErrLog->ErrorCode = IO_ERR_PORT_RESOURCE_CONFLICT;
-      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_ASSIGN.c:3061:41: note: each undeclared identifier is reported only once for each function it appears in
-io_ASSIGN.c:3065:41: error: 'IO_ERR_MEMORY_RESOURCE_CONFLICT' undeclared (first use in this function)
- 3065 |                     ErrLog->ErrorCode = IO_ERR_MEMORY_RESOURCE_CONFLICT;
-      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_ASSIGN.c:3069:41: error: 'IO_ERR_INTERRUPT_RESOURCE_CONFLICT' undeclared (first use in this function)
- 3069 |                     ErrLog->ErrorCode = IO_ERR_INTERRUPT_RESOURCE_CONFLICT;
-      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_ASSIGN.c:3073:41: error: 'IO_ERR_DMA_RESOURCE_CONFLICT' undeclared (first use in this function)
- 3073 |                     ErrLog->ErrorCode = IO_ERR_DMA_RESOURCE_CONFLICT;
-      |                                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_DUMPCTL.c: In function 'IoWriteCrashDump':
-io_DUMPCTL.c:375:2: error: #error ( "unknown processor type" )
-  375 | #error( "unknown processor type" )
-      |  ^~~~~
-io_REPORT.c: In function 'IopCheckAndLogConflict':
-io_REPORT.c:1430:21: error: 'IO_ERR_MEMORY_CONFLICT_DETECTED' undeclared (first use in this function)
- 1430 |         errorCode = IO_ERR_MEMORY_CONFLICT_DETECTED;
-      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_REPORT.c:1430:21: note: each undeclared identifier is reported only once for each function it appears in
-io_REPORT.c:1436:21: error: 'IO_ERR_PORT_CONFLICT_DETECTED' undeclared (first use in this function)
- 1436 |         errorCode = IO_ERR_PORT_CONFLICT_DETECTED;
-      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_REPORT.c:1442:21: error: 'IO_ERR_IRQ_CONFLICT_DETECTED' undeclared (first use in this function)
- 1442 |         errorCode = IO_ERR_IRQ_CONFLICT_DETECTED;
-      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_REPORT.c:1448:21: error: 'IO_ERR_DMA_CONFLICT_DETECTED' undeclared (first use in this function)
- 1448 |         errorCode = IO_ERR_DMA_CONFLICT_DETECTED;
-      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
-io_REPORT.c: In function 'IopTranslateResourceList':
-io_REPORT.c:1697:28: error: 'IO_ERR_CONFIGURATION_ERROR' undeclared (first use in this function)
- 1697 |                     return IO_ERR_CONFIGURATION_ERROR;
-      |                            ^~~~~~~~~~~~~~~~~~~~~~~~~~
 In file included from /tmp/f/pub/windows.h:107,
                  from se_ADTINIT.c:30:
 /tmp/f/pub/winbase.h:226:9: error: unknown type name 'PLDT_ENTRY'

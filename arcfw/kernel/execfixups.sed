@@ -8,8 +8,8 @@
 # (unblocks PspCreateProcess / NtCreateProcess / NtCreateThread / PsCreateSystemThread)
 s#"\.\.\\mm\\mi\.h"#"mi.h"#
 
-# io/report.c + io/assign.c: header typo - ntiologc.h does not exist; it is ntiolog.h.
-s#ntiologc\.h#ntiolog.h#
+# (io/report.c + io/assign.c include "ntiologc.h" - a GENERATED header of IO_ERR_*
+#  codes; it is generated into the farm by make-exec/probe, not redirected here.)
 
 # rtl/string.c: TO_UPPER(Ch) modifies its arg in place; the (UCHAR) cast at the call
 # sites makes a non-lvalue (MSVC cast-as-lvalue). Drop the cast (the arg is a CHAR).
@@ -26,3 +26,28 @@ s#RtlCheckBit(&Hive->DirtyVector, p / HSECTOR_SIZE, 1)#RtlCheckBit(\&Hive->Dirty
 # cast applies to the field value -> non-lvalue. Assign to the PVOID field, cast the RHS.
 # (unblocks the 22 Io*/Iof* manager-core symbols)
 s#(PIRP) (PsGetCurrentThread())->TopLevelIrp = Irp;#(PsGetCurrentThread())->TopLevelIrp = (PVOID)Irp;#
+
+# mm/modwrite.c: Block[8] machine-type #ifdef has no _ARM_ -> inject the ARM value
+# (before the existing branches, so it wins for ARM). (unblocks MM crash-dump symbols)
+/^        Block\[8\] =$/ {
+a #ifdef _ARM_
+a IMAGE_FILE_MACHINE_ARM;
+a #endif
+}
+
+# mm/mapview.c: the image-machine check if-clause has no _ARM_ branch (dangling ')').
+# After the _ALPHA_ branch's #endif (advance past the unique ALPHA if-line via 'n'),
+# inject the _ARM_ if-clause. (unblocks MmMapViewOfSection / NtMapViewOfSection)
+/!= IMAGE_FILE_MACHINE_ALPHA)$/ {
+n
+a #ifdef _ARM_
+a if ((ControlArea->Segment->ImageInformation.Machine != IMAGE_FILE_MACHINE_ARM)
+a #endif
+}
+
+# io/dumpctl.c: no _ARM_ case for the crash exception address. Add an _ARM_ #elif
+# AFTER the _PPC_ branch body (context->Iar) and BEFORE #else (so #elif stays legal).
+/exception.ExceptionAddress = (PVOID) context->Iar;/ {
+a #elif defined(_ARM_)
+a exception.ExceptionAddress = (PVOID) context->Pc;
+}
