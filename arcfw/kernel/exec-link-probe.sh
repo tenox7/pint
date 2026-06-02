@@ -70,7 +70,7 @@ done
 # the HAL display half (HalDisplayString / HalpInitializeDisplay0), built like make-kernel.sh
 ${CROSS}gcc -mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fno-builtin \
    -fno-stack-protector -ffunction-sections -fdata-sections -O2 -w -c jxdisp.c -o "$OUT/k_jxdisp.o" 2>/dev/null
-for c in KERNLDAT KIINIT PROCOBJ THREDOBJ THREDSUP DPCOBJ DPCSUP TIMEROBJ TIMERSUP SEMPHOBJ APCOBJ EVENTOBJ WAITSUP MUTNTOBJ PROFOBJ; do
+for c in KERNLDAT KIINIT PROCOBJ THREDOBJ THREDSUP DPCOBJ DPCSUP TIMEROBJ TIMERSUP SEMPHOBJ APCOBJ EVENTOBJ WAITSUP MUTNTOBJ PROFOBJ DEVQUOBJ APCSUP MISCC; do
   tr -d "\032\r" < /work/PRIVATE/NTOS/KE/$c.C > /tmp/c.c
   ${CROSS}gcc $CFLAGS $KINCS -c /tmp/c.c -o "$OUT/k_$(echo $c|tr A-Z a-z).o" 2>/dev/null
 done
