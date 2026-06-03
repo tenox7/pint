@@ -876,9 +876,22 @@ extern ULONG MiArmDemandPage(VOID);     // ke/initarm.c: a free page off the rea
 static ULONG MiArmRealL2Group[1024];    // (M>>2) -> phys page of 4 packed REAL L2s, 0=none
 
 static ULONG MiArmExecHonored;          // system faults where the LOGICAL PTE was Valid -> honored
-static ULONG MiArmExecZeroed;           // system faults demand-zeroed (no valid logical PTE yet)
+static ULONG MiArmExecZeroed;           // system faults demand-zeroed (total of the buckets below)
 static ULONG MiArmExecPdL1Fills;        // hardware L1 fills AUTHORIZED by a valid logical PDE (MM's *StartPde)
 static ULONG MiArmExecPdL1Demand;       // hardware L1 fills with no logical PDE yet (demand region; step-B residual)
+
+//
+// REAL MM step B (B1): the invalid-logical-PTE classification of the demand-fill arm
+// (mirrors MiDispatchFault PAGFAULT.C). Count-only - the page is still demand-zeroed
+// (safety valve) so Phase 0 cannot regress; B2 swaps in the real demand-zero resolution.
+//
+static ULONG MiArmExecDemandZero;       // committed demand-zero PTE (Protection != 0, not proto/trans/pagefile) - the real one
+static ULONG MiArmExecNoPte;            // Protection == 0 / unbacked window: free / uncommitted (NT: PAGE_FAULT_IN_NONPAGED_AREA)
+static ULONG MiArmExecNoAccess;         // Protection == MM_NOACCESS (0x18)
+static ULONG MiArmExecProto;            // prototype PTE (Phase 1)
+static ULONG MiArmExecTrans;            // transition PTE (Phase 1)
+static ULONG MiArmExecPagefile;         // pagefile PTE - PageFileHigh != 0 (Phase 1)
+static ULONG MiArmExecLogValidWrites;   // B2: real demand-zero resolves that wrote a VALID logical PTE back
 
 //
 // KSEG0 VA of megabyte M's private real L2, allocating its packed page (arena) and
@@ -1115,12 +1128,58 @@ MiArmTryFillFault (
                 MiArmTlbiMva(FaultVa);
                 MiArmExecHonored += 1;
             } else {
-                pfn = MiArmDemandPage();                     // committed demand-zero
+                //
+                // REAL MM step B: classify the INVALID logical PTE by its NT software-PTE
+                // format (MMPTE_SOFTWARE: Prototype bit2, Protection bits3-7, Transition
+                // bit8, PageFileHigh bits12-31) - mirrors MiDispatchFault - so a committed
+                // demand-zero PTE is DISTINGUISHED from a genuine uncommitted / no-access
+                // PTE. w == 0 when the window was unbacked (MM wrote no PTE) -> no-PTE.
+                //
+                ULONG w = *(ULONG *)&lpte;
+                ULONG prot = (w >> 3) & 0x1Fu;
+                ULONG isDemandZero = 0;
+
+                if (w & 0x4u)             MiArmExecProto += 1;        // Prototype (Phase 1)
+                else if (w & 0x100u)      MiArmExecTrans += 1;        // Transition (Phase 1)
+                else if (w & 0xFFFFF000u) MiArmExecPagefile += 1;     // PageFileHigh != 0 (Phase 1)
+                else if (prot == 0)       MiArmExecNoPte += 1;        // free / uncommitted
+                else if (prot == 0x18u)   MiArmExecNoAccess += 1;     // MM_NOACCESS
+                else { MiArmExecDemandZero += 1; isDemandZero = 1; }  // committed demand-zero
+
+                pfn = MiArmDemandPage();
                 if (pfn == 0)
                     return 0;
-                l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+
+                if (isDemandZero) {
+                    //
+                    // B2: the real MiResolveDemandZeroFault resolution (system arm). Build
+                    // a VALID logical PTE from the committed protection (the MI_MAKE_VALID_PTE
+                    // essence: PFN, Valid, Write from MM_PROTECTION_WRITE_MASK, Dirty if
+                    // writable, Global for system space) and write it back THROUGH the self-
+                    // map - so MM's logical page table now holds a real valid PTE it could
+                    // read back, not an inert one - then mirror it to the hardware L2 so the
+                    // two tables AGREE. This is the un-fake of the blind demand-zero.
+                    //
+                    HARDWARE_PTE np;
+                    *(ULONG *)&np = 0;
+                    np.Valid = 1; np.Global = 1; np.CachePolicy = 1;
+                    np.PageFrameNumber = pfn;
+                    np.Write = (prot & 0x4u) ? 1 : 0;       // MM_PROTECTION_WRITE_MASK
+                    if (np.Write) np.Dirty = 1;
+                    *(volatile ULONG *)MI_PTE_VA(FaultVa) = *(ULONG *)&np;  // logical table now VALID
+                    l2[idx] = MiArmPteToDescriptor(np);                    // hardware descriptor agrees
+                    MiArmExecLogValidWrites += 1;
+                } else {
+                    //
+                    // Not a committed demand-zero PTE (no-PTE / no-access / proto / trans /
+                    // pagefile). Safety-fill a zeroed page so Phase 0 does not regress; B3
+                    // tightens the no-PTE residual and Phase 1 ports the proto/trans/pagefile
+                    // resolvers.
+                    //
+                    l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+                }
                 MiArmTlbiMva(FaultVa);
-                MiArmZeroPages((PVOID)(FaultVa & ~0xFFFu), PAGE_SIZE);   // demand-zero via the mapping
+                MiArmZeroPages((PVOID)(FaultVa & ~0xFFFu), PAGE_SIZE);   // zero via the new mapping (page may be > 512 MB)
                 MiArmExecZeroed += 1;
             }
         }
@@ -1745,6 +1804,13 @@ ULONG MiArmGetExecHonored (VOID) { return MiArmExecHonored; }
 ULONG MiArmGetExecZeroed  (VOID) { return MiArmExecZeroed; }
 ULONG MiArmGetExecPdL1Fills  (VOID) { return MiArmExecPdL1Fills; }
 ULONG MiArmGetExecPdL1Demand (VOID) { return MiArmExecPdL1Demand; }
+ULONG MiArmGetExecDemandZero (VOID) { return MiArmExecDemandZero; }
+ULONG MiArmGetExecNoPte      (VOID) { return MiArmExecNoPte; }
+ULONG MiArmGetExecNoAccess   (VOID) { return MiArmExecNoAccess; }
+ULONG MiArmGetExecProto      (VOID) { return MiArmExecProto; }
+ULONG MiArmGetExecTrans      (VOID) { return MiArmExecTrans; }
+ULONG MiArmGetExecPagefile   (VOID) { return MiArmExecPagefile; }
+ULONG MiArmGetExecLogValidWrites (VOID) { return MiArmExecLogValidWrites; }
 
 //
 // Count the valid entries MM's *StartPde wrote into the logical page directory - proof

@@ -529,6 +529,31 @@ KiArmReportInitialized (
         emit_hex(MiArmGetExecHonored());
         emit(", demand-zero = ");
         emit_hex(MiArmGetExecZeroed());
+        {
+            extern ULONG MiArmGetExecDemandZero(VOID);
+            extern ULONG MiArmGetExecNoPte(VOID);
+            extern ULONG MiArmGetExecNoAccess(VOID);
+            extern ULONG MiArmGetExecProto(VOID);
+            extern ULONG MiArmGetExecTrans(VOID);
+            extern ULONG MiArmGetExecPagefile(VOID);
+            emit("\n  invalid-PTE classify: demand-zero = ");
+            emit_hex(MiArmGetExecDemandZero());
+            emit(", no-PTE = ");
+            emit_hex(MiArmGetExecNoPte());
+            emit(", no-access = ");
+            emit_hex(MiArmGetExecNoAccess());
+            emit(", proto = ");
+            emit_hex(MiArmGetExecProto());
+            emit(", trans = ");
+            emit_hex(MiArmGetExecTrans());
+            emit(", pagefile = ");
+            emit_hex(MiArmGetExecPagefile());
+        }
+        {
+            extern ULONG MiArmGetExecLogValidWrites(VOID);
+            emit("\n  demand-zero resolved with a real VALID logical PTE written back = ");
+            emit_hex(MiArmGetExecLogValidWrites());
+        }
         emit("\n");
     }
     emit("------------------------------------------------------------------\n\n");
