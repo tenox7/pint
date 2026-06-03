@@ -516,7 +516,12 @@ KiArmReportInitialized (
     emit("------------------------------------------------------------------\n\n");
 #endif
 
+#if KI_RUN_EXECUTIVE
+    emit("KE/ARM up. Executive Phase 0 complete (Mm/Ob/Se/Ps init + version banner).\n");
+    emit("Phase 1 (scheduler dispatches the Phase1Initialization thread) is next.\n");
+#else
     emit("KE/ARM up. Executive (Ex/Mm/Ob/Ps/Io/Se/Cm) not yet ported.\n");
+#endif
     emit("Starting the clock interrupt and entering the idle loop.\n\n");
 
     //

@@ -132,7 +132,10 @@ for S in $SUBSYS; do
     grep -q "#include" "$f" || continue
     grep -qE "[^A-Za-z_]main[ \t]*\(" "$f" && continue
     case "$base" in CTXMIP|CTXALPHA|CTXPPC|CTXI386) continue;; esac
-    tr -d "\032\r" < "$f" | perl -p "$CLFILTER" | sed -f "$FIXUPS" > /tmp/tu.c
+    src="$f"
+    # Prefer the ported PSINIT.C (carries PS0 breadcrumbs to pinpoint which Ps sub-init fails).
+    case "$base" in PSINIT) [ -f /work/ARM32/arcfw/ported/psinit.c ] && { src=/work/ARM32/arcfw/ported/psinit.c; echo "   (using ported psinit.c with PS0 breadcrumbs)"; } ;; esac
+    tr -d "\032\r" < "$src" | perl -p "$CLFILTER" | sed -f "$FIXUPS" > /tmp/tu.c
     if ${CROSS}gcc $CFLAGS $INCS -c /tmp/tu.c -o "$AOBJ/e_${s}_${base}.o" 2>/dev/null; then
       nexec=$((nexec+1)); else nfail=$((nfail+1)); fi
   done

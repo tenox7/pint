@@ -242,6 +242,42 @@ MiInitMachineDependent (
     KiEmit("  MiInitMachineDependent: KSEG0 nonpaged pool ready\n");
 
     //
+    // Initialize the SystemPteSpace PTE pool (the INITMIPS.C:741-746 step that
+    // MiInitializeNonPagedPool, above, does NOT cover - that builds the separate
+    // NonPagedPoolExpansion pool). Without it MmTotalFreeSystemPtes[SystemPteSpace]
+    // is 0, so MmCreateKernelStack (MM/PROCSUP.C:1033) returns NULL on its very first
+    // check -> PsCreateSystemThread fails STATUS_UNSUCCESSFUL -> PsInitSystem returns
+    // FALSE -> STOP 0x60. The pool occupies a system VA window just below the nonpaged
+    // system area; its PTE table sits in the self-map PTE window (MiGetPteAddress),
+    // pre-backed with MiArmEnsureL2 so MiInitializeSystemPtes's RtlFillMemoryUlong does
+    // not fault. The reserved system VAs themselves (kernel-stack data pages) are mapped
+    // on demand by ke/mmuarm.c MiArmTryFillFault (the 0xC0800000..0xFFFFF000 region) when
+    // a stack is first written by KeInitializeThread.
+    //
+    {
+        ULONG sysPtes  = MM_DEFAULT_SYSTEM_PTES;                 // 10000
+        ULONG sysBytes = (sysPtes + 1) << PAGE_SHIFT;
+        ULONG sysStart = (startVirtual - sysBytes) & ~0xFFFFFu;  // megabyte aligned
+        ULONG mb;
+
+        for (mb = sysStart; mb < sysStart + (sysPtes << PAGE_SHIFT); mb += 0x100000)
+            MiArmEnsureL2(mb);
+
+        MmNonPagedSystemStart = (PVOID)sysStart;                 // true low end of nonpaged system
+        MmNumberOfSystemPtes  = sysPtes;
+        MiInitializeSystemPtes((PMMPTE)MiGetPteAddress((PVOID)sysStart),
+                               sysPtes, SystemPteSpace);
+
+        KiEmit("  system PTE pool      : VA "); KiEmitHex(sysStart);
+        KiEmit(" x "); KiEmitHex(sysPtes);
+        KiEmit(", free="); KiEmitHex(MmTotalFreeSystemPtes[SystemPteSpace]);
+        KiEmit("\n  MmResidentAvail="); KiEmitHex((ULONG)MmResidentAvailablePages);
+        KiEmit(" MmTotalCommit="); KiEmitHex(MmTotalCommittedPages);
+        KiEmit(" CommitLimit="); KiEmitHex(MmTotalCommitLimit);
+        KiEmit("\n");
+    }
+
+    //
     // Build the genuine MM page-frame free lists so MiRemoveAnyPage works (Item A).
     // MmAvailablePages is now left LIVE (Item B): MmInitSystem no longer early-returns
     // at MMINIT.C:457, so it proceeds into the system-cache build + MiBuildPagedPool.
