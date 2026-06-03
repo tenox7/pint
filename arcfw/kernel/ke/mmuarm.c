@@ -765,6 +765,30 @@ static ULONG MiArmFillBase;             // demand-fill window [base, end), 0 = d
 static ULONG MiArmFillEnd;
 static ULONG MiArmFillCount;            // pages filled on fault (for the demo report)
 
+#if !KI_RUN_EXECUTIVE
+//
+// Real-model log-fill window (the hardware-page-table-as-software-TLB demo). Unlike
+// MiArmFillBase above - which blindly demand-zeros any faulting page regardless of
+// what maps it - this path READS the LOGICAL NT-PTE for the faulting VA (through the
+// self-map, MiGetPteAddress) and fills the hardware ARMv7 L2 *from it*: a valid
+// logical PTE is translated and installed (a pure "TLB miss"), and a committed
+// demand-zero PTE allocates+zeroes a page and makes the logical PTE valid first.
+// This is the faithful ARMv7 equivalent of the MIPS software-TLB fill (the hardware
+// page table is a never-evicting, software-managed TLB over the logical NT-PTE
+// table), the model REAL MM is built on. State is live only while MiArmRealModelDemo
+// runs, so the fault path is unchanged for every other fault.
+//
+static ULONG MiArmLogFillBase;          // logical-table-driven fill window, 0 = off
+static ULONG MiArmLogFillEnd;
+static volatile ULONG *MiArmLogHwL2;    // the hardware L2 the MMU walks for that window
+static ULONG MiArmLogFillCount;         // hardware descriptors filled from the logical table
+static ULONG MiArmLogZeroCount;         // of those, demand-zero (committed) resolutions
+
+#define MI_LOG_DEMAND_ZERO 0x00000400u  // logical-PTE marker: committed, fill on touch
+                                        // (Valid = bit 1, clear here; NT proper carries
+                                        //  commit in the VAD - a self-contained stand-in)
+#endif
+
 #if KI_RUN_EXECUTIVE
 //
 // System-region demand fault (the MmAccessFault analog for the executive). The
@@ -807,6 +831,54 @@ MiArmRealL2Va (
     if ((MiArmL1[M] & 0x3) != 0x1)
         MiArmL1[M] = (((ULONG)l2 - KSEG0) & 0xFFFFFC00) | 0x1;
     return (ULONG)l2;
+}
+#endif
+
+#if !KI_RUN_EXECUTIVE
+//
+// The real fill: translate the LOGICAL NT-PTE that maps FaultVa into a hardware
+// ARMv7 descriptor and install it (the MmAccessFault analog, logical-table-driven).
+// The logical L2 is pre-exposed in the self-map window, so reading MiGetPteAddress
+// (FaultVa) here is a backed Normal-memory access and cannot nest-fault (the trap.S
+// no-nesting invariant); the real MmAccessFault likewise requires the page-table
+// page to be resident, faulting it in first if not.
+//
+static ULONG
+MiArmLogFill (
+    ULONG FaultVa
+    )
+{
+    volatile ULONG *logPtePtr = (volatile ULONG *)MI_PTE_VA(FaultVa);
+    ULONG idx = (FaultVa >> 12) & 0xFF;
+    HARDWARE_PTE pte;
+    ULONG pfn;
+
+    *(ULONG *)&pte = *logPtePtr;                 // the logical NT-PTE, read via the self-map
+
+    if (pte.Valid) {                             // mapping known - a pure "TLB miss": translate + install
+        MiArmLogHwL2[idx] = MiArmPteToDescriptor(pte);
+        MiArmTlbiMva(FaultVa);
+        MiArmLogFillCount += 1;
+        return 1;
+    }
+
+    if (*(ULONG *)&pte == MI_LOG_DEMAND_ZERO) {  // committed: allocate, zero, make the logical PTE valid
+        pfn = MiArmAllocKseg0Page();
+        if (pfn == 0)
+            return 0;
+        MiArmZeroPages((PVOID)(KSEG0 + (pfn << PAGE_SHIFT)), PAGE_SIZE);
+        *(ULONG *)&pte = 0;
+        pte.Global = 1; pte.Valid = 1; pte.Write = 1;
+        pte.CachePolicy = 1; pte.PageFrameNumber = pfn;
+        *logPtePtr = *(ULONG *)&pte;             // write the now-valid logical PTE back (via the self-map)
+        MiArmLogHwL2[idx] = MiArmPteToDescriptor(pte);
+        MiArmTlbiMva(FaultVa);
+        MiArmLogFillCount += 1;
+        MiArmLogZeroCount += 1;
+        return 1;
+    }
+
+    return 0;                                    // not committed -> genuine fault
 }
 #endif
 
@@ -856,6 +928,16 @@ MiArmTryFillFault (
         MiArmFillCount += 1;
         return 1;                                    // retry the faulting access
     }
+#endif
+
+#if !KI_RUN_EXECUTIVE
+    //
+    // Real-model log-fill window: drive the fill from the logical NT-PTE table
+    // (the faithful model) rather than the blind demand-zero below.
+    //
+    if (MiArmLogFillBase != 0 &&
+        FaultVa >= MiArmLogFillBase && FaultVa < MiArmLogFillEnd)
+        return MiArmLogFill(FaultVa);
 #endif
 
     if (MiArmFillBase == 0 || FaultVa < MiArmFillBase || FaultVa >= MiArmFillEnd)
@@ -914,6 +996,112 @@ MiArmFaultFillDemo (
 
     MiArmFillBase = 0;                              // close the demand-fill window
 }
+
+//
+// Prove the REAL MM page-table model: a hardware ARMv7 page table the MMU walks,
+// filled lazily and FAITHFULLY from a LOGICAL NT-PTE page table (HARDWARE_PTE words,
+// the form MM reads/writes through the self-map). This is the un-faked successor to
+// MiArmFaultFillDemo above: that one blindly demand-zeros any faulting page; this one
+// consults the logical PTE and installs exactly the page it names - a valid PTE maps
+// its page (a pure TLB miss), a committed demand-zero PTE resolves to a fresh zeroed
+// page. A flush + logical-PTE change re-fills to the new page, proving the hardware
+// table is a coherent software-managed "TLB" over the logical table (the ARMv7 analog
+// of the MIPS TLB-miss fill). This is the mechanism the real MmAccessFault rides on.
+//
+
+#if !KI_RUN_EXECUTIVE
+static VOID
+MiArmRealModelDemo (
+    VOID
+    )
+{
+    ULONG testVa = 0xB0000000;                  // a currently-unmapped megabyte
+    ULONG M = testVa >> 20;
+    volatile ULONG *win;                        // &logical PTE of page 0, in the self-map window
+    volatile ULONG *logL2;
+    ULONG hwPhys, pfnA, pfnB;
+    ULONG vValid, vZero, vWrite, vRemap;
+    HARDWARE_PTE pte;
+
+    KiEmit("\nARMv7 REAL MM model - hardware page table filled from the logical NT-PTE table:\n");
+
+    //
+    // Logical L2 (HARDWARE_PTE words), exposed in the PTE window so MiGetPteAddress
+    // reaches it; the hardware L2 (ARMv7 descriptors) is a separate page the MMU
+    // walks via the real L1. Both start all-fault.
+    //
+    logL2 = (volatile ULONG *)MiArmL2Va(M);
+    MiArmZeroPages((PVOID)logL2, PAGE_SIZE);
+
+    hwPhys = MiArmAllocKseg0Page() << PAGE_SHIFT;
+    MiArmLogHwL2 = (volatile ULONG *)(KSEG0 + hwPhys);
+    MiArmZeroPages((PVOID)MiArmLogHwL2, PAGE_SIZE);
+    MiArmL1[M] = (hwPhys & 0xFFFFFC00) | 0x1;   // real L1 the MMU walks -> hardware L2
+    MiArmTlbiAll();
+
+    //
+    // Two backing pages off the free list, each tagged so the read proves WHICH page
+    // the fill chose. Set the logical PTEs THROUGH the self-map window, exactly as MM
+    // does: page 0 valid -> page A, page 1 a committed demand-zero.
+    //
+    pfnA = MiArmAllocKseg0Page();
+    pfnB = MiArmAllocKseg0Page();
+    *(volatile ULONG *)(KSEG0 + (pfnA << PAGE_SHIFT)) = 0x0A11600Du;   // page A sentinel
+    *(volatile ULONG *)(KSEG0 + (pfnB << PAGE_SHIFT)) = 0x0B0B0B0Bu;   // page B sentinel
+
+    win = (volatile ULONG *)MI_PTE_VA(testVa);
+    *(ULONG *)&pte = 0;
+    pte.Global = 1; pte.Valid = 1; pte.Write = 1; pte.CachePolicy = 1;
+    pte.PageFrameNumber = pfnA;
+    win[0] = *(ULONG *)&pte;                     // page 0: VALID -> page A
+    win[1] = MI_LOG_DEMAND_ZERO;                 // page 1: committed demand-zero
+
+    //
+    // Touch the pages. Each access data-aborts (hardware L2 all-fault), trap.S calls
+    // MiArmTryFillFault -> MiArmLogFill, which reads the logical PTE and fills the
+    // hardware descriptor from it, then the instruction retries.
+    //
+    MiArmLogFillBase = testVa;
+    MiArmLogFillEnd = testVa + 0x100000;
+    MiArmLogFillCount = 0;
+    MiArmLogZeroCount = 0;
+
+    vValid = *(volatile ULONG *)(testVa + 0x0000);   // -> fill from the VALID logical PTE -> page A
+    vZero  = *(volatile ULONG *)(testVa + 0x1000);   // -> demand-zero -> 0
+    *(volatile ULONG *)(testVa + 0x1000) = 0x600D600Du;
+    vWrite = *(volatile ULONG *)(testVa + 0x1000);   // write/readback on the zeroed page
+
+    //
+    // Coherence: drop page 0's hardware descriptor (KeFlushSingleTb = clear + TLBIMVA),
+    // repoint the LOGICAL PTE at page B, touch again -> the fill tracks the new PTE.
+    //
+    MiArmLogHwL2[0] = 0;
+    MiArmTlbiMva(testVa);
+    *(ULONG *)&pte = 0;
+    pte.Global = 1; pte.Valid = 1; pte.Write = 1; pte.CachePolicy = 1;
+    pte.PageFrameNumber = pfnB;
+    win[0] = *(ULONG *)&pte;
+    vRemap = *(volatile ULONG *)(testVa + 0x0000);   // -> refill from the CHANGED logical PTE -> page B
+
+    KiEmit("  logical L2 (NT PTEs) @ MiGetPteAddress   : "); KiEmitHex((ULONG)win);
+    KiEmit("\n  hardware L2 (ARMv7) the MMU walks        : "); KiEmitHex((ULONG)MiArmLogHwL2);
+    KiEmit("\n  page0 read (filled from the VALID PTE)   : "); KiEmitHex(vValid);
+    KiEmit(vValid == 0x0A11600Du ? "  OK - installed the page the logical PTE named\n"
+                                 : "  *** FAIL (a blind demand-zero fill would read 0) ***\n");
+    KiEmit("  page1 read (committed demand-zero)       : "); KiEmitHex(vZero);
+    KiEmit(vZero == 0 ? "  OK - demand-zero\n" : "  *** FAIL ***\n");
+    KiEmit("  page1 write + read back                  : "); KiEmitHex(vWrite);
+    KiEmit(vWrite == 0x600D600Du ? "  OK\n" : "  *** FAIL ***\n");
+    KiEmit("  page0 reread after flush + PTE change    : "); KiEmitHex(vRemap);
+    KiEmit(vRemap == 0x0B0B0B0Bu ? "  OK - hardware table tracked the logical table\n"
+                                 : "  *** FAIL ***\n");
+    KiEmit("  hw descriptors filled / demand-zero      : ");
+    KiEmitHex(MiArmLogFillCount); KiEmit(" / "); KiEmitHex(MiArmLogZeroCount);
+    KiEmit("\n");
+
+    MiArmLogFillBase = 0;                        // close the window
+}
+#endif
 
 //
 // Step 1: walk the loader's memory-descriptor list, accumulate the physical
@@ -1126,6 +1314,7 @@ MiArmInitMachineDependent (
 #if !KI_RUN_EXECUTIVE
     MiArmRemapDemo();
     MiArmFaultFillDemo();
+    MiArmRealModelDemo();
 #endif
 }
 
