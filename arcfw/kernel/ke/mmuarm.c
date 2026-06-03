@@ -51,9 +51,33 @@ Environment:
 extern void KiEmit(const char *s);
 extern void KiEmitHex(ULONG v);
 
+//
+// KI_RUN_EXECUTIVE: set by make-execlink.sh (the full-executive kernel) so the
+// genuine MmInitSystem / MiInitMachineDependent (ke/initarm.c) runs. When it is
+// on, MiArmInitMachineDependent additionally reserves a CONTIGUOUS physical
+// chunk for the executive's initial nonpaged pool (so MmNonPagedPoolStart can be
+// a KSEG0 direct-map alias) and skips the in-kernel self-map demos. The minimal
+// make-kernel.sh kernel leaves it 0 -> behaviour is byte-identical to before.
+//
+
+#ifndef KI_RUN_EXECUTIVE
+#define KI_RUN_EXECUTIVE 0
+#endif
+
 #define L1_ENTRIES 4096                 // 4 GB / 1 MB, 16 KB directory
 #define L2_ENTRIES 256                  // 1 MB / 4 KB, 1 KB table
 #define KSEG0 0x80000000u               // high-half base (== ntarm.h KSEG0_BASE)
+
+//
+// Initial nonpaged-pool reservation (KI_RUN_EXECUTIVE). Reserved contiguous and
+// physically above the PFN database, in the KSEG0 direct map; ke/initarm.c points
+// MmNonPagedPoolStart at its KSEG0 alias. 4 MB is ample for executive Phase 0.
+//
+
+#define MI_ARM_INITIAL_POOL_PAGES 0x400u        // 4 MB
+
+ULONG MiArmPoolBasePage = 0;            // first page of the pool reservation (0 = none)
+ULONG MiArmPoolPages = 0;               // pages reserved
 
 //
 // The boot page directory (16 KB aligned, as TTBR0 requires) and one second-level
@@ -864,6 +888,21 @@ MiArmInitMachineDependent (
         MiArmPfnDb = (PARM_MMPFN)(KSEG0_BASE + (carveStart << PAGE_SHIFT));
         MiArmZeroPages(MiArmPfnDb, PfnAllocation << PAGE_SHIFT);
 
+#if KI_RUN_EXECUTIVE
+        //
+        // Reserve the executive's initial nonpaged pool contiguously, immediately
+        // above the PFN database (still inside the free run, still inside the
+        // 512 MB KSEG0 window). Extending carveEnd folds these pages into the
+        // "keep active, off the free list" range below, exactly like the PFN DB;
+        // ke/initarm.c reads MiArmPoolBasePage/Pages and maps the pool at its
+        // KSEG0 alias (KSEG0_BASE + BasePage*PAGE_SIZE), a physical address so
+        // MiAllocatePoolPages derives the PFN from the address (no PTE read).
+        //
+        MiArmPoolBasePage = carveEnd;
+        MiArmPoolPages = MI_ARM_INITIAL_POOL_PAGES;
+        carveEnd += MiArmPoolPages;
+#endif
+
         //
         // Step 3: walk the descriptors again and populate the PFN database -
         // free physical pages onto the free list, bad pages onto the bad list,
@@ -936,12 +975,38 @@ MiArmInitMachineDependent (
     }
 
     //
-    // Steps 4+5: the free list now exists, so build the general self-map and
-    // demonstrate the 4 KB remap + self-map edit (the mechanisms MmAccessFault
-    // and MiInitMachineDependent's per-page work depend on).
+    // Step 4: the free list now exists, so build the general self-map (the PTE
+    // window MiGetPteAddress/MiGetPdeAddress resolve through). ke/initarm.c needs
+    // it to back the pool expansion's system PTEs, so it is built on every path.
     //
 
     MiArmBuildSelfMap();
+
+    //
+    // Step 5 (verification only): demonstrate the 4 KB remap + self-map edit and
+    // the demand-fill fault path. Skipped under KI_RUN_EXECUTIVE so the executive
+    // boot is clean and deterministic (the mechanisms are proven; the real MM
+    // owns these VAs once linked).
+    //
+
+#if !KI_RUN_EXECUTIVE
     MiArmRemapDemo();
     MiArmFaultFillDemo();
+#endif
 }
+
+//
+// Accessors for ke/initarm.c (the real MiInitMachineDependent). initarm.c is
+// compiled with the MM include chain (mi.h/miarm.h), so it owns the real MMPFN /
+// Mm* globals; these hand it the values this self-contained bring-up computed -
+// the PFN database (ARM_MMPFN is byte-compatible with MMPFN), the physical-page
+// accounting, and the reserved KSEG0 pool chunk.
+//
+
+PVOID MiArmGetPfnDatabase  (VOID) { return (PVOID)MiArmPfnDb; }
+ULONG MiArmGetPhysPages    (VOID) { return MiArmPhysPages; }
+ULONG MiArmGetLowestPage   (VOID) { return MiArmLowestPage; }
+ULONG MiArmGetHighestPage  (VOID) { return MiArmHighestPage; }
+ULONG MiArmGetFreeCount    (VOID) { return MiArmFreeList.Total; }
+ULONG MiArmGetPoolBasePage (VOID) { return MiArmPoolBasePage; }
+ULONG MiArmGetPoolPages    (VOID) { return MiArmPoolPages; }

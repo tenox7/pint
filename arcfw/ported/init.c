@@ -29,6 +29,7 @@ Revision History:
 #include "stdio.h"
 #include <string.h>
 extern void KiEmit(const char *);   /* KE/ARM serial+HDMI breadcrumb */
+extern void KiEmitHex(unsigned long);
 
 VOID
 ExpInitializeExecutive(
@@ -593,8 +594,13 @@ Return Value:
                 NextMd = MemoryDescriptor->ListEntry.Flink;
             }
 
-            KiEmit("INIT: before NLS snapshot ExAllocatePool\n");
+            KiEmit("INIT: NLS snapshot ExAllocatePool(NonPagedPool, ");
+            KiEmitHex(InitNlsTableSize);
+            KiEmit(")\n");
             InitNlsTableBase = ExAllocatePoolWithTag(NonPagedPool,InitNlsTableSize,' slN');
+            KiEmit("INIT: NLS snapshot pool = ");
+            KiEmitHex((unsigned long)InitNlsTableBase);
+            KiEmit("  (NonPagedPool works)\n");
             if ( !InitNlsTableBase ) {
                 KeBugCheck(PHASE0_INITIALIZATION_FAILED);
                 }
