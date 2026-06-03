@@ -31,7 +31,7 @@ NT35="$(cd ../../.. && pwd)"
 IMAGE="${IMAGE:-arc-rpi-build:latest}"
 docker image inspect "$IMAGE" >/dev/null 2>&1 || docker build -t "$IMAGE" "$NT35/ARM32/build"
 
-docker run --rm -e INSTALL="${INSTALL:-0}" -e DIAG="${DIAG:-0}" -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
+docker run --rm -e INSTALL="${INSTALL:-0}" -e DIAG="${DIAG:-0}" -e FAULTPC="${FAULTPC:-}" -v "$NT35":/work -w /work/ARM32/arcfw/kernel "$IMAGE" bash -c '
 set -u
 CROSS=arm-linux-gnueabihf-
 CLFILTER=/work/ARM32/arcfw/kernel/castlvalue.pl
@@ -190,6 +190,14 @@ if [ "${DIAG:-0}" = 1 ]; then
   echo ">> DIAG: CmpFindControlSet disassembly head (real=has bl KiEmit; stub=mov r0,#0;bx lr):"
   ${CROSS}objdump -d "$DIR/kernel.elf" 2>/dev/null | sed -n "/<CmpFindControlSet>:/,/^$/p" | head -25
   echo ">> DIAG: nm CmpFindControlSet:"; ${CROSS}nm "$DIR/kernel.elf" | grep -iE "CmpFindControlSet|CmGetSystemControlValues"
+  if [ -n "${FAULTPC:-}" ]; then
+    hx=$(printf %x "$FAULTPC")
+    echo ">> DIAG: function + context at FAULTPC=$FAULTPC ($hx):"
+    ${CROSS}objdump -d "$DIR/kernel.elf" 2>/dev/null | awk -v t="$hx" "
+        /^[0-9a-f]+ </ {fn=\$0}
+        index(\$0, t\":\")==1 {print \"  in: \" fn; c=1}
+        c && c<=5 {print \"  \" \$0; c++}"
+  fi
 fi
 
 echo ">> auto-stubbed symbols (still need a real definition for Phase 0 to run):"

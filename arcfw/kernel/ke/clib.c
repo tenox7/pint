@@ -171,6 +171,7 @@ static int kvsnprintf(char *buf, size_t count, const char *fmt, VA_LIST ap)
 {
     char *out = buf;
     char *end = (count > 0) ? buf + count - 1 : buf;       // reserve one for NUL
+    if (end < buf) end = (char *)~(size_t)0;               // buf+count wrapped (sprintf's count=SIZE_MAX on 32-bit): unbounded
 
 #define PUT(ch) do { if (out < end) *out = (char)(ch); out++; } while (0)
 
