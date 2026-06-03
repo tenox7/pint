@@ -32,19 +32,27 @@ Environment:
 #include "mi.h"
 
 //
-// PTE templates (MI.H: extern MMPTE ...; defined per-arch in DATA<arch>.C).
+// PTE templates (MI.H: extern MMPTE ...; defined per-arch in DATA<arch>.C). The
+// "valid" family carries the real DATAMIPS.C mask composition (the MM_PROTECT_FIELD_
+// SHIFT == 3 lineage, matching our miarm.h: VALID 0x2, WRITE 0x40000000, DIRTY 0x4,
+// GLOBAL 0x1). REAL MM: with Valid set, MM's *StartPde / *PointerPte writes are
+// meaningful in the logical NT-PTE page tables the ARMv7 fault-fill consults
+// (ke/mmuarm.c). The MMPTE union's first member is u.Long, so { mask } sets u.Long -
+// exactly as DATAMIPS.C does. The invalid-PTE family (DemandZero/Transition/Prototype/
+// NoAccess) is interpreted only by the fault dispatch (REAL MM step B = MmAccessFault),
+// so it stays {0} until that is ported - the demand-zero fill keys off Valid==0 today.
 //
 
 MMPTE ZeroPte = { 0 };
-MMPTE ZeroKernelPte = { 0 };
-MMPTE ValidKernelPte = { 0 };
-MMPTE ValidKernelPde = { 0 };
-MMPTE ValidUserPte = { 0 };
-MMPTE ValidPdePde = { 0 };
-MMPTE DemandZeroPde = { 0 };
-MMPTE TransitionPde = { 0 };
-MMPTE PrototypePte = { 0 };
-MMPTE NoAccessPte = { 0 };
+MMPTE ZeroKernelPte = { MM_PTE_GLOBAL_MASK };
+MMPTE ValidKernelPte = { MM_PTE_VALID_MASK | MM_PTE_WRITE_MASK | MM_PTE_DIRTY_MASK | MM_PTE_GLOBAL_MASK };
+MMPTE ValidKernelPde = { MM_PTE_VALID_MASK | MM_PTE_WRITE_MASK | MM_PTE_DIRTY_MASK | MM_PTE_GLOBAL_MASK };
+MMPTE ValidUserPte = { MM_PTE_VALID_MASK | MM_PTE_WRITE_MASK | MM_PTE_DIRTY_MASK };
+MMPTE ValidPdePde = { MM_PTE_VALID_MASK | MM_PTE_WRITE_MASK | MM_PTE_DIRTY_MASK };
+MMPTE DemandZeroPde = { 0 };            // REAL MM step B (MmAccessFault dispatch)
+MMPTE TransitionPde = { 0 };            // REAL MM step B
+MMPTE PrototypePte = { 0 };             // REAL MM step B
+MMPTE NoAccessPte = { 0 };              // REAL MM step B
 
 PMMPTE MmCrashDumpPte = NULL;
 

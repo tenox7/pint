@@ -102,6 +102,18 @@ static ULONG MiArmL2ArenaNext = 0;
 ULONG MiArmL1[L1_ENTRIES] __attribute__((aligned(16384)));
 static ULONG MiArmL2Demo[L2_ENTRIES] __attribute__((aligned(1024)));
 
+//
+// The LOGICAL page directory (REAL MM). MM writes its page-directory entries
+// (*StartPde, NT software-PTE format) HERE - reached via MiGetPdeAddress once the PDE
+// self-map window is repointed at it (MiArmBuildSelfMap, KI_RUN_EXECUTIVE) - NOT into
+// the live MiArmL1 the MMU walks. The hardware L1 is filled lazily FROM this directory
+// on a section-translation fault (the two-level fill in MiArmTryFillFault), so MM's PDE
+// writes drive the MMU-walked tables without ever touching the live TTBR0 directory.
+// 16 KB / 16 KB-aligned, the logical analog of MiArmL1; never loaded into TTBR0. (Per
+// process in step C; one system directory in step A.)
+//
+ULONG MiArmLogPd[L1_ENTRIES] __attribute__((aligned(16384)));
+
 static volatile ULONG MiArmMmuProbe = 0xABCD1234;
 
 //
@@ -583,11 +595,37 @@ MiArmBuildSelfMap (
     }
 
     l1phys = (ULONG)MiArmL1 - KSEG0;            // 16 KB directory = 4 pages
+#if KI_RUN_EXECUTIVE
+    //
+    // REAL MM (step A): repoint the PDE self-map window at the LOGICAL page directory,
+    // so MM's *StartPde (via MiGetPdeAddress) writes land in MiArmLogPd - the inert
+    // logical directory - NOT the live TTBR0 MiArmL1 the MMU walks. The hardware L1 is
+    // filled lazily FROM MiArmLogPd by the two-level fill in MiArmTryFillFault. This is
+    // the un-fake of "MM writes NT-format PDEs straight into the live hardware L1."
+    //
+    MiArmZeroPages((PVOID)MiArmLogPd, sizeof(MiArmLogPd));
+    l1phys = (ULONG)MiArmLogPd - KSEG0;
+#endif
     for (j = 0; j < 256; j += 1)
         MiArmPdeWinL2[j] = (j < 4)
             ? (((l1phys + (j << PAGE_SHIFT)) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW)
             : 0;
     MiArmL1[0xC04] = (((ULONG)MiArmPdeWinL2 - KSEG0) & 0xFFFFFC00) | 0x1;
+#if KI_RUN_EXECUTIVE
+    //
+    // The self-referential PDE: MiGetPdeAddress(PDE_BASE) (read by MM at MMINIT.C:533 and
+    // :1272 for MmSystemPageDirectory = the page-directory PFN) now resolves through the
+    // repointed window to MiArmLogPd[PDE_BASE>>20]; point it at the logical directory's
+    // own first page so that read returns a sane PFN.
+    //
+    {
+        HARDWARE_PTE pde;
+        *(ULONG *)&pde = 0;
+        pde.Global = 1; pde.Valid = 1; pde.Write = 1; pde.CachePolicy = 1;
+        pde.PageFrameNumber = (((ULONG)MiArmLogPd - KSEG0) >> PAGE_SHIFT);
+        MiArmLogPd[PDE_BASE >> 20] = *(ULONG *)&pde;
+    }
+#endif
 
     MiArmTlbiAll();
 }
@@ -805,6 +843,20 @@ static ULONG MiArmPdLogPde;             // the LOGICAL page-directory entry (NT 
 static volatile ULONG *MiArmPdHwL2;     // the hardware L2 the handler wires L1[M] -> on the L1 fill
 static ULONG MiArmPdL1Fills;            // hardware L1 entries filled from the logical PD
 static ULONG MiArmPdL2Fills;            // hardware L2 entries filled from the logical L2
+
+//
+// Repointed-window two-level fill (REAL MM step-A self-contained proof). Like
+// MiArmPdFill above, but the logical page-directory entry is read from the FULL
+// MiArmLogPd directory through the repointed PDE window (MiGetPdeAddress / MI_PDE_VA) -
+// exactly as the live executive integration will - rather than from a single scalar
+// (MiArmPdLogPde). Proves a PDE written through MiGetPdeAddress lands in MiArmLogPd and
+// the fault handler reads it back to fill the hardware L1.
+//
+static ULONG MiArmLogPdFillBase;        // window, 0 = off
+static ULONG MiArmLogPdFillEnd;
+static volatile ULONG *MiArmLogPdHwL2;  // the hardware L2 the handler wires L1[M] -> on the L1 fill
+static ULONG MiArmLogPdL1Fills;
+static ULONG MiArmLogPdL2Fills;
 #endif
 
 #if KI_RUN_EXECUTIVE
@@ -825,6 +877,8 @@ static ULONG MiArmRealL2Group[1024];    // (M>>2) -> phys page of 4 packed REAL 
 
 static ULONG MiArmExecHonored;          // system faults where the LOGICAL PTE was Valid -> honored
 static ULONG MiArmExecZeroed;           // system faults demand-zeroed (no valid logical PTE yet)
+static ULONG MiArmExecPdL1Fills;        // hardware L1 fills AUTHORIZED by a valid logical PDE (MM's *StartPde)
+static ULONG MiArmExecPdL1Demand;       // hardware L1 fills with no logical PDE yet (demand region; step-B residual)
 
 //
 // KSEG0 VA of megabyte M's private real L2, allocating its packed page (arena) and
@@ -942,6 +996,44 @@ MiArmPdFill (
 
     return 1;                                    // retry: both levels now present
 }
+
+//
+// The two-level fill reading the LOGICAL PDE from the full directory via the repointed
+// window. MiArmLogPd[M] is read DIRECTLY (KSEG0-resident static -> always mapped, cannot
+// nest-fault, the trap.S no-nesting invariant). The logical PTE is read via the PTE
+// window (MI_PTE_VA), which the demo backs first (MiArmL2Va) so that read is also
+// non-faulting. This is MiArmPdFill generalized from a scalar PDE to the real directory.
+//
+static ULONG
+MiArmLogPdFill (
+    ULONG FaultVa
+    )
+{
+    ULONG M = FaultVa >> 20;
+    ULONG idx = (FaultVa >> 12) & 0xFF;
+    HARDWARE_PTE pde, pte;
+
+    if ((MiArmL1[M] & 0x3) == 0) {               // hardware L1[M] absent
+        *(ULONG *)&pde = MiArmLogPd[M];          // logical PDE (KSEG0 static - safe, no nest)
+        if (!pde.Valid)
+            return 0;                            // no page table here -> genuine fault
+        MiArmL1[M] =                             // install coarse descriptor -> hardware L2
+            (((ULONG)MiArmLogPdHwL2 - KSEG0) & 0xFFFFFC00) | 0x1;
+        MiArmTlbiMva(FaultVa);
+        MiArmLogPdL1Fills += 1;
+    }
+
+    if ((MiArmLogPdHwL2[idx] & 0x3) == 0) {      // hardware L2 entry absent
+        *(ULONG *)&pte = *(volatile ULONG *)MI_PTE_VA(FaultVa);   // logical PTE via the window
+        if (!pte.Valid)
+            return 0;
+        MiArmLogPdHwL2[idx] = MiArmPteToDescriptor(pte);
+        MiArmTlbiMva(FaultVa);
+        MiArmLogPdL2Fills += 1;
+    }
+
+    return 1;
+}
 #endif
 
 ULONG
@@ -975,24 +1067,44 @@ MiArmTryFillFault (
     //
     if (FaultVa >= 0xC0800000u && FaultVa < 0xFFFFF000u) {
         ULONG M = FaultVa >> 20;
-        volatile ULONG *l2 = (volatile ULONG *)MiArmRealL2Va(M);
         ULONG idx = (FaultVa >> 12) & 0xFF;
-        HARDWARE_PTE lpte;
+        ULONG l1WasAbsent = ((MiArmL1[M] & 0x3) != 0x1);
+        volatile ULONG *l2;
+        HARDWARE_PTE lpde, lpte;
 
+        l2 = (volatile ULONG *)MiArmRealL2Va(M);    // alloc the private hardware L2 + wire L1[M]
         if (l2 == 0)
             return 0;                               // arena exhausted -> real fault
+
+        //
+        // L1 level (REAL MM step A): the hardware L1 fill is DRIVEN by the LOGICAL page
+        // directory. MiArmLogPd[M] is read DIRECTLY (KSEG0 static -> always mapped, cannot
+        // nest-fault, the trap.S no-nesting invariant). A valid logical PDE means MM's
+        // *StartPde declared a page table here, so this L1 fill is AUTHORIZED by MM's own
+        // directory (the un-fake of the blind L1 wire). No logical PDE yet = a demand region
+        // MM has not built a PDE for (kernel stacks, ...) - still mapped here for Phase 0;
+        // the real MmAccessFault (step B) removes that residual. The hardware L1 points at
+        // our PRIVATE ARMv7 L2 (the MMU cannot walk MM's NT-format logical L2): two page
+        // tables are inherent on a hardware-walked MMU running NT software PTEs.
+        //
+        if (l1WasAbsent) {
+            *(ULONG *)&lpde = MiArmLogPd[M];
+            if (lpde.Valid)
+                MiArmExecPdL1Fills += 1;
+            else
+                MiArmExecPdL1Demand += 1;
+        }
+
         if ((l2[idx] & 0x3) == 0) {
             //
-            // Consult the LOGICAL NT-PTE first (the faithful, logical-table-driven
-            // fill - the model proven self-contained in MiArmRealModelDemo). Reading
-            // MiGetPteAddress(FaultVa) is only safe once its window page is backed, so
-            // first check the L2-of-L2 entry (KSEG0, cannot fault) to avoid nesting a
-            // window fault. A VALID logical PTE means MM mapped a specific page here:
-            // install THAT page (translate it), do not clobber it with a demand-zero
-            // page. Otherwise demand-zero (committed but not yet backed - the system
-            // cache / paged pool / kernel-stack growth case). This is the step toward
-            // the real MmAccessFault, which will additionally resolve transition /
-            // prototype / paging-file PTEs rather than blind demand-zero.
+            // L2 level: consult the LOGICAL NT-PTE (the faithful, logical-table-driven
+            // fill). Reading MiGetPteAddress(FaultVa) is only safe once its window L2 is
+            // backed, so first check the L2-of-L2 entry (KSEG0, cannot fault) to avoid
+            // nesting a window fault - the trap.S no-nesting invariant (do NOT remove this
+            // guard). A VALID logical PTE means MM mapped a specific page here: install
+            // THAT page. Otherwise demand-zero (committed but not yet backed - cache /
+            // paged pool / kernel-stack growth). Step B (MmAccessFault) additionally
+            // resolves transition / prototype / paging-file PTEs rather than blind zero.
             //
             *(ULONG *)&lpte = 0;
             if (MiArmWindowL2[M >> 10][(M >> 2) & 0xFF] != 0)
@@ -1033,6 +1145,14 @@ MiArmTryFillFault (
     if (MiArmPdFillBase != 0 &&
         FaultVa >= MiArmPdFillBase && FaultVa < MiArmPdFillEnd)
         return MiArmPdFill(FaultVa);
+
+    //
+    // Repointed-window two-level fill (REAL MM step-A demo): the logical PDE is read
+    // from the full MiArmLogPd directory via MiGetPdeAddress.
+    //
+    if (MiArmLogPdFillBase != 0 &&
+        FaultVa >= MiArmLogPdFillBase && FaultVa < MiArmLogPdFillEnd)
+        return MiArmLogPdFill(FaultVa);
 #endif
 
     if (MiArmFillBase == 0 || FaultVa < MiArmFillBase || FaultVa >= MiArmFillEnd)
@@ -1278,6 +1398,107 @@ MiArmPdSplitDemo (
 
     MiArmPdFillBase = 0;                          // close the window
 }
+
+//
+// Prove the REPOINTED-WINDOW logical page directory (the executive-integration
+// mechanism, step A): point the PDE self-map window at the full MiArmLogPd directory,
+// write a page-directory entry THROUGH MiGetPdeAddress (as MM's *StartPde does), confirm
+// it landed in MiArmLogPd, then touch the megabyte -> the two-level fill reads that PDE
+// back via the window, fills the hardware L1 from it and the hardware L2 from the logical
+// PTE -> the named page. MiArmPdSplitDemo generalized from a scalar PDE to the real
+// directory read through MiGetPdeAddress - the last piece the live repoint needs proven.
+//
+
+static VOID
+MiArmLogPdRepointDemo (
+    VOID
+    )
+{
+    ULONG testVa = 0xB3000000;                  // fresh unmapped megabyte (past KSEG0)
+    ULONG M = testVa >> 20;
+    volatile ULONG *logL2, *win;
+    ULONG hwPhys, pfnA, savedWin[4], logPdPhys, j, pdeInPd, vRead, l1After;
+    HARDWARE_PTE pte;
+
+    KiEmit("\nARMv7 REAL-MM step A: logical page directory via the repointed PDE window:\n");
+
+    MiArmZeroPages((PVOID)MiArmLogPd, sizeof(MiArmLogPd));
+
+    //
+    // Repoint MiArmPdeWinL2[0..3] (the PDE window) from MiArmL1 to MiArmLogPd, so
+    // MiGetPdeAddress reads/writes the logical directory. Save the originals to restore
+    // at the end (this is a demo; the live executive path repoints permanently).
+    //
+    logPdPhys = (ULONG)MiArmLogPd - KSEG0;
+    for (j = 0; j < 4; j += 1) {
+        savedWin[j] = MiArmPdeWinL2[j];
+        MiArmPdeWinL2[j] = ((logPdPhys + (j << PAGE_SHIFT)) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+    }
+    MiArmTlbiAll();
+
+    //
+    // Logical L2 (windowed) + a hardware L2 page the fault handler wires L1[M] -> on the
+    // L1 fill (it is NOT wired here - the handler installs it from the logical PD).
+    //
+    logL2 = (volatile ULONG *)MiArmL2Va(M);
+    MiArmZeroPages((PVOID)logL2, PAGE_SIZE);
+
+    hwPhys = MiArmAllocKseg0Page() << PAGE_SHIFT;
+    MiArmLogPdHwL2 = (volatile ULONG *)(KSEG0 + hwPhys);
+    MiArmZeroPages((PVOID)MiArmLogPdHwL2, PAGE_SIZE);
+
+    pfnA = MiArmAllocKseg0Page();
+    *(volatile ULONG *)(KSEG0 + (pfnA << PAGE_SHIFT)) = 0x1093D00Du;   // page A sentinel
+
+    //
+    // MM-style writes through the self-map: a valid logical PTE (page 0 -> page A) and a
+    // valid logical PDE written THROUGH MiGetPdeAddress (the repointed window) naming the
+    // logical L2 page - exactly as *StartPde does.
+    //
+    win = (volatile ULONG *)MI_PTE_VA(testVa);
+    *(ULONG *)&pte = 0;
+    pte.Global = 1; pte.Valid = 1; pte.Write = 1; pte.CachePolicy = 1;
+    pte.PageFrameNumber = pfnA;
+    win[0] = *(ULONG *)&pte;
+
+    *(ULONG *)&pte = 0;
+    pte.Global = 1; pte.Valid = 1; pte.Write = 1; pte.CachePolicy = 1;
+    pte.PageFrameNumber = (((ULONG)logL2 - KSEG0) >> PAGE_SHIFT);
+    *(volatile ULONG *)MI_PDE_VA(testVa) = *(ULONG *)&pte;   // *StartPde via the repointed window
+
+    pdeInPd = MiArmLogPd[M];                     // read it back from the directory itself
+
+    MiArmLogPdFillBase = testVa;
+    MiArmLogPdFillEnd = testVa + 0x100000;
+    MiArmLogPdL1Fills = 0;
+    MiArmLogPdL2Fills = 0;
+
+    vRead = *(volatile ULONG *)testVa;          // fault -> L1 fill (from MiArmLogPd) + L2 fill -> page A
+    l1After = *(volatile ULONG *)&MiArmL1[M];
+
+    KiEmit("  wrote *MiGetPdeAddress(VA); MiArmLogPd[M] : "); KiEmitHex(pdeInPd);
+    KiEmit((pdeInPd & 0x2) ? "  OK - the window write reached the logical PD\n"
+                           : "  *** FAIL - PDE did not land in MiArmLogPd ***\n");
+    KiEmit("  hardware L1[M] after touch (filled)       : "); KiEmitHex(l1After);
+    KiEmit((l1After & 0x3) == 0x1 ? "  OK - coarse -> hw L2, filled from MiArmLogPd\n"
+                                  : "  *** FAIL ***\n");
+    KiEmit("  page read (two-level fill via the window) : "); KiEmitHex(vRead);
+    KiEmit(vRead == 0x1093D00Du ? "  OK - logical PD (read via MiGetPdeAddress) drove the fill\n"
+                                : "  *** FAIL ***\n");
+    KiEmit("  L1 fills / L2 fills                       : "); KiEmitHex(MiArmLogPdL1Fills);
+    KiEmit(" / "); KiEmitHex(MiArmLogPdL2Fills); KiEmit("\n");
+
+    MiArmLogPdFillBase = 0;                      // close the window
+
+    //
+    // Restore the PDE window to MiArmL1 and drop the test L1 mapping (demo hygiene - the
+    // live executive path leaves the window repointed at MiArmLogPd permanently).
+    //
+    for (j = 0; j < 4; j += 1)
+        MiArmPdeWinL2[j] = savedWin[j];
+    MiArmL1[M] = 0;
+    MiArmTlbiAll();
+}
 #endif
 
 //
@@ -1493,6 +1714,7 @@ MiArmInitMachineDependent (
     MiArmFaultFillDemo();
     MiArmRealModelDemo();
     MiArmPdSplitDemo();
+    MiArmLogPdRepointDemo();
 #endif
 }
 
@@ -1521,4 +1743,23 @@ ULONG MiArmGetPoolPages    (VOID) { return MiArmPoolPages; }
 //
 ULONG MiArmGetExecHonored (VOID) { return MiArmExecHonored; }
 ULONG MiArmGetExecZeroed  (VOID) { return MiArmExecZeroed; }
+ULONG MiArmGetExecPdL1Fills  (VOID) { return MiArmExecPdL1Fills; }
+ULONG MiArmGetExecPdL1Demand (VOID) { return MiArmExecPdL1Demand; }
+
+//
+// Count the valid entries MM's *StartPde wrote into the logical page directory - proof
+// the repointed PDE window routed MM's writes to MiArmLogPd (not the live hardware L1).
+//
+ULONG
+MiArmGetLogPdValid (VOID)
+{
+    ULONG i, n = 0;
+    HARDWARE_PTE pde;
+    for (i = 0; i < L1_ENTRIES; i += 1) {
+        *(ULONG *)&pde = MiArmLogPd[i];
+        if (pde.Valid)                      // HARDWARE_PTE.Valid (bit 1); miarm.h not in this chain
+            n += 1;
+    }
+    return n;
+}
 #endif

@@ -516,7 +516,16 @@ KiArmReportInitialized (
     {
         extern ULONG MiArmGetExecHonored(VOID);
         extern ULONG MiArmGetExecZeroed(VOID);
-        emit("MM system-fault fill: logical-PTE honored = ");
+        extern ULONG MiArmGetExecPdL1Fills(VOID);
+        extern ULONG MiArmGetExecPdL1Demand(VOID);
+        extern ULONG MiArmGetLogPdValid(VOID);
+        emit("MM logical page directory: valid PDEs MM wrote = ");
+        emit_hex(MiArmGetLogPdValid());
+        emit("\n  hardware L1 fills: authorized by a logical PDE = ");
+        emit_hex(MiArmGetExecPdL1Fills());
+        emit(", demand (no PDE yet) = ");
+        emit_hex(MiArmGetExecPdL1Demand());
+        emit("\n  hardware L2 fills: logical-PTE honored = ");
         emit_hex(MiArmGetExecHonored());
         emit(", demand-zero = ");
         emit_hex(MiArmGetExecZeroed());
