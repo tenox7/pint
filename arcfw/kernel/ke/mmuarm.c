@@ -570,6 +570,50 @@ MiArmL2Va (
     return KSEG0 + phys + ((M & 3) << 10);
 }
 
+//
+// Ensure megabyte M of `va` has a zeroed L2 exposed in the PTE window, so
+// MiGetPteAddress(va) resolves to a valid (zeroed = invalid) descriptor MM can
+// read/write - WITHOUT wiring L1[M] (the MMU must NOT walk this region: it holds
+// the nonpaged-pool *expansion* system PTEs, which are NT software-PTE format, not
+// ARMv7 descriptors). Used by the real MiInitMachineDependent (ke/initarm.c) so
+// MiInitializeNonPagedPool's MiGetPteAddress(expansion) reads Valid==0 instead of
+// faulting. Non-static (callable from initarm.c).
+//
+VOID
+MiArmEnsureL2 (
+    ULONG va
+    )
+{
+    (void)MiArmL2Va(va >> 20);          // allocate + zero + expose in the PTE window
+    MiArmTlbiAll();
+}
+
+//
+// Map one Normal-cacheable RW page at system VA `va` to a fresh free physical page
+// (off the free list); wires L1[M]->L2, the page's L2 descriptor, and the PTE
+// window. Returns the physical PFN, or 0 if out of free memory. The pages need not
+// be physically contiguous (each is paged individually) - the x86-style nonpaged
+// pool. Non-static (callable from initarm.c).
+//
+ULONG
+MiArmMapSystemPage (
+    ULONG va
+    )
+{
+    ULONG M = va >> 20;
+    ULONG idx = (va >> 12) & 0xFF;
+    volatile ULONG *l2 = (volatile ULONG *)MiArmL2Va(M);
+    ULONG pfn = MiArmAllocKseg0Page();
+
+    if (pfn == 0)
+        return 0;
+    l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+    if ((MiArmL1[M] & 0x3) != 0x1)
+        MiArmL1[M] = (((ULONG)l2 - KSEG0) & 0xFFFFFC00) | 0x1;
+    MiArmTlbiMva(va);
+    return pfn;
+}
+
 static const char *
 MiArmMemTypeName (
     ULONG t

@@ -97,10 +97,10 @@ DCFILES="ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/
          ke/exarm.c ke/exglobals.c ke/rtlarm.c ke/portstubs.c ke/clib.c \
          ../ported/wait.c ../ported/queueobj.c"
 # the hand-written stub/data files (added as they are authored)
-for opt in ke/linkstubs.c ke/linkdata.c ke/dataarm.c; do [ -f "$opt" ] && DCFILES="$DCFILES $opt"; done
+for opt in ke/linkstubs.c ke/linkdata.c ke/dataarm.c ke/initarm.c; do [ -f "$opt" ] && DCFILES="$DCFILES $opt"; done
 for c in $DCFILES; do
   tr -d "\032\r" < "$c" > /tmp/c.c
-  if [ "$c" = ke/dataarm.c ]; then INC="$COMMON"; else INC="$KINCS"; fi   # dataarm needs mi.h/miarm.h
+  case "$c" in ke/dataarm.c|ke/initarm.c) INC="$COMMON";; *) INC="$KINCS";; esac   # need mi.h/miarm.h
   ${CROSS}gcc $CFLAGS $INC -c /tmp/c.c -o "$DOBJ/$(basename ${c%.c}).o" 2>"$DIR/cc_$(basename ${c%.c}).err" \
     || echo "  CC FAIL $c (see $DIR/cc_$(basename ${c%.c}).err)"
 done

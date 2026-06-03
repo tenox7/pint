@@ -53,6 +53,7 @@ PMMPTE MmCrashDumpPte = NULL;
 //
 
 PVOID MmNonPagedPoolStart = NULL;
+PVOID MmNonPagedPoolEnd = NULL;         // set by MiInitMachineDependent (ke/initarm.c)
 PVOID MmPagedPoolStart = NULL;
 PVOID MmPagedPoolEnd = NULL;
 
