@@ -805,6 +805,9 @@ extern ULONG MiArmDemandPage(VOID);     // ke/initarm.c: a free page off the rea
 
 static ULONG MiArmRealL2Group[1024];    // (M>>2) -> phys page of 4 packed REAL L2s, 0=none
 
+static ULONG MiArmExecHonored;          // system faults where the LOGICAL PTE was Valid -> honored
+static ULONG MiArmExecZeroed;           // system faults demand-zeroed (no valid logical PTE yet)
+
 //
 // KSEG0 VA of megabyte M's private real L2, allocating its packed page (arena) and
 // wiring L1[M] -> it (an ARMv7 coarse-page-table descriptor the MMU walks) on first use.
@@ -912,18 +915,43 @@ MiArmTryFillFault (
     // KeQuerySystemTime reads). Excludes the self-map windows (< 0xC0800000) above.
     //
     if (FaultVa >= 0xC0800000u && FaultVa < 0xFFFFF000u) {
-        volatile ULONG *l2 = (volatile ULONG *)MiArmRealL2Va(FaultVa >> 20);
+        ULONG M = FaultVa >> 20;
+        volatile ULONG *l2 = (volatile ULONG *)MiArmRealL2Va(M);
         ULONG idx = (FaultVa >> 12) & 0xFF;
+        HARDWARE_PTE lpte;
 
         if (l2 == 0)
             return 0;                               // arena exhausted -> real fault
         if ((l2[idx] & 0x3) == 0) {
-            pfn = MiArmDemandPage();                 // any free page off the real MM list
-            if (pfn == 0)
-                return 0;
-            l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
-            MiArmTlbiMva(FaultVa);
-            MiArmZeroPages((PVOID)(FaultVa & ~0xFFFu), PAGE_SIZE);   // demand-zero via the mapping
+            //
+            // Consult the LOGICAL NT-PTE first (the faithful, logical-table-driven
+            // fill - the model proven self-contained in MiArmRealModelDemo). Reading
+            // MiGetPteAddress(FaultVa) is only safe once its window page is backed, so
+            // first check the L2-of-L2 entry (KSEG0, cannot fault) to avoid nesting a
+            // window fault. A VALID logical PTE means MM mapped a specific page here:
+            // install THAT page (translate it), do not clobber it with a demand-zero
+            // page. Otherwise demand-zero (committed but not yet backed - the system
+            // cache / paged pool / kernel-stack growth case). This is the step toward
+            // the real MmAccessFault, which will additionally resolve transition /
+            // prototype / paging-file PTEs rather than blind demand-zero.
+            //
+            *(ULONG *)&lpte = 0;
+            if (MiArmWindowL2[M >> 10][(M >> 2) & 0xFF] != 0)
+                *(ULONG *)&lpte = *(volatile ULONG *)MI_PTE_VA(FaultVa);
+
+            if (lpte.Valid) {
+                l2[idx] = MiArmPteToDescriptor(lpte);       // honor the page the logical PTE named
+                MiArmTlbiMva(FaultVa);
+                MiArmExecHonored += 1;
+            } else {
+                pfn = MiArmDemandPage();                     // committed demand-zero
+                if (pfn == 0)
+                    return 0;
+                l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+                MiArmTlbiMva(FaultVa);
+                MiArmZeroPages((PVOID)(FaultVa & ~0xFFFu), PAGE_SIZE);   // demand-zero via the mapping
+                MiArmExecZeroed += 1;
+            }
         }
         MiArmFillCount += 1;
         return 1;                                    // retry the faulting access
@@ -1333,3 +1361,14 @@ ULONG MiArmGetHighestPage  (VOID) { return MiArmHighestPage; }
 ULONG MiArmGetFreeCount    (VOID) { return MiArmFreeList.Total; }
 ULONG MiArmGetPoolBasePage (VOID) { return MiArmPoolBasePage; }
 ULONG MiArmGetPoolPages    (VOID) { return MiArmPoolPages; }
+
+#if KI_RUN_EXECUTIVE
+//
+// System-region fault accounting: how many faults the logical-table-driven fill
+// honored (a valid logical PTE -> installed the page MM named) vs demand-zeroed.
+// Printed after ExpInitializeExecutive returns (ke/kearm.c) to show how much of the
+// fill is now faithful to MM's own page tables.
+//
+ULONG MiArmGetExecHonored (VOID) { return MiArmExecHonored; }
+ULONG MiArmGetExecZeroed  (VOID) { return MiArmExecZeroed; }
+#endif

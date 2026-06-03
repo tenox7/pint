@@ -513,6 +513,15 @@ KiArmReportInitialized (
     emit("Calling the genuine ExpInitializeExecutive (Phase 0)...\n\n");
     ExpInitializeExecutive(0, LoaderBlock);
     emit("\nExpInitializeExecutive (Phase 0) RETURNED to KE/ARM.\n");
+    {
+        extern ULONG MiArmGetExecHonored(VOID);
+        extern ULONG MiArmGetExecZeroed(VOID);
+        emit("MM system-fault fill: logical-PTE honored = ");
+        emit_hex(MiArmGetExecHonored());
+        emit(", demand-zero = ");
+        emit_hex(MiArmGetExecZeroed());
+        emit("\n");
+    }
     emit("------------------------------------------------------------------\n\n");
 #endif
 
