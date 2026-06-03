@@ -124,6 +124,22 @@ MiArmInitRealFreeLists (
     return threaded;
 }
 
+//
+// A free physical page off the real MM free list, for ke/mmuarm.c's system-region
+// demand-fault path (MiArmTryFillFault). Any PFN is fine - the faulting system VA
+// is mapped to it and zeroed through that mapping, so it need not be KSEG0-reachable.
+//
+
+ULONG
+MiArmDemandPage (
+    VOID
+    )
+{
+    if (MmAvailablePages == 0)
+        return 0;
+    return MiRemoveAnyPage(0);
+}
+
 VOID
 MiInitMachineDependent (
     IN PLOADER_PARAMETER_BLOCK LoaderBlock
@@ -226,26 +242,17 @@ MiInitMachineDependent (
     KiEmit("  MiInitMachineDependent: KSEG0 nonpaged pool ready\n");
 
     //
-    // Build the genuine MM page-frame free lists so MiRemoveAnyPage works (Item A
-    // toward completing MmInitSystem Phase 0). Self-test it, then reset
-    // MmAvailablePages so MmInitSystem still early-returns (the system-cache build
-    // is the next milestone).
+    // Build the genuine MM page-frame free lists so MiRemoveAnyPage works (Item A).
+    // MmAvailablePages is now left LIVE (Item B): MmInitSystem no longer early-returns
+    // at MMINIT.C:457, so it proceeds into the system-cache build + MiBuildPagedPool.
+    // The system-region PTE windows those touch are backed on-demand by the
+    // MiArmTryFillFault path (ke/mmuarm.c, KI_RUN_EXECUTIVE).
     //
     {
         ULONG threaded = MiArmInitRealFreeLists(LoaderBlock);
-        ULONG r1 = MiRemoveAnyPage(0);
-        ULONG r2 = MiRemoveAnyPage(0);
-        ULONG r3 = MiRemoveAnyPage(0);
 
         KiEmit("  real MM free lists   : threaded "); KiEmitHex(threaded);
         KiEmit(" pages, MmAvailablePages="); KiEmitHex(MmAvailablePages);
-        KiEmit("\n  MiRemoveAnyPage x3   : ");
-        KiEmitHex(r1); KiEmit(" "); KiEmitHex(r2); KiEmit(" "); KiEmitHex(r3);
-        KiEmit((r1 && r2 && r3 && r1 != r2 && r2 != r3 && r1 != r3 &&
-                r1 <= MmHighestPhysicalPage && r2 <= MmHighestPhysicalPage &&
-                r3 <= MmHighestPhysicalPage)
-               ? "  OK - real free lists work\n" : "  *** FAIL ***\n");
-
-        MmAvailablePages = 0;       // keep the MMINIT.C:457 early-return (Item B wires it live)
+        KiEmit("\n");
     }
 }

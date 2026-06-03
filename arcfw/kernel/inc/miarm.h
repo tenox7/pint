@@ -347,7 +347,16 @@ Revision History:
 
 #define PDE_PER_PAGE ((ULONG)1024)
 
-#define PTE_PER_PAGE ((ULONG)1024)
+//
+// ARMv7-A second-level table = 256 entries (1 KB), maps one 1 MB section. The MIPS
+// value was 1024 (4 KB page table). The system-cache build / MiBuildPagedPool walk
+// `PointerPte += PTE_PER_PAGE` per 1 MB PDE (MiGetPdeAddress is >>20 = 1 MB here), so
+// PTE_PER_PAGE MUST be 256 or PointerPte runs 4x ahead of StartPde out of the PTE
+// window. (Four 1 KB L2s pack into one 4 KB page in the self-map window - that is a
+// storage detail, not the per-PDE PTE count.)
+//
+
+#define PTE_PER_PAGE ((ULONG)256)
 
 //
 // Number of page table pages for user addresses.

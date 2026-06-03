@@ -87,7 +87,7 @@ ULONG MiArmPoolPages = 0;               // pages reserved
 // draw from DISJOINT pages - no double-use.
 //
 
-#define MI_ARM_L2_ARENA_PAGES 0x200u            // 2 MB
+#define MI_ARM_L2_ARENA_PAGES 0x800u            // 8 MB (window L2s + real L2s for the system region)
 ULONG MiArmL2ArenaBase = 0;
 ULONG MiArmL2ArenaPages = 0;
 static ULONG MiArmL2ArenaNext = 0;
@@ -765,6 +765,51 @@ static ULONG MiArmFillBase;             // demand-fill window [base, end), 0 = d
 static ULONG MiArmFillEnd;
 static ULONG MiArmFillCount;            // pages filled on fault (for the demo report)
 
+#if KI_RUN_EXECUTIVE
+//
+// System-region demand fault (the MmAccessFault analog for the executive). The
+// portable MM builds the system cache / paged pool / system-PTE page tables in NT
+// software-PTE format (which the ARMv7 MMU cannot walk), writing them through the
+// self-map window (MiGetPteAddress). So the MMU has no real mapping for those VAs;
+// we map them ourselves on first access with REAL ARMv7 L2s - PRIVATE to mmuarm,
+// separate from the window L2s MM writes (those stay MM's inert logical page table).
+// MM's structure writes (working-set list, pool headers, ...) then land in the
+// demand-filled pages. ke/initarm.c provides MiArmDemandPage = MiRemoveAnyPage.
+//
+
+extern ULONG MiArmDemandPage(VOID);     // ke/initarm.c: a free page off the real MM list
+
+static ULONG MiArmRealL2Group[1024];    // (M>>2) -> phys page of 4 packed REAL L2s, 0=none
+
+//
+// KSEG0 VA of megabyte M's private real L2, allocating its packed page (arena) and
+// wiring L1[M] -> it (an ARMv7 coarse-page-table descriptor the MMU walks) on first use.
+//
+
+static ULONG
+MiArmRealL2Va (
+    ULONG M
+    )
+{
+    ULONG group = M >> 2;
+    ULONG phys = MiArmRealL2Group[group];
+    volatile ULONG *l2;
+
+    if (phys == 0) {
+        ULONG pfn = MiArmAllocKseg0Page();
+        if (pfn == 0)
+            return 0;
+        phys = pfn << PAGE_SHIFT;
+        MiArmRealL2Group[group] = phys;
+        MiArmZeroPages((PVOID)(KSEG0 + phys), PAGE_SIZE);
+    }
+    l2 = (volatile ULONG *)(KSEG0 + phys + ((M & 3) << 10));
+    if ((MiArmL1[M] & 0x3) != 0x1)
+        MiArmL1[M] = (((ULONG)l2 - KSEG0) & 0xFFFFFC00) | 0x1;
+    return (ULONG)l2;
+}
+#endif
+
 ULONG
 MiArmTryFillFault (
     ULONG FaultVa
@@ -772,6 +817,45 @@ MiArmTryFillFault (
 {
     volatile ULONG *l2;
     ULONG pfn;
+
+#if KI_RUN_EXECUTIVE
+    //
+    // On-demand PTE-window backing. The genuine MM (system-cache build at
+    // MMINIT.C:539, MiBuildPagedPool, MiInitializeSystemPtes) writes/zeros PTEs
+    // across the system region through the self-map window MiGetPteAddress(va);
+    // a window megabyte whose L2-of-L2 entry is not yet materialized faults here.
+    // Back it from the arena and retry - lazily growing the window instead of
+    // pre-backing the whole 512 MB+ system region. FaultVa is the window VA, so
+    // the mapped source VA is FaultVa<<10 (MiGetVirtualAddressMappedByPte).
+    //
+    if (FaultVa >= PTE_BASE && FaultVa < PTE_BASE + 0x400000u) {
+        MiArmEnsureL2(FaultVa << 10);
+        return 1;                                   // retry the faulting store
+    }
+
+    //
+    // System region (cache / hyperspace / paged pool / system PTEs): demand-fill a
+    // real page through a private real L2. MM_SYSTEM_SPACE_START .. just below the
+    // HAL's top 4 MB. Excludes the self-map windows (< 0xC0800000) handled above.
+    //
+    if (FaultVa >= 0xC0800000u && FaultVa < 0xFFC00000u) {
+        volatile ULONG *l2 = (volatile ULONG *)MiArmRealL2Va(FaultVa >> 20);
+        ULONG idx = (FaultVa >> 12) & 0xFF;
+
+        if (l2 == 0)
+            return 0;                               // arena exhausted -> real fault
+        if ((l2[idx] & 0x3) == 0) {
+            pfn = MiArmDemandPage();                 // any free page off the real MM list
+            if (pfn == 0)
+                return 0;
+            l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+            MiArmTlbiMva(FaultVa);
+            MiArmZeroPages((PVOID)(FaultVa & ~0xFFFu), PAGE_SIZE);   // demand-zero via the mapping
+        }
+        MiArmFillCount += 1;
+        return 1;                                    // retry the faulting access
+    }
+#endif
 
     if (MiArmFillBase == 0 || FaultVa < MiArmFillBase || FaultVa >= MiArmFillEnd)
         return 0;                                   // not ours - let the trap path run
