@@ -80,6 +80,19 @@ ULONG MiArmPoolBasePage = 0;            // first page of the pool reservation (0
 ULONG MiArmPoolPages = 0;               // pages reserved
 
 //
+// L2/window arena (KI_RUN_EXECUTIVE). mmuarm's own contiguous page source for
+// page-table / self-map-window pages (MiArmAllocKseg0Page), reserved next to the
+// pool. So the real MM free lists (ke/initarm.c hands the rest of physical memory
+// to MiInsertPageInList / MiRemoveAnyPage) and mmuarm's page-table allocations
+// draw from DISJOINT pages - no double-use.
+//
+
+#define MI_ARM_L2_ARENA_PAGES 0x200u            // 2 MB
+ULONG MiArmL2ArenaBase = 0;
+ULONG MiArmL2ArenaPages = 0;
+static ULONG MiArmL2ArenaNext = 0;
+
+//
 // The boot page directory (16 KB aligned, as TTBR0 requires) and one second-level
 // table for the HARDWARE_PTE demonstration. Global so ke/armstart.S can take their
 // addresses; static-storage so they sit at a fixed physical address. Linked in
@@ -479,10 +492,20 @@ MiArmAllocKseg0Page (
     VOID
     )
 {
+#if KI_RUN_EXECUTIVE
+    //
+    // Bump-allocate from the dedicated arena (disjoint from the real MM free list).
+    // The arena was carved low (KSEG0-reachable) and marked active.
+    //
+    if (MiArmL2ArenaNext >= MiArmL2ArenaBase + MiArmL2ArenaPages)
+        return 0;
+    return MiArmL2ArenaNext++;
+#else
     if (MiArmFreeList.Flink == MM_EMPTY_LIST ||
         MiArmFreeList.Flink >= MI_KSEG0_PAGE_LIMIT)
         return 0;
     return MiArmRemovePageFromList(&MiArmFreeList);
+#endif
 }
 
 static VOID
@@ -901,6 +924,15 @@ MiArmInitMachineDependent (
         MiArmPoolBasePage = carveEnd;
         MiArmPoolPages = MI_ARM_INITIAL_POOL_PAGES;
         carveEnd += MiArmPoolPages;
+
+        //
+        // The L2/window arena (kept active, off the real free list - just like the
+        // PFN DB + pool). MiArmAllocKseg0Page bump-allocates from it.
+        //
+        MiArmL2ArenaBase = carveEnd;
+        MiArmL2ArenaPages = MI_ARM_L2_ARENA_PAGES;
+        MiArmL2ArenaNext = MiArmL2ArenaBase;
+        carveEnd += MiArmL2ArenaPages;
 #endif
 
         //
@@ -926,13 +958,19 @@ MiArmInitMachineDependent (
 
                 switch (md->MemoryType) {
                 case LoaderBad:
-                    MiArmInsertPageInList(&MiArmBadList, p);
-                    break;
                 case LoaderFree:
                 case LoaderLoadedProgram:
                 case LoaderFirmwareTemporary:
                 case LoaderOsloaderStack:
-                    MiArmInsertPageInList(&MiArmFreeList, p);
+                    //
+                    // KI_RUN_EXECUTIVE: leave free/bad pages ReferenceCount==0 so
+                    // ke/initarm.c threads them onto the REAL MM lists (MiInsertPageInList).
+                    // Otherwise thread our self-contained lists for the bring-up demos.
+                    //
+#if !KI_RUN_EXECUTIVE
+                    MiArmInsertPageInList(
+                        (md->MemoryType == LoaderBad) ? &MiArmBadList : &MiArmFreeList, p);
+#endif
                     break;
                 default:
                     pfn->ReferenceCount = 1;            // in use: kernel/HAL/stack/...
@@ -950,6 +988,16 @@ MiArmInitMachineDependent (
         KiEmitHex(sizeof(ARM_MMPFN));
         KiEmit("\n  PFN pages (in KSEG0) : ");
         KiEmitHex(PfnAllocation);
+#if KI_RUN_EXECUTIVE
+        //
+        // KI_RUN_EXECUTIVE: the free pages are left ReferenceCount==0 for the real
+        // MM lists (ke/initarm.c). mmuarm's page-table pages come from the arena.
+        //
+        (void)a; (void)b; (void)c;
+        KiEmit("\n  L2/window arena      : base="); KiEmitHex(MiArmL2ArenaBase);
+        KiEmit(" pages="); KiEmitHex(MiArmL2ArenaPages);
+        KiEmit("\n  (free pages handed to the real MM lists in ke/initarm.c)\n");
+#else
         KiEmit("\n  free pages on list   : ");
         KiEmitHex(MiArmFreeList.Total);
         KiEmit("\n  bad pages on list    : ");
@@ -972,6 +1020,7 @@ MiArmInitMachineDependent (
         KiEmit("  free pages remaining : ");
         KiEmitHex(MiArmFreeList.Total);
         KiEmit("\n");
+#endif
     }
 
     //

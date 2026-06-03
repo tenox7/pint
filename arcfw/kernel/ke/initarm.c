@@ -61,6 +61,69 @@ extern ULONG MiArmGetFreeCount(VOID);
 extern ULONG MiArmGetPoolBasePage(VOID);
 extern ULONG MiArmGetPoolPages(VOID);
 
+//
+// Initialize the genuine MM page-frame free lists (the INITMIPS.C:121-131 +
+// 576-654 path) so the real MiRemoveAnyPage works - the foundation the system
+// cache build + MiBuildPagedPool need. ke/mmuarm.c (KI_RUN_EXECUTIVE) carved the
+// PFN database and left every free page ReferenceCount==0 (its own page-table
+// pages come from a disjoint arena), so here we color-init and thread those free
+// pages onto MmPageLocationList[FreePageList] via the genuine MiInsertPageInList
+// over the byte-compatible MmPfnDatabase. MiInsertPageInList bumps MmAvailablePages;
+// the caller self-tests MiRemoveAnyPage and then resets MmAvailablePages to 0 so
+// MmInitSystem still early-returns at MMINIT.C:457 (the system-cache build, which
+// needs the ARMv7 page-table-model reconciliation, is the next milestone).
+//
+
+static ULONG
+MiArmInitRealFreeLists (
+    IN PLOADER_PARAMETER_BLOCK LoaderBlock
+    )
+{
+    PLIST_ENTRY next, head;
+    PMEMORY_ALLOCATION_DESCRIPTOR md = NULL;
+    ULONG i, p, e, threaded = 0;
+
+    for (i = 0; i < MM_SECONDARY_COLORS; i += 1) {
+        MmFreePagesByColor[ZeroedPageList][i].Flink = MM_EMPTY_LIST;
+        InitializeListHead(&MmFreePagesByColor[ZeroedPageList][i].PrimaryColor);
+        MmFreePagesByColor[FreePageList][i].Flink = MM_EMPTY_LIST;
+        InitializeListHead(&MmFreePagesByColor[FreePageList][i].PrimaryColor);
+    }
+    for (i = 0; i < MM_MAXIMUM_NUMBER_OF_COLORS; i += 1) {
+        InitializeListHead(&MmFreePagesByPrimaryColor[ZeroedPageList][i].ListHead);
+        InitializeListHead(&MmFreePagesByPrimaryColor[FreePageList][i].ListHead);
+    }
+
+    head = &LoaderBlock->MemoryDescriptorListHead;
+    for (next = head->Flink; next != head; next = md->ListEntry.Flink) {
+        md = CONTAINING_RECORD(next, MEMORY_ALLOCATION_DESCRIPTOR, ListEntry);
+        p = md->BasePage;
+        e = md->BasePage + md->PageCount;
+        for (; p < e; p += 1) {
+            PMMPFN pfn = MI_PFN_ELEMENT(p);
+
+            if (p == 0 || pfn->ReferenceCount != 0)
+                continue;                       // page 0 + in-use/carved (mmuarm marked active)
+
+            if (md->MemoryType == LoaderBad) {
+                pfn->PteAddress = (PMMPTE)(p << PTE_SHIFT);
+                MiInsertPageInList(MmPageLocationList[BadPageList], p);
+                continue;
+            }
+            if (md->MemoryType == LoaderFree ||
+                md->MemoryType == LoaderLoadedProgram ||
+                md->MemoryType == LoaderFirmwareTemporary ||
+                md->MemoryType == LoaderOsloaderStack) {
+                pfn->PteAddress = (PMMPTE)(p << PTE_SHIFT);
+                pfn->u3.e1.PageColor = MI_GET_PAGE_COLOR_FROM_PTE(pfn->PteAddress);
+                MiInsertPageInList(MmPageLocationList[FreePageList], p);
+                threaded += 1;
+            }
+        }
+    }
+    return threaded;
+}
+
 VOID
 MiInitMachineDependent (
     IN PLOADER_PARAMETER_BLOCK LoaderBlock
@@ -144,7 +207,6 @@ MiInitMachineDependent (
 
     KiEmit("  PFN database         : "); KiEmitHex((ULONG)MmPfnDatabase);
     KiEmit("\n  physical pages       : "); KiEmitHex(MmNumberOfPhysicalPages);
-    KiEmit("\n  free pages           : "); KiEmitHex(MiArmGetFreeCount());
     KiEmit("\n  nonpaged pool (KSEG0): "); KiEmitHex((ULONG)MmNonPagedPoolStart);
     KiEmit(" .. "); KiEmitHex((ULONG)MmNonPagedPoolStart + initSize);
     KiEmit("\n  pool expansion VA    : "); KiEmitHex(expandVa);
@@ -162,4 +224,28 @@ MiInitMachineDependent (
     KiEmit("  -> InitializePool(NonPagedPool)\n");
     InitializePool(NonPagedPool, 0);
     KiEmit("  MiInitMachineDependent: KSEG0 nonpaged pool ready\n");
+
+    //
+    // Build the genuine MM page-frame free lists so MiRemoveAnyPage works (Item A
+    // toward completing MmInitSystem Phase 0). Self-test it, then reset
+    // MmAvailablePages so MmInitSystem still early-returns (the system-cache build
+    // is the next milestone).
+    //
+    {
+        ULONG threaded = MiArmInitRealFreeLists(LoaderBlock);
+        ULONG r1 = MiRemoveAnyPage(0);
+        ULONG r2 = MiRemoveAnyPage(0);
+        ULONG r3 = MiRemoveAnyPage(0);
+
+        KiEmit("  real MM free lists   : threaded "); KiEmitHex(threaded);
+        KiEmit(" pages, MmAvailablePages="); KiEmitHex(MmAvailablePages);
+        KiEmit("\n  MiRemoveAnyPage x3   : ");
+        KiEmitHex(r1); KiEmit(" "); KiEmitHex(r2); KiEmit(" "); KiEmitHex(r3);
+        KiEmit((r1 && r2 && r3 && r1 != r2 && r2 != r3 && r1 != r3 &&
+                r1 <= MmHighestPhysicalPage && r2 <= MmHighestPhysicalPage &&
+                r3 <= MmHighestPhysicalPage)
+               ? "  OK - real free lists work\n" : "  *** FAIL ***\n");
+
+        MmAvailablePages = 0;       // keep the MMINIT.C:457 early-return (Item B wires it live)
+    }
 }
