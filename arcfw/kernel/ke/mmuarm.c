@@ -787,6 +787,24 @@ static ULONG MiArmLogZeroCount;         // of those, demand-zero (committed) res
 #define MI_LOG_DEMAND_ZERO 0x00000400u  // logical-PTE marker: committed, fill on touch
                                         // (Valid = bit 1, clear here; NT proper carries
                                         //  commit in the VAD - a self-contained stand-in)
+
+//
+// Logical-PD / hardware-L1 split window (the two-level lazy fill). MiArmLogFill above
+// fills the hardware L2 from the logical L2 but assumes the hardware L1 entry is
+// already wired. The real model goes one level up: MM writes its page-directory
+// entries (*StartPde) into a SEPARATE LOGICAL page directory (reached via
+// MiGetPdeAddress), NOT the live TTBR0 L1 - and the hardware L1 entry is filled
+// lazily from the logical PDE on a section-translation fault, exactly as the L2 is
+// filled from the logical PTE. This decouples MM's PDE writes from the hardware L1
+// (today they go straight into the live L1, which only survives because the demand-
+// fault later overwrites the megabyte). Proven by MiArmPdSplitDemo.
+//
+static ULONG MiArmPdFillBase;           // two-level fill window, 0 = off
+static ULONG MiArmPdFillEnd;
+static ULONG MiArmPdLogPde;             // the LOGICAL page-directory entry (NT PDE) for the test MB
+static volatile ULONG *MiArmPdHwL2;     // the hardware L2 the handler wires L1[M] -> on the L1 fill
+static ULONG MiArmPdL1Fills;            // hardware L1 entries filled from the logical PD
+static ULONG MiArmPdL2Fills;            // hardware L2 entries filled from the logical L2
 #endif
 
 #if KI_RUN_EXECUTIVE
@@ -883,6 +901,47 @@ MiArmLogFill (
 
     return 0;                                    // not committed -> genuine fault
 }
+
+//
+// The two-level lazy fill: resolve a fault by filling BOTH the hardware L1 (from the
+// LOGICAL page directory) and the hardware L2 (from the LOGICAL L2), so MM's PDE/PTE
+// writes drive the MMU-walked tables without MM ever touching the hardware L1. A
+// section-translation fault (L1[M] absent) consults the logical PDE: if it says a
+// page table exists, install the coarse L1 descriptor -> the hardware L2; then fill
+// the L2 entry from the logical PTE. This is the L1-level analog of MiArmLogFill, and
+// the mechanism the executive integration will use after MiGetPdeAddress is repointed
+// at a real logical page directory.
+//
+static ULONG
+MiArmPdFill (
+    ULONG FaultVa
+    )
+{
+    ULONG M = FaultVa >> 20;
+    ULONG idx = (FaultVa >> 12) & 0xFF;
+    HARDWARE_PTE pde, pte;
+
+    if ((MiArmL1[M] & 0x3) == 0) {               // L1 fill: hardware L1[M] absent
+        *(ULONG *)&pde = MiArmPdLogPde;          // the NT PDE MM wrote (separate from the hw L1)
+        if (!pde.Valid)
+            return 0;                            // no page table here -> genuine fault
+        MiArmL1[M] =                             // install the coarse descriptor -> hardware L2
+            (((ULONG)MiArmPdHwL2 - KSEG0) & 0xFFFFFC00) | 0x1;
+        MiArmTlbiMva(FaultVa);
+        MiArmPdL1Fills += 1;
+    }
+
+    if ((MiArmPdHwL2[idx] & 0x3) == 0) {         // L2 fill: hardware L2 entry absent
+        *(ULONG *)&pte = *(volatile ULONG *)MI_PTE_VA(FaultVa);   // logical PTE via the self-map
+        if (!pte.Valid)
+            return 0;                            // not mapped -> genuine fault
+        MiArmPdHwL2[idx] = MiArmPteToDescriptor(pte);
+        MiArmTlbiMva(FaultVa);
+        MiArmPdL2Fills += 1;
+    }
+
+    return 1;                                    // retry: both levels now present
+}
 #endif
 
 ULONG
@@ -966,6 +1025,14 @@ MiArmTryFillFault (
     if (MiArmLogFillBase != 0 &&
         FaultVa >= MiArmLogFillBase && FaultVa < MiArmLogFillEnd)
         return MiArmLogFill(FaultVa);
+
+    //
+    // Two-level fill window: fill the hardware L1 (from the logical PD) AND the
+    // hardware L2 (from the logical L2) - the logical-PD / hardware-L1 split.
+    //
+    if (MiArmPdFillBase != 0 &&
+        FaultVa >= MiArmPdFillBase && FaultVa < MiArmPdFillEnd)
+        return MiArmPdFill(FaultVa);
 #endif
 
     if (MiArmFillBase == 0 || FaultVa < MiArmFillBase || FaultVa >= MiArmFillEnd)
@@ -1128,6 +1195,88 @@ MiArmRealModelDemo (
     KiEmit("\n");
 
     MiArmLogFillBase = 0;                        // close the window
+}
+
+//
+// Prove the LOGICAL-PD / HARDWARE-L1 SPLIT: MM's page-directory entry lives in a
+// SEPARATE logical page directory, and the hardware L1 (the live TTBR0 directory the
+// MMU walks) is filled lazily FROM it - so MM's *StartPde writes never touch the
+// hardware L1 directly (today they do, surviving only because the demand-fault later
+// rewrites the megabyte). This is the L1-level analog of MiArmRealModelDemo and the
+// last structural prerequisite for real per-process address spaces (each process gets
+// its own logical PD + hardware L1/TTBR0). Touch an unmapped megabyte whose hardware
+// L1 entry is ABSENT but whose logical PDE is valid -> the two-level fill installs the
+// L1 coarse descriptor (from the logical PD) then the L2 entry (from the logical PTE).
+//
+
+static VOID
+MiArmPdSplitDemo (
+    VOID
+    )
+{
+    ULONG testVa = 0xB1000000;                  // a fresh unmapped megabyte (past KSEG0)
+    ULONG M = testVa >> 20;
+    volatile ULONG *logL2, *win;
+    ULONG hwPhys, pfnA, l1Before, l1After, vRead;
+    HARDWARE_PTE pte;
+
+    KiEmit("\nARMv7 logical-PD / hardware-L1 split (two-level lazy fill):\n");
+
+    //
+    // Logical L2 (windowed) + a hardware L2 page that is NOT yet wired into the
+    // hardware L1 - the L1 entry is filled by the fault handler, not here.
+    //
+    logL2 = (volatile ULONG *)MiArmL2Va(M);
+    MiArmZeroPages((PVOID)logL2, PAGE_SIZE);
+
+    hwPhys = MiArmAllocKseg0Page() << PAGE_SHIFT;
+    MiArmPdHwL2 = (volatile ULONG *)(KSEG0 + hwPhys);
+    MiArmZeroPages((PVOID)MiArmPdHwL2, PAGE_SIZE);
+
+    pfnA = MiArmAllocKseg0Page();
+    *(volatile ULONG *)(KSEG0 + (pfnA << PAGE_SHIFT)) = 0x0DDF00D5u;   // page A sentinel
+
+    //
+    // MM-style writes: a valid logical PTE (page 0 -> page A) THROUGH the self-map,
+    // and a valid logical PDE into the SEPARATE logical page directory (its PFN names
+    // the logical L2 page, as *StartPde would) - NOT the hardware L1.
+    //
+    win = (volatile ULONG *)MI_PTE_VA(testVa);
+    *(ULONG *)&pte = 0;
+    pte.Global = 1; pte.Valid = 1; pte.Write = 1; pte.CachePolicy = 1;
+    pte.PageFrameNumber = pfnA;
+    win[0] = *(ULONG *)&pte;
+
+    *(ULONG *)&pte = 0;
+    pte.Global = 1; pte.Valid = 1; pte.Write = 1; pte.CachePolicy = 1;
+    pte.PageFrameNumber = (((ULONG)logL2 - KSEG0) >> PAGE_SHIFT);      // the page-table page
+    MiArmPdLogPde = *(ULONG *)&pte;
+
+    l1Before = *(volatile ULONG *)&MiArmL1[M];   // hardware L1[M] - still ABSENT (decoupled); volatile:
+                                                 // the fault handler writes it via a fault the compiler
+                                                 // cannot see, so the re-read must not be optimized away
+    MiArmPdFillBase = testVa;
+    MiArmPdFillEnd = testVa + 0x100000;
+    MiArmPdL1Fills = 0;
+    MiArmPdL2Fills = 0;
+
+    vRead = *(volatile ULONG *)testVa;           // fault -> L1 fill (from logical PD) + L2 fill -> page A
+    l1After = *(volatile ULONG *)&MiArmL1[M];
+
+    KiEmit("  logical PDE (MM wrote, separate PD)      : "); KiEmitHex(MiArmPdLogPde);
+    KiEmit("\n  hardware L1[M] BEFORE touch              : "); KiEmitHex(l1Before);
+    KiEmit(l1Before == 0 ? "  (absent - decoupled from the logical PDE)\n"
+                         : "  *** not absent ***\n");
+    KiEmit("  hardware L1[M] AFTER touch (filled)      : "); KiEmitHex(l1After);
+    KiEmit((l1After & 0x3) == 0x1 ? "  OK - coarse -> hw L2, filled by the fault handler\n"
+                                  : "  *** FAIL ***\n");
+    KiEmit("  page read (L1 fill + L2 fill)            : "); KiEmitHex(vRead);
+    KiEmit(vRead == 0x0DDF00D5u ? "  OK - two-level fill from the logical PD + L2\n"
+                                : "  *** FAIL ***\n");
+    KiEmit("  L1 fills / L2 fills                      : "); KiEmitHex(MiArmPdL1Fills);
+    KiEmit(" / "); KiEmitHex(MiArmPdL2Fills); KiEmit("\n");
+
+    MiArmPdFillBase = 0;                          // close the window
 }
 #endif
 
@@ -1343,6 +1492,7 @@ MiArmInitMachineDependent (
     MiArmRemapDemo();
     MiArmFaultFillDemo();
     MiArmRealModelDemo();
+    MiArmPdSplitDemo();
 #endif
 }
 
