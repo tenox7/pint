@@ -78,7 +78,7 @@ printf "#ifndef _V_\n#define _V_\n#define VER_PRODUCTBUILD 782\n#endif\n" > /tmp
 # common-symbol model. GCC 12 defaults to -fno-common, turning each into a strong
 # definition -> "multiple definition" at link. -fcommon restores the merge semantics.
 CFLAGS="-mcpu=cortex-a7 -marm -mfloat-abi=soft -ffreestanding -fno-pic -fshort-wchar -fcommon \
-        -D_ARM_ -DIMAGE_FILE_MACHINE_ARM=0x1c0 -DNT_UP -DDBG=0 -DFPO=0 -DDEVL=1 -D_EXCEPTION_DISPOSITION_DEFINED -DKI_RUN_EXECUTIVE=1 \
+        -D_ARM_ -D_NTSYSTEM_ -DIMAGE_FILE_MACHINE_ARM=0x1c0 -DNT_UP -DDBG=0 -DFPO=0 -DDEVL=1 -D_EXCEPTION_DISPOSITION_DEFINED -DKI_RUN_EXECUTIVE=1 \
         -fno-builtin -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables \
         -ffunction-sections -fdata-sections -O1 -w -include /work/ARM32/arcfw/inc/ntshim.h"
 ALLSUB=""; for S in $SUBSYS; do ALLSUB="$ALLSUB -I/tmp/f/$(echo $S|tr A-Z a-z)"; done

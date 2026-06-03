@@ -52,10 +52,16 @@ PMMPTE MmCrashDumpPte = NULL;
 // Pool extents (set by MiInitializeNonPagedPool / MiBuildPagedPool at runtime).
 //
 
-PVOID MmNonPagedPoolStart = NULL;
+PVOID MmNonPagedPoolStart = NULL;       // set by MiInitMachineDependent (ke/initarm.c)
 PVOID MmNonPagedPoolEnd = NULL;         // set by MiInitMachineDependent (ke/initarm.c)
-PVOID MmPagedPoolStart = NULL;
-PVOID MmPagedPoolEnd = NULL;
+//
+// MmPagedPoolStart must carry MIGLOBAL.C's init value MM_PAGED_POOL_START: it is NOT
+// reassigned at runtime (MiBuildPagedPool reads it to lay out the paged pool). A NULL
+// here (this weak def can win over MIGLOBAL when ld does not pull MIGLOBAL.o) builds
+// the paged pool at VA 0 -> allocations return ~0x1000 and fault.
+//
+PVOID MmPagedPoolStart = (PVOID)MM_PAGED_POOL_START;
+PVOID MmPagedPoolEnd = NULL;            // set by MiBuildPagedPool
 
 //
 // MM spin locks (initialized by KeInitializeSpinLock during MmInitSystem).

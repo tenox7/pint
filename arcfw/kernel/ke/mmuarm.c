@@ -834,11 +834,12 @@ MiArmTryFillFault (
     }
 
     //
-    // System region (cache / hyperspace / paged pool / system PTEs): demand-fill a
-    // real page through a private real L2. MM_SYSTEM_SPACE_START .. just below the
-    // HAL's top 4 MB. Excludes the self-map windows (< 0xC0800000) handled above.
+    // System region (cache / hyperspace / paged pool / system PTEs / shared data):
+    // demand-fill a real page through a private real L2. MM_SYSTEM_SPACE_START .. the
+    // top page (includes the HAL region + the fixed system-time / shared-data page
+    // KeQuerySystemTime reads). Excludes the self-map windows (< 0xC0800000) above.
     //
-    if (FaultVa >= 0xC0800000u && FaultVa < 0xFFC00000u) {
+    if (FaultVa >= 0xC0800000u && FaultVa < 0xFFFFF000u) {
         volatile ULONG *l2 = (volatile ULONG *)MiArmRealL2Va(FaultVa >> 20);
         ULONG idx = (FaultVa >> 12) & 0xFF;
 
