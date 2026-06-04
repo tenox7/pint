@@ -73,6 +73,8 @@ extern VOID HalDisplayString(PUCHAR String);
 extern ULONG HalpInitializeDisplay0(PLOADER_PARAMETER_BLOCK LoaderBlock);
 extern VOID KiArmInitializeVectors(VOID);
 extern VOID KiArmStartClock(VOID);
+extern VOID HalpInitializeInterrupts(VOID);
+extern VOID HalpClockInterrupt0(VOID);
 extern VOID MiArmReportPaging(VOID);
 extern VOID MiArmInitMachineDependent(PLOADER_PARAMETER_BLOCK LoaderBlock);
 #if KI_RUN_EXECUTIVE
@@ -588,6 +590,13 @@ KiArmReportInitialized (
     // IRQ path and the clock are working (KeTickCount is driven by KiClockTick
     // from the real interrupt dispatch). The scheduler will replace this loop.
     //
+
+    HalpInitializeInterrupts();
+    emit("  clock vector InterruptRoutine[7] = ");
+    emit_hex((ULONG)PCR->InterruptRoutine[CLOCK2_LEVEL]);
+    emit(" (HalpClockInterrupt0 = ");
+    emit_hex((ULONG)HalpClockInterrupt0);
+    emit(")\n\n");
 
     KiArmStartClock();
     KeLowerIrql(PASSIVE_LEVEL);

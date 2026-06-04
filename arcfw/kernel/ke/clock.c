@@ -213,20 +213,21 @@ static VOID KiClockTick(VOID)
 #endif
 
 //
-// Interrupt dispatcher, called from the IRQ entry (trap.S) with interrupts
-// masked. Identify the source, service it, acknowledge, and return. The clock
-// is currently the only wired source.
+// HalpClockInterrupt0 - the clock ISR (the X4CLOCK.S HalpClockInterrupt0 analog).
+// Installed at PCR->InterruptRoutine[CLOCK2_LEVEL] by HalpInitializeInterrupts
+// (ke/halirq.c) and called by the generic distributor KiInterruptDispatch once it
+// has confirmed the system-timer IRQ is pending. Acknowledge the match at the
+// device, re-arm the next compare, and run the genuine KeUpdateSystemTime (the
+// executive kernel) or advance the tick counter (the minimal kernel).
 //
 
-VOID KiInterruptDispatch(VOID)
+VOID HalpClockInterrupt0(VOID)
 {
-    if ((HalpBcmPending(1) & ST3_IRQ) != 0) {
-        REG(ST_CS) = ST3_IRQ;                               // acknowledge the match at the device
-        REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;         // re-arm
+    REG(ST_CS) = ST3_IRQ;                               // acknowledge the match at the device
+    REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;         // re-arm the next tick
 #if KI_RUN_EXECUTIVE
-        KeUpdateSystemTime((struct _KTRAP_FRAME *)0, HalpCurrentTimeIncrement);
+    KeUpdateSystemTime((struct _KTRAP_FRAME *)0, HalpCurrentTimeIncrement);
 #else
-        KiClockTick();
+    KiClockTick();
 #endif
-    }
 }

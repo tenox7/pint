@@ -93,7 +93,7 @@ echo ">> compiling ARM kernel-architecture + support objects (direct)"
 for s in ke/armstart.S ke/interlock.S ke/ctxsw.S ke/trap.S ke/seh.S ke/zwstubs.S; do
   ${CROSS}gcc $CFLAGS $KINCS -c $s -o "$DOBJ/$(basename ${s%.S})_asm.o" || echo "  ASM FAIL $s"
 done
-DCFILES="ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/seh.c ke/mmuarm.c \
+DCFILES="ke/kearm.c ke/initkr.c ke/ctxsw.c ke/timindex.c ke/clock.c ke/halirq.c ke/seh.c ke/mmuarm.c \
          ke/exarm.c ke/exglobals.c ke/rtlarm.c ke/portstubs.c ke/clib.c \
          ../ported/wait.c ../ported/queueobj.c"
 # the hand-written stub/data files (added as they are authored)

@@ -105,6 +105,14 @@ ExArmInterlockedExchangeUlong (
 #define PROFILE_LEVEL 8
 #define HIGH_LEVEL 8
 
+//
+// The BCM system-timer interval clock runs at the Jazz CLOCK2_LEVEL (level 7, the
+// POWER/IPI band): above every peripheral device, below PROFILE/HIGH, so it is not
+// preemptable by devices and does not nest in the single-clock configuration.
+//
+
+#define CLOCK2_LEVEL POWER_LEVEL
+
 #define DEFAULT_PROFILE_INTERVAL (10 * 1000)
 #define MAXIMUM_PROFILE_INTERVAL (10 * 1000 * 1000)
 #define MINIMUM_PROFILE_INTERVAL (10 * 1000)
