@@ -98,14 +98,40 @@ ULONG HalpCurrentTimeIncrement = MAXIMUM_INCREMENT;
 #endif
 
 //
-// Arm the periodic system-timer interrupt: enable IRQ 3 in the controller and
-// set the first compare. Called once interrupts are about to be enabled.
+// Arm the periodic system-timer interrupt and set the first compare. Called once
+// interrupts are about to be enabled. The interrupt is enabled the genuine HAL
+// way - the path a device driver's IoConnectInterrupt would take: resolve the
+// source with HalGetInterruptVector (the BCM system timer is an Internal-bus
+// interrupt whose bus level is the clock IRQL and whose bus vector is the BCM IRQ
+// number) and unmask it at the controller with HalEnableSystemInterrupt.
 //
 
 VOID KiArmStartClock(VOID)
 {
-    HalpEnableBcmIrq(1, 3);                          // enable the system-timer match-3 IRQ (bank 1, bit 3)
+    KIRQL Irql;
+    KAFFINITY Affinity;
+    ULONG Vector;
+
+    Vector = HalGetInterruptVector(Internal, 0, CLOCK2_LEVEL, HAL_TIMER_IRQ,
+                                   &Irql, &Affinity);
+    HalEnableSystemInterrupt(Vector, Irql, Latched);
     REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;
+}
+
+//
+// Busy-wait the given number of microseconds on the free-running 1 MHz BCM
+// system-timer counter (CLO). The counter runs independently of its compare-3
+// interrupt, so this is a valid time base even while that interrupt is masked -
+// the HAL interrupt-gating self-test uses it to measure tick freeze/resume. The
+// subtraction is unsigned so it is correct across the 32-bit counter wrap.
+//
+
+VOID KiArmSpinMicroseconds(ULONG Microseconds)
+{
+    ULONG Start = REG(ST_CLO);
+
+    while ((ULONG)(REG(ST_CLO) - Start) < Microseconds)
+        ;
 }
 
 #if KI_RUN_EXECUTIVE

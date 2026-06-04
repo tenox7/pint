@@ -115,3 +115,92 @@ KiInterruptDispatch (
     if ((HalpBcmPending(HAL_CLOCK_BANK) & (1u << HAL_CLOCK_BIT)) != 0)
         PCR->InterruptRoutine[CLOCK2_LEVEL]();
 }
+
+//
+// HalDisableSystemInterrupt - the JXSYSINT.C analog. Mask one system interrupt
+// at the BCM legacy controller. The genuine HAL serializes against concurrent
+// enable/disable with a spin lock taken at HIGH_LEVEL; on this uniprocessor
+// kernel a spin lock degenerates to the IRQL raise (there is no second CPU to
+// exclude), so raising to HIGH_LEVEL is the real mutual exclusion. The BCM
+// enable/disable registers are independent write-1-to-act bits, so the mask is a
+// single store with no read-modify-write.
+//
+
+VOID
+HalDisableSystemInterrupt (
+    IN ULONG Vector,
+    IN KIRQL Irql
+    )
+{
+    KIRQL OldIrql;
+
+    UNREFERENCED_PARAMETER(Irql);
+
+    KeRaiseIrql(HIGH_LEVEL, &OldIrql);
+    if (Vector <= HAL_MAXIMUM_BCM_VECTOR)
+        HalpDisableBcmIrq(HAL_VECTOR_BANK(Vector), HAL_VECTOR_BIT(Vector));
+    KeLowerIrql(OldIrql);
+}
+
+//
+// HalEnableSystemInterrupt - the JXSYSINT.C analog. Unmask one system interrupt
+// at the BCM legacy controller (see HalDisableSystemInterrupt for the locking
+// model). InterruptMode (LevelSensitive / Latched) is accepted for the standard
+// HAL signature but has no per-IRQ effect here: the BCM legacy controller has no
+// per-source edge/level configuration register. Irql is unused until the two-tier
+// IRQL masking increment builds the per-IRQL controller-enable snapshots
+// (PCR->IrqlTable). Returns TRUE when the vector is a controller source.
+//
+
+BOOLEAN
+HalEnableSystemInterrupt (
+    IN ULONG Vector,
+    IN KIRQL Irql,
+    IN KINTERRUPT_MODE InterruptMode
+    )
+{
+    KIRQL OldIrql;
+
+    UNREFERENCED_PARAMETER(Irql);
+    UNREFERENCED_PARAMETER(InterruptMode);
+
+    if (Vector > HAL_MAXIMUM_BCM_VECTOR)
+        return FALSE;
+
+    KeRaiseIrql(HIGH_LEVEL, &OldIrql);
+    HalpEnableBcmIrq(HAL_VECTOR_BANK(Vector), HAL_VECTOR_BIT(Vector));
+    KeLowerIrql(OldIrql);
+    return TRUE;
+}
+
+//
+// HalGetInterruptVector - the JXSYSINT.C analog. Map a bus interrupt to the
+// system interrupt vector + IRQL a driver hands to KeInitializeInterrupt. The
+// Raspberry Pi 2 has only the on-chip "Internal" bus (no ISA/EISA), so an
+// Internal request passes straight through: the system vector is the BCM IRQ
+// number and the IRQL is the caller-supplied bus level. Any other bus type is
+// absent on this platform and resolves to nothing.
+//
+
+ULONG
+HalGetInterruptVector (
+    IN INTERFACE_TYPE InterfaceType,
+    IN ULONG BusNumber,
+    IN ULONG BusInterruptLevel,
+    IN ULONG BusInterruptVector,
+    OUT PKIRQL Irql,
+    OUT PKAFFINITY Affinity
+    )
+{
+    UNREFERENCED_PARAMETER(BusNumber);
+
+    if (InterfaceType == Internal) {
+        *Affinity = 1;
+        *Irql = (KIRQL)BusInterruptLevel;
+        return BusInterruptVector;
+    }
+
+    *Affinity = 0;
+    *Irql = 0;
+    return 0;
+}

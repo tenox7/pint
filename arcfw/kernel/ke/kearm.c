@@ -28,6 +28,7 @@ Environment:
 
 #include "ki.h"
 #include "kiseh.h"
+#include "halirq.h"
 
 #undef RtlZeroMemory
 
@@ -64,6 +65,17 @@ Environment:
 #define KI_RUN_EXECUTIVE 0
 #endif
 
+//
+// Boot-time self-test of the HAL controller-gating API (ke/halirq.c). With the
+// clock running, disable the system-timer interrupt at the BCM controller and
+// confirm the tick count freezes, then re-enable it and confirm it resumes. Set
+// to 0 once the interrupt-controller path is exercised by real devices.
+//
+
+#ifndef KI_HAL_IRQ_SELFTEST
+#define KI_HAL_IRQ_SELFTEST 1
+#endif
+
 #define UART0   0x3F201000u
 #define UART_DR (*(volatile ULONG *)(UART0 + 0x00))
 #define UART_FR (*(volatile ULONG *)(UART0 + 0x18))
@@ -73,6 +85,7 @@ extern VOID HalDisplayString(PUCHAR String);
 extern ULONG HalpInitializeDisplay0(PLOADER_PARAMETER_BLOCK LoaderBlock);
 extern VOID KiArmInitializeVectors(VOID);
 extern VOID KiArmStartClock(VOID);
+extern VOID KiArmSpinMicroseconds(ULONG Microseconds);
 extern VOID HalpInitializeInterrupts(VOID);
 extern VOID HalpClockInterrupt0(VOID);
 extern VOID MiArmReportPaging(VOID);
@@ -447,6 +460,58 @@ static VOID KiSehSelfTest(VOID)
 #endif
 
 //
+// Self-test of the HAL controller-gating API (HalEnable/DisableSystemInterrupt,
+// ke/halirq.c). Run at PASSIVE_LEVEL with the clock already ticking: confirm the
+// clock is alive, disable the system-timer interrupt at the BCM controller and
+// confirm the tick count freezes (the interrupt is gated), then re-enable it and
+// confirm the tick count resumes. Time is measured on the free-running 1 MHz
+// system-timer counter (KiArmSpinMicroseconds), which keeps running while its
+// compare-3 interrupt is masked, so it is an independent reference for the test.
+//
+
+#if KI_HAL_IRQ_SELFTEST
+
+static VOID KiArmInterruptGatingTest(VOID)
+{
+    ULONG before, alive, atDisable, frozen, resumed, guard;
+
+    emit("HAL interrupt-gating self-test (HalEnable/DisableSystemInterrupt):\n");
+
+    //
+    // Confirm the clock is alive: wait until the tick count advances. Bounded by
+    // a guard (~2 s) so a dead clock still terminates the test instead of hanging.
+    // The wait is period-agnostic (the minimal kernel ticks at 250 ms, the
+    // executive at 10 ms).
+    //
+
+    before = (ULONG)KeTickCount.LowPart;
+    for (guard = 0; (ULONG)KeTickCount.LowPart == before && guard < 20; guard += 1)
+        KiArmSpinMicroseconds(100000);              // 0.1 s per probe
+    alive = (ULONG)KeTickCount.LowPart;
+
+    HalDisableSystemInterrupt(HAL_TIMER_IRQ, CLOCK2_LEVEL);
+    atDisable = (ULONG)KeTickCount.LowPart;
+    KiArmSpinMicroseconds(500000);                  // 0.5 s masked: ticks must freeze
+    frozen = (ULONG)KeTickCount.LowPart;
+
+    HalEnableSystemInterrupt(HAL_TIMER_IRQ, CLOCK2_LEVEL, Latched);
+    KiArmSpinMicroseconds(500000);                  // 0.5 s enabled: ticks must resume
+    resumed = (ULONG)KeTickCount.LowPart;
+
+    emit("  running   : ticks "); emit_hex(before); emit(" -> "); emit_hex(alive);
+    emit(alive != before ? "  (clock alive)\n" : "  *** clock NOT ticking ***\n");
+    emit("  disabled  : ticks "); emit_hex(atDisable); emit(" -> "); emit_hex(frozen);
+    emit(frozen == atDisable ? "  (frozen - gated)\n" : "  *** still ticking - NOT gated ***\n");
+    emit("  re-enabled: ticks "); emit_hex(frozen); emit(" -> "); emit_hex(resumed);
+    emit(resumed != frozen ? "  (resumed)\n" : "  *** did NOT resume ***\n");
+    emit("  HAL gating self-test ");
+    emit((alive != before && frozen == atDisable && resumed != frozen) ?
+         "OK\n\n" : "*** FAIL ***\n\n");
+}
+
+#endif
+
+//
 // KiInitializeKernel halts here once all real kernel-architecture
 // initialization has completed - the point at which it would otherwise call
 // ExpInitializeExecutive (not yet ported). Report the initialized state from
@@ -600,6 +665,10 @@ KiArmReportInitialized (
 
     KiArmStartClock();
     KeLowerIrql(PASSIVE_LEVEL);
+
+#if KI_HAL_IRQ_SELFTEST
+    KiArmInterruptGatingTest();
+#endif
 
 #if KI_RUN_EXECUTIVE
     //

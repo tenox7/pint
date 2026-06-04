@@ -63,6 +63,26 @@ Abstract:
 #define HAL_REG(a)            (*(volatile ULONG *)(ULONG)(a))
 
 //
+// System interrupt vector space. A HAL system interrupt vector is the linear
+// legacy IRQ number 0-63 (the value HalGetInterruptVector returns and
+// HalEnable/DisableSystemInterrupt take). Bank 1 holds IRQs 0-31, bank 2 holds
+// IRQs 32-63; the bank and bit select the enable/disable/pending register and bit.
+//
+
+#define HAL_MAXIMUM_BCM_VECTOR  63u
+#define HAL_VECTOR_BANK(v)      ((v) < 32u ? 1u : 2u)
+#define HAL_VECTOR_BIT(v)       ((v) & 31u)
+
+//
+// The BCM2835 system-timer interval clock is match channel 3 = IRQ 3 (bank 1,
+// bit 3). Its system interrupt vector is 3; its dispatch slot in
+// PCR->InterruptRoutine[] is the IRQL CLOCK2_LEVEL - the MIPS dual numbering
+// (the controller is addressed by IRQ number, the dispatcher by IRQL).
+//
+
+#define HAL_TIMER_IRQ           3u
+
+//
 // Enable / disable a legacy-controller IRQ. The enable and disable registers hold
 // independent write-1-to-act bits, so a single store enables (or disables) exactly
 // one IRQ with no read-modify-write. Bank 1 = IRQs 0-31, bank 2 = IRQs 32-63.
