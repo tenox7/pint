@@ -76,6 +76,19 @@ Environment:
 #define KI_HAL_IRQ_SELFTEST 1
 #endif
 
+//
+// Boot-time self-test of the synthesized software-interrupt / DPC path
+// (KiRequestSoftwareInterrupt latches a per-PCR bit, KiCheckSoftwareInterrupts
+// drains it at the KeLowerIrql tail, KiDispatchInterrupt runs the DPC queue).
+// Queues a DPC at PASSIVE_LEVEL and at DISPATCH_LEVEL and confirms it runs
+// exactly once at the right moment. Set to 0 once DPCs are exercised by real
+// timers / drivers.
+//
+
+#ifndef KI_DPC_SELFTEST
+#define KI_DPC_SELFTEST 1
+#endif
+
 #define UART0   0x3F201000u
 #define UART_DR (*(volatile ULONG *)(UART0 + 0x00))
 #define UART_FR (*(volatile ULONG *)(UART0 + 0x18))
@@ -230,6 +243,63 @@ VOID _enable(VOID)  { __asm__ __volatile__("cpsie i" ::: "memory"); }
 // control (a coarse model; per-level interrupt-controller masking arrives with a
 // full HAL). The PCR tracks the precise level for the rest of the kernel.
 //
+// Software interrupts (APC_LEVEL, DISPATCH_LEVEL) have no hardware cause bit on
+// ARM, so they are emulated the i386 HAL way (HALX86 IXSWINT.ASM/IXIRQL.ASM):
+// the per-PCR request byte PCR->SoftwareInterrupt holds a pending bitmask, set
+// by KiRequestSoftwareInterrupt(irql) and drained at the KeLowerIrql tail by
+// KiCheckSoftwareInterrupts, which dispatches PCR->InterruptRoutine[level]
+// (KiDispatchInterrupt for DPCs at DISPATCH_LEVEL, KiApcInterrupt for kernel
+// APCs at APC_LEVEL) highest level first. MIPS/Alpha instead carry the request
+// in a hardware cause/Sirr register the CPU re-takes when the mask widens; ARM
+// (like x86) lacks that, hence the explicit software drain.
+//
+
+static VOID KiCheckSoftwareInterrupts(KIRQL NewIrql)
+{
+    PKPCR Pcr = PCR;
+    ULONG Pending;
+
+    //
+    // Deliver every software interrupt pending strictly above NewIrql, highest
+    // level first (the i386 KfLowerIrql discipline: pending = IRR AND the mask of
+    // levels above NewIrql; BSR the highest; clear it; call the handler). Only
+    // APC_LEVEL (1) and DISPATCH_LEVEL (2) are ever requested, so this runs at
+    // most twice.
+    //
+
+    while ((Pending = ((ULONG)(UCHAR)Pcr->SoftwareInterrupt) &
+                      ~((1u << (NewIrql + 1)) - 1)) != 0) {
+        ULONG Level = 31 - __builtin_clz(Pending);
+
+        //
+        // Claim the level with interrupts masked: clear the request bit BEFORE
+        // dispatch (a re-request inside the handler re-arms it), raise the IRQL
+        // to the handler's level, and unmask only if that level is below
+        // DISPATCH_LEVEL (a DPC runs at DISPATCH_LEVEL with devices masked in the
+        // coarse model; two-tier masking that lets the clock preempt a DPC is
+        // increment 6).
+        //
+
+        __asm__ __volatile__("cpsid i" ::: "memory");
+        Pcr->SoftwareInterrupt &= (CCHAR)~(1u << Level);
+        Pcr->CurrentIrql = (UCHAR)Level;
+        if (Level < DISPATCH_LEVEL)
+            __asm__ __volatile__("cpsie i" ::: "memory");
+
+        (Pcr->InterruptRoutine[Level])();
+
+        //
+        // Drop back to NewIrql and re-evaluate: a handler may have requested a
+        // level that is still above NewIrql (e.g. an APC handler that queues a
+        // DPC). The cleared bit keeps the just-serviced level from re-firing.
+        //
+
+        __asm__ __volatile__("cpsid i" ::: "memory");
+        Pcr->CurrentIrql = NewIrql;
+        if (NewIrql < DISPATCH_LEVEL)
+            __asm__ __volatile__("cpsie i" ::: "memory");
+    }
+}
 
 VOID KeRaiseIrql(KIRQL NewIrql, PKIRQL OldIrql)
 {
@@ -244,23 +314,106 @@ VOID KeLowerIrql(KIRQL NewIrql)
     PCR->CurrentIrql = NewIrql;
     if (NewIrql < DISPATCH_LEVEL)
         __asm__ __volatile__("cpsie i" ::: "memory");
+
+    //
+    // Tail: now that the IRQL has dropped, deliver any software interrupt that
+    // became eligible (the MIPS "the pending cause bit re-traps as the PSR mask
+    // widens" effected in software). Cheap on the common path: one byte read, a
+    // mask, a compare against zero.
+    //
+
+    KiCheckSoftwareInterrupts(NewIrql);
 }
 
 VOID KiRequestSoftwareInterrupt(KIRQL RequestIrql)
 {
-    UNREFERENCED_PARAMETER(RequestIrql);
+    ULONG Cpsr;
+
+    //
+    // Latch the request in the per-PCR pending byte under interrupt-disable (an
+    // atomic read-modify-write against a nested interrupt). The bit is honored
+    // when the IRQL next drops below RequestIrql at the KeLowerIrql tail;
+    // KeInsertQueueDpc / KiInsertQueueApc always lower right after requesting, so
+    // no eager dispatch is needed here (i386 HalRequestSoftwareInterrupt does an
+    // eager check; the drain-at-lower path alone is sufficient and simpler).
+    //
+
+    __asm__ __volatile__("mrs %0, cpsr" : "=r"(Cpsr));
+    __asm__ __volatile__("cpsid i" ::: "memory");
+    PCR->SoftwareInterrupt |= (CCHAR)(1u << RequestIrql);
+    if (!(Cpsr & 0x80u))
+        __asm__ __volatile__("cpsie i" ::: "memory");
 }
 
 //
-// Interrupt dispatch routines stored in the PCR vector table. They are placed
-// during KiInitializeKernel but are not entered until real interrupt dispatch
-// is wired; reaching one now means an unexpected fault, so they bug check.
+// Interrupt dispatch routines stored in the PCR vector table (placed during
+// KiInitializeKernel at InterruptRoutine[0/APC_LEVEL/DISPATCH_LEVEL]).
+//
+//   KiUnexpectedInterrupt / KiPassiveRelease - reaching one is an unexpected
+//     fault, so they bug check.
+//   KiDispatchInterrupt - the DISPATCH_LEVEL software interrupt: drain the
+//     processor's DPC queue (KE/MIPS X4CTXSW.S KiProcessDpcList). The
+//     quantum-end / next-thread context-switch tail is deferred until the
+//     scheduler exists (Phase 1). Real in both builds - pure KE, no executive.
+//   KiApcInterrupt - the APC_LEVEL software interrupt: deliver kernel-mode APCs
+//     through the genuine KiDeliverApc (KE/APCSUP.C). Present only under
+//     KI_RUN_EXECUTIVE (KiDeliverApc links from libexec.a); the minimal kernel
+//     never requests APC_LEVEL, so it keeps the bug-check stub.
 //
 
 VOID KiUnexpectedInterrupt(VOID) { KeBugCheck(TRAP_CAUSE_UNKNOWN); }
 VOID KiPassiveRelease(VOID)      { KeBugCheck(TRAP_CAUSE_UNKNOWN); }
+
+VOID KiDispatchInterrupt(VOID)
+{
+    PKPRCB Prcb = PCR->Prcb;
+
+    //
+    // Entered at DISPATCH_LEVEL with device interrupts masked (coarse model).
+    // Drain the DPC queue head first; each DPC runs exactly once. The entry is
+    // unlinked and Dpc->Lock cleared BEFORE the call so a routine may re-queue
+    // itself (matches KE/MIPS KiProcessDpcList). DpcCount is a cumulative
+    // statistic in NT 3.5 (only KeInsertQueueDpc touches it - never decremented),
+    // so the list-empty test, not a count, bounds the drain.
+    //
+
+    while (!IsListEmpty(&Prcb->DpcListHead)) {
+        PLIST_ENTRY Entry = Prcb->DpcListHead.Flink;
+        PKDPC Dpc = CONTAINING_RECORD(Entry, KDPC, DpcListEntry);
+        PKDEFERRED_ROUTINE Routine = Dpc->DeferredRoutine;
+        PVOID Context = Dpc->DeferredContext;
+        PVOID Arg1 = Dpc->SystemArgument1;
+        PVOID Arg2 = Dpc->SystemArgument2;
+
+        RemoveEntryList(Entry);
+        Dpc->Lock = NULL;
+        PCR->DpcRoutineActive = TRUE;
+        (Routine)(Dpc, Context, Arg1, Arg2);
+        PCR->DpcRoutineActive = FALSE;
+    }
+}
+
+#if KI_RUN_EXECUTIVE
+
+VOID KiApcInterrupt(VOID)
+{
+    //
+    // Deliver kernel-mode APCs. We are at the KeLowerIrql tail at APC_LEVEL, not
+    // returning to user mode, so there is no trap/exception frame - and the
+    // genuine KiDeliverApc never dereferences them unless PreviousMode==UserMode
+    // (KE/MIPS XXAPCINT.S skips the frame build for kernel mode, label 20). NULL
+    // is the faithful value here; user-APC delivery (and a real frame) is
+    // deferred until the port runs user mode.
+    //
+
+    KiDeliverApc(KernelMode, NULL, NULL);
+}
+
+#else
+
 VOID KiApcInterrupt(VOID)        { KeBugCheck(TRAP_CAUSE_UNKNOWN); }
-VOID KiDispatchInterrupt(VOID)   { KeBugCheck(TRAP_CAUSE_UNKNOWN); }
+
+#endif
 
 BOOLEAN
 KeBusError (
@@ -512,6 +665,95 @@ static VOID KiArmInterruptGatingTest(VOID)
 #endif
 
 //
+// Software-interrupt / DPC self-test. Proves the increment-4 path end to end:
+// a DPC queued at PASSIVE_LEVEL drains synchronously at the KeLowerIrql tail
+// inside KeInsertQueueDpc; a DPC queued at DISPATCH_LEVEL stays deferred until
+// the IRQL drops, then runs exactly once. Mirrors the KI_HAL_IRQ_SELFTEST shape.
+//
+
+#if KI_DPC_SELFTEST
+
+static volatile ULONG KiDpcTestRuns;
+static volatile ULONG KiDpcTestActiveSeen;
+
+static VOID
+KiArmDpcTestRoutine (
+    IN struct _KDPC *Dpc,
+    IN PVOID DeferredContext,
+    IN PVOID SystemArgument1,
+    IN PVOID SystemArgument2
+    )
+{
+    UNREFERENCED_PARAMETER(Dpc);
+    UNREFERENCED_PARAMETER(DeferredContext);
+    UNREFERENCED_PARAMETER(SystemArgument1);
+    UNREFERENCED_PARAMETER(SystemArgument2);
+
+    KiDpcTestRuns += 1;
+    if (PCR->DpcRoutineActive)
+        KiDpcTestActiveSeen = 1;            // confirm we run inside the DPC bracket
+}
+
+static VOID KiArmDpcSelfTest(VOID)
+{
+    static KDPC TestDpc;
+    KIRQL OldIrql;
+    BOOLEAN Queued1, Queued2;
+    ULONG RanImmediate, DeferredWhileHigh, RanAfterLower;
+
+    emit("DPC software-interrupt self-test (KiRequestSoftwareInterrupt drain):\n");
+
+    KeInitializeDpc(&TestDpc, KiArmDpcTestRoutine, NULL);
+
+    //
+    // Case 1: queue at PASSIVE_LEVEL. KeInsertQueueDpc requests a DISPATCH_LEVEL
+    // software interrupt and then lowers IRQL back to PASSIVE - the KeLowerIrql
+    // tail must drain it and run the routine exactly once, synchronously, before
+    // KeInsertQueueDpc even returns.
+    //
+
+    KiDpcTestRuns = 0;
+    KiDpcTestActiveSeen = 0;
+    Queued1 = KeInsertQueueDpc(&TestDpc, NULL, NULL);
+    RanImmediate = KiDpcTestRuns;
+
+    //
+    // Case 2: at DISPATCH_LEVEL the DPC must stay queued (nothing pends above
+    // DISPATCH), then run exactly once when IRQL drops back below it.
+    //
+
+    KeRaiseIrql(DISPATCH_LEVEL, &OldIrql);
+    KiDpcTestRuns = 0;
+    Queued2 = KeInsertQueueDpc(&TestDpc, NULL, NULL);
+    DeferredWhileHigh = KiDpcTestRuns;
+    KeLowerIrql(OldIrql);
+    RanAfterLower = KiDpcTestRuns;
+
+    emit("  queue@PASSIVE  : inserted=");
+    emit_hex((ULONG)Queued1);
+    emit(" ran=");
+    emit_hex(RanImmediate);
+    emit(RanImmediate == 1 ? "  (ran once at the KeLowerIrql tail)\n"
+                           : "  *** expected exactly 1 ***\n");
+    emit("  queue@DISPATCH : inserted=");
+    emit_hex((ULONG)Queued2);
+    emit(" deferred=");
+    emit_hex((ULONG)(DeferredWhileHigh == 0));
+    emit(" ranAfterLower=");
+    emit_hex(RanAfterLower);
+    emit((DeferredWhileHigh == 0 && RanAfterLower == 1) ?
+         "  (deferred, then ran once)\n" : "  *** wrong ***\n");
+    emit("  DpcRoutineActive during DPC = ");
+    emit_hex(KiDpcTestActiveSeen);
+    emit("\n  DPC self-test ");
+    emit((Queued1 && RanImmediate == 1 && Queued2 &&
+          DeferredWhileHigh == 0 && RanAfterLower == 1 && KiDpcTestActiveSeen) ?
+         "OK\n\n" : "*** FAIL ***\n\n");
+}
+
+#endif
+
+//
 // KiInitializeKernel halts here once all real kernel-architecture
 // initialization has completed - the point at which it would otherwise call
 // ExpInitializeExecutive (not yet ported). Report the initialized state from
@@ -668,6 +910,10 @@ KiArmReportInitialized (
 
 #if KI_HAL_IRQ_SELFTEST
     KiArmInterruptGatingTest();
+#endif
+
+#if KI_DPC_SELFTEST
+    KiArmDpcSelfTest();
 #endif
 
 #if KI_RUN_EXECUTIVE

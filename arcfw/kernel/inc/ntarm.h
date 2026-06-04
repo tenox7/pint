@@ -139,7 +139,14 @@ typedef struct _KPCR {
     ULONG StallScaleFactor;
 
     CCHAR Number;
-    CCHAR Spareb1;
+    CCHAR SoftwareInterrupt;    // i386-style software interrupt request byte: a
+                                // pending bitmask, bit n == a software interrupt
+                                // is pending at IRQL n (APC_LEVEL/DISPATCH_LEVEL).
+                                // ARM has no hardware software-interrupt cause
+                                // bit, so this PCR byte is the request register
+                                // (the i386 PcIRR analog); set by
+                                // KiRequestSoftwareInterrupt, drained at the
+                                // KeLowerIrql tail by KiCheckSoftwareInterrupts.
     CCHAR Spareb2;
     CCHAR Spareb3;
 
