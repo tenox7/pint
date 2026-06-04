@@ -42,13 +42,17 @@ Environment:
 --*/
 
 #include "ki.h"
+#include "halirq.h"
 
 #ifndef KI_RUN_EXECUTIVE
 #define KI_RUN_EXECUTIVE 0
 #endif
 
 //
-// BCM2835 system timer (1 MHz free-running) and interrupt controller.
+// BCM2835 system timer (1 MHz free-running). The interrupt-controller registers
+// (enable/disable/pending) live in inc/halirq.h; clock.c owns only the timer
+// device (compare channel 3) and acknowledges it at the device, per the HAL
+// interrupt contract (the BCM controllers have no EOI).
 //
 
 #define SYSTIMER_BASE   0x3F003000u
@@ -56,11 +60,7 @@ Environment:
 #define ST_CLO          (SYSTIMER_BASE + 0x04)     // counter low
 #define ST_C3           (SYSTIMER_BASE + 0x18)     // compare register 3
 
-#define INTCTL_BASE     0x3F00B200u
-#define IRQ_PENDING1    (INTCTL_BASE + 0x04)        // pending IRQs 0-31
-#define IRQ_ENABLE1     (INTCTL_BASE + 0x10)        // enable IRQs 0-31
-
-#define ST3_IRQ         (1u << 3)                    // system timer match 3 = IRQ 3
+#define ST3_IRQ         (1u << 3)                    // system timer match 3 = IRQ 3 (bank 1 bit 3)
 
 #define REG(a)          (*(volatile ULONG *)(ULONG)(a))
 
@@ -104,7 +104,7 @@ ULONG HalpCurrentTimeIncrement = MAXIMUM_INCREMENT;
 
 VOID KiArmStartClock(VOID)
 {
-    REG(IRQ_ENABLE1) = ST3_IRQ;
+    HalpEnableBcmIrq(1, 3);                          // enable the system-timer match-3 IRQ (bank 1, bit 3)
     REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;
 }
 
@@ -220,8 +220,8 @@ static VOID KiClockTick(VOID)
 
 VOID KiInterruptDispatch(VOID)
 {
-    if ((REG(IRQ_PENDING1) & ST3_IRQ) != 0) {
-        REG(ST_CS) = ST3_IRQ;                               // acknowledge the match
+    if ((HalpBcmPending(1) & ST3_IRQ) != 0) {
+        REG(ST_CS) = ST3_IRQ;                               // acknowledge the match at the device
         REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;         // re-arm
 #if KI_RUN_EXECUTIVE
         KeUpdateSystemTime((struct _KTRAP_FRAME *)0, HalpCurrentTimeIncrement);
