@@ -554,6 +554,20 @@ KiArmReportInitialized (
             emit("\n  demand-zero resolved with a real VALID logical PTE written back = ");
             emit_hex(MiArmGetExecLogValidWrites());
         }
+        {
+            extern ULONG MiArmGetExecSharedData(VOID);
+            extern ULONG MiArmGetExecWildL1(VOID);
+            extern ULONG MiArmGetExecWildNoPte(VOID);
+            extern ULONG MiArmGetExecWildVa(VOID);
+            emit("\n  shared-data page faults (KUSER_SHARED_DATA scaffold) = ");
+            emit_hex(MiArmGetExecSharedData());
+            emit("\n  B3 wild faults (no PDE/PTE, outside any expected region): L1 = ");
+            emit_hex(MiArmGetExecWildL1());
+            emit(", no-PTE = ");
+            emit_hex(MiArmGetExecWildNoPte());
+            emit(", first VA = ");
+            emit_hex(MiArmGetExecWildVa());
+        }
         emit("\n");
     }
     emit("------------------------------------------------------------------\n\n");

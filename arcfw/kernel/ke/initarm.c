@@ -268,6 +268,18 @@ MiInitMachineDependent (
         MiInitializeSystemPtes((PMMPTE)MiGetPteAddress((PVOID)sysStart),
                                sysPtes, SystemPteSpace);
 
+        //
+        // Publish this window to the demand-fill path (B3): kernel-stack VAs are
+        // reserved from these system PTEs and faulted in lazily by MiArmTryFillFault,
+        // so an L1-demand / no-PTE fault inside it is EXPECTED; one outside it is a
+        // genuine residual the fill flags as wild (count now, bug-check later).
+        //
+        {
+            extern ULONG MiArmGrowStart, MiArmGrowEnd;
+            MiArmGrowStart = sysStart;
+            MiArmGrowEnd   = sysStart + (sysPtes << PAGE_SHIFT);
+        }
+
         KiEmit("  system PTE pool      : VA "); KiEmitHex(sysStart);
         KiEmit(" x "); KiEmitHex(sysPtes);
         KiEmit(", free="); KiEmitHex(MmTotalFreeSystemPtes[SystemPteSpace]);

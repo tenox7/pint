@@ -894,6 +894,52 @@ static ULONG MiArmExecPagefile;         // pagefile PTE - PageFileHigh != 0 (Pha
 static ULONG MiArmExecLogValidWrites;   // B2: real demand-zero resolves that wrote a VALID logical PTE back
 
 //
+// REAL MM step B (B3): the known-growable system window - the SystemPteSpace /
+// kernel-stack region ke/initarm.c reserves. A demand fault here with NO logical PDE
+// (L1 demand) or NO committed PTE (no-PTE) is EXPECTED: MiReserveSystemPtes hands
+// kernel-stack VAs out of this window and KeInitializeThread faults them in lazily.
+// The SAME fault OUTSIDE this window is a genuine no-PTE residual - a wild access MM
+// committed nothing for - that Phase 1 must bug-check once it owns the address space.
+// B3 IDENTIFIES it (counts it + captures the first VA) WITHOUT changing behaviour: the
+// page is still safety-filled so Phase 0 cannot regress (count now, bug-check later).
+//
+ULONG MiArmGrowStart;                   // [MiArmGrowStart, MiArmGrowEnd), set by ke/initarm.c
+ULONG MiArmGrowEnd;
+static ULONG MiArmExecSharedData;       // faults on the fixed KUSER_SHARED_DATA page (a demand-zero scaffold)
+static ULONG MiArmExecWildL1;           // L1 demand (no logical PDE) outside any expected region
+static ULONG MiArmExecWildNoPte;        // no-PTE (uncommitted) outside any expected region
+static ULONG MiArmExecWildVa;           // first wild fault VA (diagnosis)
+
+//
+// The fixed KUSER_SHARED_DATA page (KI_USER_SHARED_DATA, arm.h): KeQuerySystemTime /
+// KeQueryTickCount read SystemTime/InterruptTime from it (e.g. SystemTime.High1Time at
+// 0xffff8018). It is demand-zero-filled today - so KeQuerySystemTime returns 0 - a known
+// scaffold REAL HAL replaces with the live, HAL-updated page. A legitimate fixed mapping,
+// not a wild access; counted in its own bucket so the scaffold stays visible.
+//
+static ULONG
+MiArmIsSharedData (
+    ULONG FaultVa
+    )
+{
+    return ((FaultVa & ~0xFFFu) == (KI_USER_SHARED_DATA & ~0xFFFu));
+}
+
+//
+// The on-demand-growable system window: kernel-stack / system-PTE VAs MiReserveSystemPtes
+// hands out, faulted in lazily by KeInitializeThread. A no-PDE / no-PTE fault here is
+// expected growth; outside the window (and not the shared-data page) it is wild.
+//
+static ULONG
+MiArmExecGrowable (
+    ULONG FaultVa
+    )
+{
+    return (MiArmGrowEnd != 0 &&
+            FaultVa >= MiArmGrowStart && FaultVa < MiArmGrowEnd);
+}
+
+//
 // KSEG0 VA of megabyte M's private real L2, allocating its packed page (arena) and
 // wiring L1[M] -> it (an ARMv7 coarse-page-table descriptor the MMU walks) on first use.
 //
@@ -1103,9 +1149,14 @@ MiArmTryFillFault (
         if (l1WasAbsent) {
             *(ULONG *)&lpde = MiArmLogPd[M];
             if (lpde.Valid)
-                MiArmExecPdL1Fills += 1;
-            else
-                MiArmExecPdL1Demand += 1;
+                MiArmExecPdL1Fills += 1;                 // MM's *StartPde authorized this page table
+            else if (MiArmExecGrowable(FaultVa) || MiArmIsSharedData(FaultVa))
+                MiArmExecPdL1Demand += 1;                // expected: lazy stack/system-PTE growth or the shared-data page
+            else {
+                MiArmExecWildL1 += 1;                    // no PDE outside any expected region (B3: bug-check later)
+                if (MiArmExecWildVa == 0)
+                    MiArmExecWildVa = FaultVa;
+            }
         }
 
         if ((l2[idx] & 0x3) == 0) {
@@ -1142,7 +1193,17 @@ MiArmTryFillFault (
                 if (w & 0x4u)             MiArmExecProto += 1;        // Prototype (Phase 1)
                 else if (w & 0x100u)      MiArmExecTrans += 1;        // Transition (Phase 1)
                 else if (w & 0xFFFFF000u) MiArmExecPagefile += 1;     // PageFileHigh != 0 (Phase 1)
-                else if (prot == 0)       MiArmExecNoPte += 1;        // free / uncommitted
+                else if (prot == 0) {
+                    if (MiArmIsSharedData(FaultVa))
+                        MiArmExecSharedData += 1;        // the fixed KUSER_SHARED_DATA page (demand-zero scaffold)
+                    else if (MiArmExecGrowable(FaultVa))
+                        MiArmExecNoPte += 1;             // window-unbacked in the growable region (expected)
+                    else {
+                        MiArmExecWildNoPte += 1;         // uncommitted outside any expected region (B3)
+                        if (MiArmExecWildVa == 0)
+                            MiArmExecWildVa = FaultVa;
+                    }
+                }
                 else if (prot == 0x18u)   MiArmExecNoAccess += 1;     // MM_NOACCESS
                 else { MiArmExecDemandZero += 1; isDemandZero = 1; }  // committed demand-zero
 
@@ -1811,6 +1872,10 @@ ULONG MiArmGetExecProto      (VOID) { return MiArmExecProto; }
 ULONG MiArmGetExecTrans      (VOID) { return MiArmExecTrans; }
 ULONG MiArmGetExecPagefile   (VOID) { return MiArmExecPagefile; }
 ULONG MiArmGetExecLogValidWrites (VOID) { return MiArmExecLogValidWrites; }
+ULONG MiArmGetExecSharedData (VOID) { return MiArmExecSharedData; }
+ULONG MiArmGetExecWildL1    (VOID) { return MiArmExecWildL1; }
+ULONG MiArmGetExecWildNoPte (VOID) { return MiArmExecWildNoPte; }
+ULONG MiArmGetExecWildVa    (VOID) { return MiArmExecWildVa; }
 
 //
 // Count the valid entries MM's *StartPde wrote into the logical page directory - proof
