@@ -226,7 +226,8 @@ KeUpdateRuntime (
 NTKERNELAPI
 VOID
 KeUpdateSystemTime (
-    IN struct _KTRAP_FRAME *TrapFrame
+    IN struct _KTRAP_FRAME *TrapFrame,
+    IN ULONG TimeIncrement
     );
 
 //

@@ -13,12 +13,27 @@ Abstract:
     interrupt from the BCM2835 system timer (compare channel 3), routed through
     the BCM2835 interrupt controller, drives the system tick: KiInterruptDispatch
     (called from the IRQ entry in trap.S) acknowledges and re-arms the timer and
-    advances KeTickCount.
+    advances time.
 
-    Minimal-but-real: a single clock source, KeTickCount advanced with the
-    High1/High2 writer protocol. The full KeUpdateSystemTime work (interrupt
-    time, timer-table expiration, thread quantum) and per-level interrupt masking
-    arrive with the scheduler and a full HAL.
+    Two builds share this file:
+
+      - The minimal known-good kernel (make-kernel.sh, KI_RUN_EXECUTIVE 0) has no
+        executive and no KUSER_SHARED_DATA page mapped. It keeps the original
+        hand-rolled tick: a single source advancing only KeTickCount with the
+        High1/High2 writer protocol, at a 4 Hz demo rate. This path is unchanged
+        (the minimal kernel stays byte-identical).
+
+      - The full-executive kernel (make-execlink.sh, KI_RUN_EXECUTIVE 1) runs the
+        genuine KeUpdateSystemTime (the port of KE/MIPS/XXCLOCK.S): every clock
+        interrupt it advances InterruptTime, and on a full tick SystemTime,
+        KeTickCount and the shared-page TickCountLow - through the live
+        KUSER_SHARED_DATA page - so KeQuerySystemTime returns real, advancing time.
+        The clock runs at the genuine ~10 ms NT rate, with the per-tick increment
+        established by KeSetTimeIncrement (HalInitSystem, ke/linkstubs.c).
+
+    The timer-table expiration scan and the KeUpdateRunTime tail (thread-quantum
+    and run-time billing) of the genuine KeUpdateSystemTime need a populated
+    KTRAP_FRAME and the dispatcher; they arrive with the scheduler (Phase 1).
 
 Environment:
 
@@ -27,6 +42,10 @@ Environment:
 --*/
 
 #include "ki.h"
+
+#ifndef KI_RUN_EXECUTIVE
+#define KI_RUN_EXECUTIVE 0
+#endif
 
 //
 // BCM2835 system timer (1 MHz free-running) and interrupt controller.
@@ -45,12 +64,38 @@ Environment:
 
 #define REG(a)          (*(volatile ULONG *)(ULONG)(a))
 
+#if KI_RUN_EXECUTIVE
+
 //
-// Tick period in microseconds (the 1 MHz timer's units). A visible demonstration
-// rate; the real KeMaximumIncrement is set by the HAL.
+// Genuine NT clock rate (the Jazz values, JAZZDEF.H), in 100-ns units:
+// MAXIMUM_INCREMENT ~= 10 ms per tick, MINIMUM_INCREMENT ~= 1 ms granularity.
+// The BCM 1 MHz system-timer reload is the increment converted to microseconds
+// (100 ns -> us is /10), so each compare-3 interrupt corresponds to one tick.
 //
 
-#define KI_CLOCK_PERIOD 250000u
+#define MAXIMUM_INCREMENT 100000u                    // 10 ms in 100-ns units
+#define MINIMUM_INCREMENT 10000u                     // 1 ms in 100-ns units
+#define KI_CLOCK_PERIOD   (MAXIMUM_INCREMENT / 10u)  // 10000 us = 10 ms (1 MHz timer)
+
+//
+// The per-tick time increment the clock ISR hands KeUpdateSystemTime, in 100-ns
+// units (the HALFXS HalpCurrentTimeIncrement). HalInitSystem (ke/linkstubs.c)
+// primes it and calls KeSetTimeIncrement; a later real HAL pipelines rate changes
+// through HalSetTimeIncrement.
+//
+
+ULONG HalpCurrentTimeIncrement = MAXIMUM_INCREMENT;
+
+#else
+
+//
+// Minimal kernel: a visible 4 Hz demonstration rate (the real increment is set
+// by the HAL, which the minimal kernel does not run).
+//
+
+#define KI_CLOCK_PERIOD   250000u
+
+#endif
 
 //
 // Arm the periodic system-timer interrupt: enable IRQ 3 in the controller and
@@ -62,6 +107,90 @@ VOID KiArmStartClock(VOID)
     REG(IRQ_ENABLE1) = ST3_IRQ;
     REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;
 }
+
+#if KI_RUN_EXECUTIVE
+
+//
+// KeUpdateSystemTime - the genuine NT clock-tick body, ported from
+// KE/MIPS/XXCLOCK.S (lines 72-160). Called from the clock ISR (the
+// HalpClockInterrupt0 analog, X4CLOCK.S) each interrupt with the per-tick time
+// increment in 100-ns units.
+//
+// Every interrupt advances InterruptTime. KiTickOffset counts the increment down
+// to a full tick; on a full tick SystemTime advances by the (adjustable)
+// KeTimeAdjustment, KeTickCount advances by one, and its low part is mirrored into
+// SharedUserData->TickCountLow. All three 64-bit times are written through the
+// KUSER_SHARED_DATA page (and the KeTickCount global) in the strict
+// High2 -> Low -> High1 store order that the lock-free KiQuery* readers (arm.h)
+// require: storing High2Time first and High1Time last guarantees a reader (which
+// retries while High1Time != High2Time) sees either the wholly-old or wholly-new
+// value, never a torn one. This is a uniprocessor kernel, so program-order stores
+// to the volatile fields suffice (the same CPU observes its own writes in order).
+//
+// The KiTimerTableListHead expiration scan (queue KiTimerExpireDpc, request a
+// DISPATCH software interrupt) and the KeUpdateRunTime tail (charge the tick to
+// thread/process/DPC/interrupt time and decrement the thread quantum) require a
+// populated KTRAP_FRAME and the dispatcher database - deferred to the scheduler
+// (Phase 1).
+//
+
+VOID
+KeUpdateSystemTime (
+    IN struct _KTRAP_FRAME *TrapFrame,
+    IN ULONG TimeIncrement
+    )
+{
+    ULONGLONG Time;
+
+    UNREFERENCED_PARAMETER(TrapFrame);
+
+    //
+    // Interrupt time advances on every interrupt by the time increment.
+    //
+
+    Time = ((ULONGLONG)(ULONG)SharedUserData->InterruptTime.High1Time << 32) |
+           (ULONGLONG)SharedUserData->InterruptTime.LowPart;
+    Time += TimeIncrement;
+    SharedUserData->InterruptTime.High2Time = (LONG)(Time >> 32);
+    SharedUserData->InterruptTime.LowPart   = (ULONG)Time;
+    SharedUserData->InterruptTime.High1Time = (LONG)(Time >> 32);
+
+    //
+    // Count down to a full tick; a partial tick advances only interrupt time.
+    //
+
+    KiTickOffset -= TimeIncrement;
+    if ((LONG)KiTickOffset > 0)
+        return;
+    KiTickOffset += KeMaximumIncrement;
+
+    //
+    // System time advances by the (time-adjustment) increment on a full tick.
+    //
+
+    Time = ((ULONGLONG)(ULONG)SharedUserData->SystemTime.High1Time << 32) |
+           (ULONGLONG)SharedUserData->SystemTime.LowPart;
+    Time += KeTimeAdjustment;
+    SharedUserData->SystemTime.High2Time = (LONG)(Time >> 32);
+    SharedUserData->SystemTime.LowPart   = (ULONG)Time;
+    SharedUserData->SystemTime.High1Time = (LONG)(Time >> 32);
+
+    //
+    // Tick count advances by one; the low part is mirrored into the shared page
+    // (NtGetTickCount reads SharedUserData->TickCountLow; KeQueryTickCount reads
+    // the KeTickCount global).
+    //
+
+    Time = ((ULONGLONG)(ULONG)KeTickCount.High1Time << 32) |
+           (ULONGLONG)KeTickCount.LowPart;
+    Time += 1;
+    SharedUserData->TickCountLow = (ULONG)Time;
+    KeTickCount.High2Time = (LONG)(Time >> 32);
+    KeTickCount.LowPart   = (ULONG)Time;
+    KeTickCount.High1Time = (LONG)(Time >> 32);
+}
+
+#else
 
 //
 // Advance the 64-bit tick count using the High1/High2 ordering so a reader
@@ -81,6 +210,8 @@ static VOID KiClockTick(VOID)
     KeTickCount.High1Time = (LONG)(Count >> 32);
 }
 
+#endif
+
 //
 // Interrupt dispatcher, called from the IRQ entry (trap.S) with interrupts
 // masked. Identify the source, service it, acknowledge, and return. The clock
@@ -92,6 +223,10 @@ VOID KiInterruptDispatch(VOID)
     if ((REG(IRQ_PENDING1) & ST3_IRQ) != 0) {
         REG(ST_CS) = ST3_IRQ;                               // acknowledge the match
         REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;         // re-arm
+#if KI_RUN_EXECUTIVE
+        KeUpdateSystemTime((struct _KTRAP_FRAME *)0, HalpCurrentTimeIncrement);
+#else
         KiClockTick();
+#endif
     }
 }

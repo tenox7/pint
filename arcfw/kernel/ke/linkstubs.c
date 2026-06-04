@@ -36,6 +36,20 @@ Environment:
 // system timer, the interrupt path, and the framebuffer + serial console - the
 // work a real HAL's HalInitSystem would do - so report success for both phases.
 //
+// Phase 0 also establishes the system clock increment, the way the genuine HAL
+// does at HALFXS XXINITHL.C:168-171: prime the clock ISR's per-tick increment
+// (ke/clock.c HalpCurrentTimeIncrement) and call KeSetTimeIncrement to publish
+// KeMaximumIncrement / KeTimeIncrement / KeTimeAdjustment / KiTickOffset. Without
+// this KeMaximumIncrement stays 0, so ExComputeTickCountMultiplier computes a
+// degenerate TickCountMultiplier and KeUpdateSystemTime never advances real time.
+// The MAXIMUM/MINIMUM increments are the genuine Jazz values (JAZZDEF.H), in
+// 100-ns units (~10 ms tick, ~1 ms granularity).
+//
+
+#define HAL_MAXIMUM_INCREMENT 100000u
+#define HAL_MINIMUM_INCREMENT 10000u
+
+extern ULONG HalpCurrentTimeIncrement;                  // ke/clock.c
 
 BOOLEAN
 HalInitSystem (
@@ -43,8 +57,13 @@ HalInitSystem (
     IN PLOADER_PARAMETER_BLOCK LoaderBlock
     )
 {
-    UNREFERENCED_PARAMETER(Phase);
     UNREFERENCED_PARAMETER(LoaderBlock);
+
+    if (Phase == 0) {
+        HalpCurrentTimeIncrement = HAL_MAXIMUM_INCREMENT;
+        KeSetTimeIncrement(HAL_MAXIMUM_INCREMENT, HAL_MINIMUM_INCREMENT);
+    }
+
     return TRUE;
 }
 

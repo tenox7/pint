@@ -966,6 +966,55 @@ MiArmRealL2Va (
         MiArmL1[M] = (((ULONG)l2 - KSEG0) & 0xFFFFFC00) | 0x1;
     return (ULONG)l2;
 }
+
+//
+// Eagerly map the fixed KUSER_SHARED_DATA page (KI_USER_SHARED_DATA) as a real,
+// persistent, kernel-writable Normal page during MM init - the un-fake of the
+// demand-zero scaffold (MiArmIsSharedData). On MIPS the shared page becomes valid
+// during MiInitMachineDependent's page-table buildout, so it is live before
+// MMINIT.C:688 double-maps the user read-only alias at MM_SHARED_USER_DATA_VA (that
+// alias is undefined on ARM and deferred to Phase 1). Here we install the kernel
+// mapping through the same private real ARMv7 L2 the executive fault-fill uses
+// (MiArmRealL2Va wires the
+// hardware L1, a real free page off the MM list backs it), so KeUpdateSystemTime
+// (ke/clock.c) writes time into a page that already exists and the page is never
+// discovered by a Phase-0 demand fault (MiArmExecSharedData stays 0). The page may
+// be > 512 MB physical, so it is zeroed through its new VA, not a KSEG0 alias.
+//
+
+static ULONG MiArmSharedDataPfn;
+
+VOID
+MiArmMapSharedUserData (VOID)
+{
+    ULONG Va = KI_USER_SHARED_DATA & ~0xFFFu;
+    ULONG M = Va >> 20;
+    ULONG idx = (Va >> 12) & 0xFF;
+    volatile ULONG *l2;
+    ULONG pfn;
+
+    if (MiArmSharedDataPfn != 0)                     // idempotent
+        return;
+
+    l2 = (volatile ULONG *)MiArmRealL2Va(M);        // alloc the private hw L2 + wire L1[M]
+    if (l2 == 0)
+        return;
+    if ((l2[idx] & 0x3) != 0) {                      // already backed (e.g. faulted in early)
+        MiArmSharedDataPfn = l2[idx] >> PAGE_SHIFT;  // record it so the map stays idempotent
+        return;
+    }
+
+    pfn = MiArmDemandPage();                         // a real free page off the MM list
+    if (pfn == 0)
+        return;
+
+    l2[idx] = ((pfn << PAGE_SHIFT) & 0xFFFFF000) | SMALL_PAGE_NORMAL_RW;
+    MiArmTlbiMva(Va);
+    MiArmZeroPages((PVOID)Va, PAGE_SIZE);            // zero via the new mapping (page may be > 512 MB)
+    MiArmSharedDataPfn = pfn;
+}
+
+ULONG MiArmGetSharedDataPfn (VOID) { return MiArmSharedDataPfn; }
 #endif
 
 #if !KI_RUN_EXECUTIVE

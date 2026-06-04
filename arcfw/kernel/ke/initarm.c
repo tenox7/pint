@@ -68,10 +68,10 @@ extern ULONG MiArmGetPoolPages(VOID);
 // PFN database and left every free page ReferenceCount==0 (its own page-table
 // pages come from a disjoint arena), so here we color-init and thread those free
 // pages onto MmPageLocationList[FreePageList] via the genuine MiInsertPageInList
-// over the byte-compatible MmPfnDatabase. MiInsertPageInList bumps MmAvailablePages;
-// the caller self-tests MiRemoveAnyPage and then resets MmAvailablePages to 0 so
-// MmInitSystem still early-returns at MMINIT.C:457 (the system-cache build, which
-// needs the ARMv7 page-table-model reconciliation, is the next milestone).
+// over the byte-compatible MmPfnDatabase. MiInsertPageInList bumps MmAvailablePages,
+// which the caller now leaves LIVE (Item B): MmInitSystem no longer early-returns at
+// MMINIT.C:457 but proceeds into the system-cache build + MiBuildPagedPool, whose
+// system-region PTE windows are backed on demand by ke/mmuarm.c MiArmTryFillFault.
 //
 
 static ULONG
@@ -301,6 +301,23 @@ MiInitMachineDependent (
 
         KiEmit("  real MM free lists   : threaded "); KiEmitHex(threaded);
         KiEmit(" pages, MmAvailablePages="); KiEmitHex(MmAvailablePages);
+        KiEmit("\n");
+    }
+
+    //
+    // Eagerly map the fixed KUSER_SHARED_DATA page (the un-fake of the demand-zero
+    // scaffold): now that the real free lists are up, install it as a permanent
+    // live page so KeUpdateSystemTime writes time into a page that already exists -
+    // no Phase-0 demand fault (MiArmExecSharedData stays 0). Needs MiArmDemandPage,
+    // so it runs after MiArmInitRealFreeLists.
+    //
+    {
+        extern VOID  MiArmMapSharedUserData(VOID);
+        extern ULONG MiArmGetSharedDataPfn(VOID);
+
+        MiArmMapSharedUserData();
+        KiEmit("  KUSER_SHARED_DATA    : pre-mapped, pfn=");
+        KiEmitHex(MiArmGetSharedDataPfn());
         KiEmit("\n");
     }
 }

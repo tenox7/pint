@@ -592,6 +592,37 @@ KiArmReportInitialized (
     KiArmStartClock();
     KeLowerIrql(PASSIVE_LEVEL);
 
+#if KI_RUN_EXECUTIVE
+    //
+    // At the genuine ~10 ms NT tick (100 Hz) a per-tick line would flood the
+    // console, so report once per ~1 s and show the LIVE system time the genuine
+    // KeUpdateSystemTime is now writing into the KUSER_SHARED_DATA page: a
+    // non-zero, monotonically-advancing KeQuerySystemTime / InterruptTime is the
+    // proof that the page is live (it returned 0 before this increment).
+    //
+    {
+        ULONG LastReport = (ULONG)KeTickCount.LowPart;
+        for (;;) {
+            ULONG Tick = (ULONG)KeTickCount.LowPart;
+            if (Tick - LastReport >= 100) {
+                LARGE_INTEGER SystemTime, InterruptTime;
+                LastReport = Tick;
+                KeQuerySystemTime(&SystemTime);
+                KiQueryInterruptTime(&InterruptTime);
+                emit("  tick=");
+                emit_hex(Tick);
+                emit("  SystemTime=");
+                emit_hex((ULONG)SystemTime.HighPart);
+                emit_hex((ULONG)SystemTime.LowPart);
+                emit("  InterruptTime=");
+                emit_hex((ULONG)InterruptTime.HighPart);
+                emit_hex((ULONG)InterruptTime.LowPart);
+                emit("\n");
+            }
+            __asm__ __volatile__("wfi");
+        }
+    }
+#else
     {
         ULONG Last = 0;
         for (;;) {
@@ -605,6 +636,7 @@ KiArmReportInitialized (
             __asm__ __volatile__("wfi");
         }
     }
+#endif
 }
 
 //
