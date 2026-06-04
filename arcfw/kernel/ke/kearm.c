@@ -100,7 +100,7 @@ extern VOID KiArmInitializeVectors(VOID);
 extern VOID KiArmStartClock(VOID);
 extern VOID KiArmSpinMicroseconds(ULONG Microseconds);
 extern VOID HalpInitializeInterrupts(VOID);
-extern VOID HalpClockInterrupt0(VOID);
+extern VOID HalpClockInterrupt0(PKTRAP_FRAME TrapFrame);
 extern VOID MiArmReportPaging(VOID);
 extern VOID MiArmInitMachineDependent(PLOADER_PARAMETER_BLOCK LoaderBlock);
 #if KI_RUN_EXECUTIVE
@@ -922,7 +922,11 @@ KiArmReportInitialized (
     // console, so report once per ~1 s and show the LIVE system time the genuine
     // KeUpdateSystemTime is now writing into the KUSER_SHARED_DATA page: a
     // non-zero, monotonically-advancing KeQuerySystemTime / InterruptTime is the
-    // proof that the page is live (it returned 0 before this increment).
+    // proof that the page is live (it returned 0 before this increment). Also show
+    // the run-time counters KeUpdateRunTime now bills on every full tick: the idle
+    // loop runs in kernel mode at PASSIVE_LEVEL, so each tick charges the idle
+    // thread's and the processor's KernelTime - advancing ~1:1 with the tick count
+    // is the proof that the trap-frame run-time accounting is live.
     //
     {
         ULONG LastReport = (ULONG)KeTickCount.LowPart;
@@ -941,6 +945,10 @@ KiArmReportInitialized (
                 emit("  InterruptTime=");
                 emit_hex((ULONG)InterruptTime.HighPart);
                 emit_hex((ULONG)InterruptTime.LowPart);
+                emit("  KernelTime[idle/cpu]=");
+                emit_hex(Prcb->CurrentThread->KernelTime);
+                emit("/");
+                emit_hex(Prcb->KernelTime);
                 emit("\n");
             }
             __asm__ __volatile__("wfi");

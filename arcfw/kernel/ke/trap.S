@@ -110,19 +110,76 @@ KiFiqEntry:
     mov     r3, lr
     b       KiArmTrapReport
 
-@ IRQ: the real interrupt entry/exit. Save the return state, switch to the SVC
-@ (kernel) stack with interrupts masked, dispatch in C, then restore and return
-@ to the interrupted instruction. Volatile registers (r0-r3, r12, lr) are saved;
-@ the C dispatcher preserves r4-r11 per AAPCS, so the full context is preserved.
+@ KTRAP_FRAME field offsets (must match inc/arm.h _KTRAP_FRAME; a _Static_assert
+@ in ke/clock.c guards against drift). The frame holds the volatile state captured
+@ on an interrupt/exception: r0-r3, r12, the banked sp/lr, the resume Pc and saved
+@ Cpsr, then software-managed fields (OldIrql is filled by HalBeginSystemInterrupt).
+.equ TrR0,               0
+.equ TrR12,              16
+.equ TrSp,               20
+.equ TrLr,               24
+.equ TrPc,               28
+.equ TrCpsr,             32
+.equ TrFpscr,            36
+.equ TrExceptionActive,  40
+.equ TrPreviousMode,     44
+.equ TrOldIrql,          48
+.equ TrFaultAddress,     52
+.equ TrFaultStatus,      56
+.equ TrOnInterruptStack, 60
+.equ KTRAP_FRAME_LENGTH, 64
+
+@ IRQ: the real interrupt entry/exit. Build a KTRAP_FRAME (inc/arm.h) on the SVC
+@ (kernel) stack capturing the interrupted volatile state, and pass its address in
+@ r0 to the C interrupt distributor; the C distributor and ISRs preserve r4-r11 per
+@ AAPCS, so the full context is preserved. Interrupts stay masked through dispatch.
+@ The return uses the IRQ-stack srs/rfe frame, so the dispatcher's reads of
+@ TrapFrame->Cpsr/OldIrql (KeUpdateRunTime billing) are honored while edits to
+@ Pc/Cpsr are not yet propagated to the return path - the scheduler's context-
+@ switch consumption of those fields arrives with the dispatcher (increment 6).
+@ The banked sp/lr captured are the SVC sp/lr: post-boot IRQs are only taken in
+@ the SVC-mode idle loop (user-mode capture lands when user mode does).
 KiIrqEntry:
-    sub     lr, lr, #4                  @ lr = interrupted instruction (resume point)
-    srsdb   sp!, #0x12                  @ push {lr, spsr} onto the IRQ-mode stack
+    sub     lr, lr, #4                  @ lr_irq = interrupted instruction (resume PC)
+    srsdb   sp!, #0x12                  @ IRQ stack <- {resume_pc, spsr_irq} (kept for rfe)
     cps     #0x13                       @ to SVC mode (kernel stack); IRQs stay masked
-    push    {r0-r3, r12, lr}            @ save volatiles + SVC lr (24 bytes; 8-aligned)
-    bl      KiInterruptDispatch
-    pop     {r0-r3, r12, lr}
+
+    sub     sp, sp, #KTRAP_FRAME_LENGTH @ reserve the trap frame on the SVC stack
+    stm     sp, {r0-r3}                 @ TrR0..TrR3
+    str     r12, [sp, #TrR12]           @ TrR12
+    add     r0, sp, #KTRAP_FRAME_LENGTH @ r0 = interrupted SVC sp (before the reserve)
+    str     r0, [sp, #TrSp]             @ TrSp (banked SVC sp)
+    str     lr, [sp, #TrLr]             @ TrLr (banked SVC lr)
+
+    @ Recover {resume_pc, spsr} the srsdb left on the IRQ stack (peek, do not pop -
+    @ the final rfe consumes them). r0-r3 are already saved, so r0/r1 are free.
+    cps     #0x12                       @ IRQ mode: sp = sp_irq -> [resume_pc, spsr]
+    ldr     r0, [sp]                    @ resume_pc
+    ldr     r1, [sp, #4]                @ spsr_irq
+    cps     #0x13                       @ back to SVC mode
+    str     r0, [sp, #TrPc]             @ TrPc
+    str     r1, [sp, #TrCpsr]           @ TrCpsr
+
+    @ Clear the software-managed tail so the distributor sees a clean frame.
+    mov     r1, #0
+    str     r1, [sp, #TrFpscr]
+    str     r1, [sp, #TrExceptionActive]
+    str     r1, [sp, #TrPreviousMode]
+    str     r1, [sp, #TrOldIrql]
+    str     r1, [sp, #TrFaultAddress]
+    str     r1, [sp, #TrFaultStatus]
+    str     r1, [sp, #TrOnInterruptStack]
+
+    mov     r0, sp                      @ r0 = PKTRAP_FRAME
+    bl      KiInterruptDistribution
+
+    ldm     sp, {r0-r3}                 @ restore TrR0..TrR3 (dispatcher preserved r4-r11)
+    ldr     r12, [sp, #TrR12]
+    ldr     lr, [sp, #TrLr]             @ restore banked SVC lr
+    add     sp, sp, #KTRAP_FRAME_LENGTH @ pop the trap frame
+
     cps     #0x12                       @ back to IRQ mode
-    rfeia   sp!                         @ pop {pc, cpsr} -> return to interrupted code
+    rfeia   sp!                         @ pop {resume_pc, spsr} -> return to interrupted code
 
 @ VOID KiArmInitializeVectors(VOID) - select VBAR vectors (SCTLR.V=0) and install
 @ the table. Called from KiArmInitialize before KiInitializeKernel.

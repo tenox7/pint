@@ -44,7 +44,17 @@ Environment:
 #define HAL_CLOCK_BANK  1u
 #define HAL_CLOCK_BIT   3u
 
-extern VOID HalpClockInterrupt0(VOID);          // ke/clock.c - the clock ISR
+extern VOID HalpClockInterrupt0(PKTRAP_FRAME TrapFrame);     // ke/clock.c - the clock ISR
+
+//
+// Device interrupt service routines receive the trap frame the IRQ entry built
+// (ke/trap.S), so the clock ISR can hand it to KeUpdateSystemTime/KeUpdateRunTime
+// for per-tick run-time accounting. PCR->InterruptRoutine[] is the generic
+// PKINTERRUPT_ROUTINE; a device vector is dispatched through this signature (the
+// software-interrupt vectors [APC_LEVEL]/[DISPATCH_LEVEL] keep the VOID form).
+//
+
+typedef VOID (*PKI_DEVICE_ISR)(PKTRAP_FRAME TrapFrame);
 
 //
 // HalpInitializeInterrupts - the XXINITNT.C analog. Bring the BCM controllers to a
@@ -97,23 +107,87 @@ HalpInitializeInterrupts (
 }
 
 //
-// KiInterruptDispatch - the generic interrupt distributor (the KiInterruptException
-// analog), called from ke/trap.S KiIrqEntry with interrupts masked. Identify the
-// highest-priority pending source, resolve it to its IRQL vector, and call its ISR
-// through PCR->InterruptRoutine[] - the genuine "dispatch by vector, one ISR per
-// interrupt" model. The clock is the only wired source today (legacy bank 1, bit 3
-// -> CLOCK2_LEVEL). ACK happens inside the ISR at the source device (the BCM
+// KiInterruptDistribution - the generic interrupt distributor (the MIPS
+// KiInterruptException / X4TRAP.S analog), called from ke/trap.S KiIrqEntry with
+// interrupts masked and the freshly-built KTRAP_FRAME in r0. Identify the highest-
+// priority pending source, resolve it to its IRQL vector, and call its ISR through
+// PCR->InterruptRoutine[], passing the trap frame so the ISR can drive per-tick
+// run-time accounting - the genuine "dispatch by vector, one ISR per interrupt"
+// model. The clock is the only wired source today (legacy bank 1, bit 3 ->
+// CLOCK2_LEVEL). The IRQL raise/lower bracket lives in the ISR (HalBegin/End
+// SystemInterrupt); ACK happens inside the ISR at the source device (the BCM
 // controllers have no EOI). Additional sources, the per-core IRQ_SOURCE priority
 // decode, and genuine nesting arrive with the multi-device increment.
 //
+// (NB: the name is KiInterruptDistribution, not KiInterruptDispatch - the latter
+// is NT's KINTERRUPT driver-ISR dispatcher, VOID-signatured in ki.h.)
+//
 
 VOID
-KiInterruptDispatch (
-    VOID
+KiInterruptDistribution (
+    IN PKTRAP_FRAME TrapFrame
     )
 {
     if ((HalpBcmPending(HAL_CLOCK_BANK) & (1u << HAL_CLOCK_BIT)) != 0)
-        PCR->InterruptRoutine[CLOCK2_LEVEL]();
+        ((PKI_DEVICE_ISR)PCR->InterruptRoutine[CLOCK2_LEVEL])(TrapFrame);
+}
+
+//
+// HalBeginSystemInterrupt / HalEndSystemInterrupt - the IRQL bracket an interrupt
+// service routine wraps itself in (the x86 HAL model; NT keeps these HAL-private,
+// declared in inc/halirq.h). The BCM controllers have NO in-controller acknowledge
+// (no EOI register), so this bracket is thin: Begin only raises IRQL and rejects a
+// spurious assert, End only lowers it. The interrupt is acknowledged at the SOURCE
+// device by the ISR (e.g. ke/clock.c writes the system-timer CS), never here - a
+// controller EOI write would be a silent no-op and the line would re-assert into an
+// interrupt storm.
+//
+
+BOOLEAN
+HalBeginSystemInterrupt (
+    IN KIRQL Irql,
+    IN ULONG Vector,
+    OUT PKIRQL OldIrql
+    )
+{
+    //
+    // Spurious-reject (the X4TRAP.S deassert race): an interrupt can assert and then
+    // deassert before the dispatcher reads the controller. If the source's pending
+    // bit is no longer set this is not a real interrupt - leave IRQL untouched and
+    // return FALSE so the ISR returns without acknowledging a phantom. The system
+    // timer stays pending until its CS match bit is cleared, so a real tick passes.
+    //
+
+    if (Vector <= HAL_MAXIMUM_BCM_VECTOR &&
+        (HalpBcmPending(HAL_VECTOR_BANK(Vector)) & (1u << HAL_VECTOR_BIT(Vector))) == 0)
+        return FALSE;
+
+    //
+    // Raise to the interrupt's IRQL and return the level to restore. CPSR.I is
+    // already masked (the CPU masked it on IRQ entry); KeRaiseIrql at the clock's
+    // CLOCK2_LEVEL (>= DISPATCH_LEVEL) keeps it masked through the ISR.
+    //
+
+    KeRaiseIrql(Irql, OldIrql);
+    return TRUE;
+}
+
+VOID
+HalEndSystemInterrupt (
+    IN KIRQL Irql,
+    IN ULONG Vector
+    )
+{
+    UNREFERENCED_PARAMETER(Vector);
+
+    //
+    // Lower back to the interrupted IRQL. KeLowerIrql's tail delivers any software
+    // interrupt that became eligible during the ISR - e.g. the DISPATCH_LEVEL
+    // request KeUpdateRunTime raises on a thread quantum end drains the DPC queue
+    // here, before the interrupt returns.
+    //
+
+    KeLowerIrql(Irql);
 }
 
 //

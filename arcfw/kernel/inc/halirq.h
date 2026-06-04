@@ -106,4 +106,16 @@ HalpBcmPending (ULONG Bank)
     return HAL_REG(Bank == 2 ? HAL_IRQ_PEND2 : HAL_IRQ_PEND1);
 }
 
+//
+// HAL system-interrupt entry/exit bracket (ke/halirq.c). These are HAL-private (NT
+// keeps them out of the public hal.h, which declares only HalRequestSoftwareInterrupt),
+// so they are declared here for the kernel's interrupt path. HalBeginSystemInterrupt
+// raises to the interrupt's IRQL and returns the level to restore (rejecting a
+// spurious assert); HalEndSystemInterrupt lowers back, delivering any software
+// interrupt that became eligible. Declared after ki.h is in scope (KIRQL/PKIRQL).
+//
+
+BOOLEAN HalBeginSystemInterrupt (IN KIRQL Irql, IN ULONG Vector, OUT PKIRQL OldIrql);
+VOID    HalEndSystemInterrupt   (IN KIRQL Irql, IN ULONG Vector);
+
 #endif // _HALIRQ_H_

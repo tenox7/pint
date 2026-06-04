@@ -31,9 +31,11 @@ Abstract:
         The clock runs at the genuine ~10 ms NT rate, with the per-tick increment
         established by KeSetTimeIncrement (HalInitSystem, ke/linkstubs.c).
 
-    The timer-table expiration scan and the KeUpdateRunTime tail (thread-quantum
-    and run-time billing) of the genuine KeUpdateSystemTime need a populated
-    KTRAP_FRAME and the dispatcher; they arrive with the scheduler (Phase 1).
+    The genuine KeUpdateRunTime tail (per-tick thread/process/processor run-time
+    billing and thread-quantum decrement) runs on a full tick, consuming the
+    KTRAP_FRAME the IRQ entry (ke/trap.S) builds. The timer-table expiration scan
+    needs the dispatcher's timer database and stays deferred to the scheduler
+    (Phase 1).
 
 Environment:
 
@@ -47,6 +49,30 @@ Environment:
 #ifndef KI_RUN_EXECUTIVE
 #define KI_RUN_EXECUTIVE 0
 #endif
+
+//
+// The IRQ entry (ke/trap.S) builds the KTRAP_FRAME by hand using .equ offset
+// constants; assert here that they still match inc/arm.h _KTRAP_FRAME so the two
+// representations can never silently drift.
+//
+
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, R0)               ==  0, "TrR0");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, R1)               ==  4, "R1");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, R2)               ==  8, "R2");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, R3)               == 12, "R3");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, R12)              == 16, "TrR12");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, Sp)               == 20, "TrSp");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, Lr)               == 24, "TrLr");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, Pc)               == 28, "TrPc");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, Cpsr)             == 32, "TrCpsr");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, Fpscr)            == 36, "TrFpscr");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, ExceptionActive)  == 40, "TrExceptionActive");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, PreviousMode)     == 44, "TrPreviousMode");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, OldIrql)          == 48, "TrOldIrql");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, FaultAddress)     == 52, "TrFaultAddress");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, FaultStatus)      == 56, "TrFaultStatus");
+_Static_assert(__builtin_offsetof(KTRAP_FRAME, OnInterruptStack) == 60, "TrOnInterruptStack");
+_Static_assert(((sizeof(KTRAP_FRAME) + 7) & ~7u)                 == 64, "KTRAP_FRAME_LENGTH");
 
 //
 // BCM2835 system timer (1 MHz free-running). The interrupt-controller registers
@@ -153,11 +179,11 @@ VOID KiArmSpinMicroseconds(ULONG Microseconds)
 // value, never a torn one. This is a uniprocessor kernel, so program-order stores
 // to the volatile fields suffice (the same CPU observes its own writes in order).
 //
-// The KiTimerTableListHead expiration scan (queue KiTimerExpireDpc, request a
-// DISPATCH software interrupt) and the KeUpdateRunTime tail (charge the tick to
-// thread/process/DPC/interrupt time and decrement the thread quantum) require a
-// populated KTRAP_FRAME and the dispatcher database - deferred to the scheduler
-// (Phase 1).
+// On a full tick the KeUpdateRunTime tail (charge the tick to thread/process/DPC/
+// interrupt time per the trap frame, and decrement the thread quantum) now runs -
+// it consumes the KTRAP_FRAME the IRQ entry builds (ke/trap.S). The
+// KiTimerTableListHead expiration scan (queue KiTimerExpireDpc) still needs the
+// timer database the dispatcher manages, so it stays deferred to Phase 1.
 //
 
 VOID
@@ -167,8 +193,6 @@ KeUpdateSystemTime (
     )
 {
     ULONGLONG Time;
-
-    UNREFERENCED_PARAMETER(TrapFrame);
 
     //
     // Interrupt time advances on every interrupt by the time increment.
@@ -214,6 +238,90 @@ KeUpdateSystemTime (
     KeTickCount.High2Time = (LONG)(Time >> 32);
     KeTickCount.LowPart   = (ULONG)Time;
     KeTickCount.High1Time = (LONG)(Time >> 32);
+
+    //
+    // A full tick completed: charge thread/process/processor run time and decrement
+    // the current thread's quantum (the KeUpdateRunTime tail of XXCLOCK.S). The
+    // KiTimerTableListHead expiration scan that also runs here stays deferred to the
+    // dispatcher (Phase 1).
+    //
+
+    KeUpdateRunTime(TrapFrame);
+}
+
+//
+// KeUpdateRunTime - the KE/MIPS/XXCLOCK.S tail (lines 286-396). Run on every full
+// tick to bill the elapsed quantum to the current thread, its process, and the
+// processor, and to decrement the thread's quantum, requesting a dispatch interrupt
+// on a quantum end. The accounting bucket is selected by the interrupted context
+// captured in the trap frame (ke/trap.S): the saved CPSR's mode field gives kernel
+// vs user, and the recorded OldIrql distinguishes thread-kernel / DPC / interrupt
+// time. A uniprocessor kernel, so the process-time updates need no interlock.
+//
+
+VOID
+KeUpdateRunTime (
+    IN PKTRAP_FRAME TrapFrame
+    )
+{
+    extern UCHAR KiClockQuantumDecrement;
+    PKPRCB Prcb = PCR->Prcb;
+    PKTHREAD Thread = Prcb->CurrentThread;
+    PKPROCESS Process = Thread->ApcState.Process;
+    SCHAR Quantum;
+
+    //
+    // ARM CPSR mode field (bits [4:0]) == 0b10000 is User mode; any other value is
+    // a privileged (kernel) mode (post-boot interrupts are taken in SVC).
+    //
+
+    if ((TrapFrame->Cpsr & 0x1Fu) == 0x10u) {
+
+        //
+        // Previous mode user: charge thread, process, and processor user time.
+        //
+
+        Thread->UserTime += 1;
+        Process->UserTime += 1;
+        Prcb->UserTime += 1;
+
+    } else {
+
+        KIRQL OldIrql = (KIRQL)TrapFrame->OldIrql;
+
+        //
+        // Previous mode kernel. Above DISPATCH_LEVEL is interrupt-service time; at
+        // DISPATCH_LEVEL with a DPC running is DPC time; otherwise the current
+        // thread's kernel time. Interrupt/DPC time is charged to the processor only
+        // (no thread/process owns it), thread-kernel time to all three.
+        //
+
+        if (OldIrql > DISPATCH_LEVEL) {
+            Prcb->InterruptTime += 1;
+            Prcb->KernelTime += 1;
+        } else if (OldIrql == DISPATCH_LEVEL && PCR->DpcRoutineActive) {
+            Prcb->DpcTime += 1;
+            Prcb->KernelTime += 1;
+        } else {
+            Thread->KernelTime += 1;
+            Process->KernelTime += 1;
+            Prcb->KernelTime += 1;
+        }
+    }
+
+    //
+    // Decrement the current thread's quantum (KiDecrementQuantum). On a quantum end,
+    // flag the PRCB and request a DISPATCH_LEVEL software interrupt: it drains the
+    // DPC queue now (at the HalEndSystemInterrupt -> KeLowerIrql tail) and will run
+    // the scheduler's quantum-end reschedule once the dispatcher exists (Phase 1).
+    //
+
+    Quantum = (SCHAR)(Thread->Quantum - (SCHAR)KiClockQuantumDecrement);
+    Thread->Quantum = Quantum;
+    if (Quantum <= 0) {
+        Prcb->QuantumEnd = (ULONG)TrapFrame;
+        KiRequestSoftwareInterrupt(DISPATCH_LEVEL);
+    }
 }
 
 #else
@@ -247,13 +355,28 @@ static VOID KiClockTick(VOID)
 // executive kernel) or advance the tick counter (the minimal kernel).
 //
 
-VOID HalpClockInterrupt0(VOID)
+VOID HalpClockInterrupt0(PKTRAP_FRAME TrapFrame)
 {
+    KIRQL OldIrql;
+
+    //
+    // Raise to CLOCK2_LEVEL through the HAL bracket (rejecting a spurious assert)
+    // and record the interrupted IRQL in the trap frame so KeUpdateRunTime can bill
+    // the tick to the right bucket (thread/DPC/interrupt time).
+    //
+
+    if (!HalBeginSystemInterrupt(CLOCK2_LEVEL, HAL_TIMER_IRQ, &OldIrql))
+        return;
+    TrapFrame->OldIrql = OldIrql;
+
     REG(ST_CS) = ST3_IRQ;                               // acknowledge the match at the device
     REG(ST_C3) = REG(ST_CLO) + KI_CLOCK_PERIOD;         // re-arm the next tick
+
 #if KI_RUN_EXECUTIVE
-    KeUpdateSystemTime((struct _KTRAP_FRAME *)0, HalpCurrentTimeIncrement);
+    KeUpdateSystemTime(TrapFrame, HalpCurrentTimeIncrement);
 #else
     KiClockTick();
 #endif
+
+    HalEndSystemInterrupt(OldIrql, HAL_TIMER_IRQ);      // lower IRQL (+ drain software ints)
 }

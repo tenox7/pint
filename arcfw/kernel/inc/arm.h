@@ -227,7 +227,7 @@ KeProfileInterrupt (
 
 NTKERNELAPI
 VOID
-KeUpdateRuntime (
+KeUpdateRunTime (
     IN struct _KTRAP_FRAME *TrapFrame
     );
 
