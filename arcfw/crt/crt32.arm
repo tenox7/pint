@@ -38,7 +38,14 @@ LOWIO lowio/arm/cinitcon.asm
 STDIO stdio/arm/cinitstd.asm
 STDIO stdio/arm/cinittmp.asm
 TIME time/arm/cinitclk.asm
-HELPER helper/arm/rthelp.asm
+HELPER helper/arm/sdiv.asm
+HELPER helper/arm/udiv.asm
+HELPER helper/arm/sdiv64.asm
+HELPER helper/arm/udiv64.asm
+HELPER helper/arm/srsh.asm
+HELPER helper/arm/ursh.asm
+HELPER helper/arm/divby0.asm
+HELPER helper/arm/chkstk.asm
 HELPER helper/arm/rthelpc.c
 TRAN asincos.c
 TRAN atan.c
@@ -59,6 +66,7 @@ TRAN tan.c
 TRAN tanh.c
 TRAN fp32/tran/arm/fpctrl.asm
 TRAN fp32/tran/arm/frnd.asm
+TRAN fp32/tran/arm/dtoul.asm
 TRAN fp32/tran/arm/huge.asm
 TRAN fp32/tran/arm/ieee.c
 TRAN fp32/tran/arm/filter.c

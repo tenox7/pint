@@ -4,9 +4,9 @@
 # Supports what the recipes use: macros (also NAME=value lines in NMK_MACROS;
 # undefined ones are empty, as in nmake),
 # continued command lines, "type << > f" and "type << >> f" inline files,
-# "type a >> b", hextract, hsplit, "wcshdr < a > b", midl, mc, copy, del/erase, lib
-# ($@ and $** as the target and its dependents) and "IF EXIST f cmd" with
-# commands joined by "&". Paths come out with "/" and the
+# "type a >> b", hextract, hsplit, "wcshdr < a > b", midl, mc, copy, del/erase, lib, rcpp, solidpp
+# ($@ and $** as the target and its dependents), inference rules ($< and $*), comment lines
+# in recipes and "IF EXIST f cmd" with commands joined by "&". Paths come out with "/" and the
 # macros NMK_KEEP names (default SDKINC NTOSINC OAKINC BASEDIR) left as prefixes
 # for the caller to resolve. With NMK_DEPS set it prints the target's dependents
 # instead.
@@ -70,11 +70,34 @@ function command(cmd,    a, n, f) {
         return "nmk_wcshdr " a[3] " " a[5]
     if (a[1] == "type" && a[3] == ">>")
         return "nmk_cat " a[2] " " a[4]
+    if (a[1] == "rcpp" || a[1] == "solidpp")
+        return "nmk_" cmd
     return "echo \x27nmk: unsupported command: " cmd "\x27 >&2; exit 1"
+}
+
+# The commands of an inference rule .FROM.TO for the target, $< its source and $* its base.
+function infer(    r, e, ext, base, src, i, l) {
+    ext = tgt; sub(/^.*\./, "", ext)
+    for (r in infn) {
+        split(substr(r, 2), e, ".")
+        if (tolower(e[2]) != tolower(ext))
+            continue
+        base = substr(tgt, 1, length(tgt) - length(ext) - 1)
+        src = base "." e[1]
+        if (ENVIRON["NMK_DEPS"]) { print src; return }
+        for (i = 1; i <= infn[r]; i++) {
+            l = infc[r, i]
+            gsub(/\$</, src, l); gsub(/\$\*/, base, l); gsub(/\$@/, tgt, l)
+            l = expand(l); sub(/^[ \t]+/, "", l)
+            print command(l)
+        }
+        return
+    }
 }
 
 BEGIN {
     target = ENVIRON["NMK_TARGET"]
+    tgt = target; gsub(/\\/, "/", tgt)
     keep = ENVIRON["NMK_KEEP"] ? ENVIRON["NMK_KEEP"] : "SDKINC NTOSINC OAKINC BASEDIR"
     n = split(ENVIRON["NMK_MACROS"], d, "\n")
     for (i = 1; i <= n; i++)
@@ -87,6 +110,17 @@ BEGIN {
 inline {
     if ($0 == "<<") { print "NMK_EOF"; inline = 0; next }
     print
+    next
+}
+
+# Comment lines, in and out of recipes.
+/^#/ { next }
+
+# Inference rules (.FROM.TO:) and their commands, for a target without a rule of its own.
+ininf && /^[ \t]+[^ \t]/ { infc[inf, ++infn[inf]] = $0; next }
+ininf { ininf = 0 }
+!inrecipe && /^\.[A-Za-z0-9]+\.[A-Za-z0-9]+[ \t]*:/ {
+    inf = $0; sub(/[ \t]*:.*/, "", inf); infn[inf] = 0; ininf = 1
     next
 }
 
@@ -115,6 +149,7 @@ inline {
         deps = $0; sub(/^[^:]*:[ \t]*/, "", deps)
         headcont = sub(/\\[ \t]*$/, "", deps)
         inrecipe = 1
+        matched = 1
         if (!headcont && ENVIRON["NMK_DEPS"]) { print expand(deps); exit }
         next
     }
@@ -157,3 +192,5 @@ inrecipe && /^[ \t]+[^ \t]/ {
         for (i = 2; i <= n; i++) out = out "; " command(part[i])
     print out
 }
+
+END { if (!matched) infer() }

@@ -54,6 +54,27 @@ nmk_lib() {
     MSVC_ENV=0 WINEDEBUG=-all lib -nologo -out:$o $l > /tmp/nttarget.err 2>&1 || { cat /tmp/nttarget.err >&2; return 1; }
 }
 nmk_mc() { :; }    # mcinc.sh runs the mc recipes
+# a file a recipe makes, among the generated files of the component
+out() { echo "$(gen $D)/$(basename "$1" | tr A-Z a-z)"; }
+nmk_cat() { local s; s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; cat "$s" >> "$(out $2)"; }
+# the build tools of the recipes (tools/host.sh), on files of the tree or generated ones
+nmk_solidpp() {
+    local i f a=()
+    i=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; shift
+    for f; do a+=("$(out $f)"); done
+    bash /work/RASPI/tools/host.sh solidpp "$i" "${a[@]}" > /dev/null
+}
+nmk_rcpp() {
+    local f a=(-I$D -I$(gen $D))
+    while [ $# -gt 0 ]; do
+        case $1 in
+        -f) f=$(locate "$2") || { echo "nttarget: no $2" >&2; return 1; }; a+=(-f "$f"); shift 2 ;;
+        -g) a+=(-g "$(out $2)"); shift 2 ;;
+        *) a+=("$1"); shift ;;
+        esac
+    done
+    bash /work/RASPI/tools/host.sh rcpp "${a[@]}" > /dev/null
+}
 mk=$(resolve makefile.inc) || exit 0
 mkdir -p $(gen $D)
 set -f
@@ -73,7 +94,7 @@ target() {
         target "$d" || return 1
     done
     NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $K/nmk.awk $mk > /tmp/nttarget.sh
-    . /tmp/nttarget.sh
+    ( set -e; . /tmp/nttarget.sh ) || { echo "nttarget: $t failed" >&2; return 1; }
 }
 case $PHASE in
 pre) T="$(targets NTTARGETFILE0) $(targets NTTARGETFILES | grep -iE "\.(c|cxx|h|hxx)$")" ;;

@@ -1,4 +1,5 @@
           __C_specific_handler
+          _dtoul
           __jump_unwind
           setjmp
           _setjmpex

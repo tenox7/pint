@@ -3,9 +3,9 @@
 # directory, then its SOURCES INCLUDES (resolved case-insensitively, as NT's file
 # system does). NT's common include directories map to the header farm
 # (mkfarm.sh), as do the components it farmed; any other directory is farmed
-# under /tmp/f/dirs (its headers and the sources others include), with the
-# headers the build generated for it (/tmp/f/gen) and the message headers of its
-# makefile.inc (mcinc.sh).
+# under /tmp/f/dirs (its text files: headers and the other files sources include),
+# with the files the build generated for it (/tmp/f/gen) and the message headers of
+# its makefile.inc (mcinc.sh).
 # Usage: incdirs.sh componentdir "INCLUDES value"
 K=$(cd "$(dirname "$0")" && pwd)
 # Microsoft C takes the sources as they are but for the ARM gates.
@@ -16,8 +16,8 @@ farm() {
     mkdir -p "$2" && : > "$2/.farmed"
     # the message headers its makefile.inc makes, as the NT build made them first
     bash $K/mcinc.sh "$1" >&2
-    for f in "$1"/*.[Hh] "$1"/*.[Hh][Xx][Xx] "$1"/*.[Cc] "$1"/*.[Cc][Xx][Xx] "/tmp/f/gen/${1#/work/PRIVATE/}"/*.[Hh]; do
-        [ -e "$f" ] || continue
+    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/*; do
+        [ -f "$f" ] && grep -Iq . "$f" || continue
         filt "$f" > "$2/$(basename "$f" | tr A-Z a-z)"
     done
     # the sys\ headers, in their directory (incfix.sed)

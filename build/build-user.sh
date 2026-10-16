@@ -74,4 +74,11 @@ lib $W SHELL/PROGMAN; exe $W SHELL/PROGMAN progman
 # the network DDE agent winlogon starts with userinit
 lib $W NETDDE/SRC/TOOLKIT; dll $W NETDDE/SRC/NDEAPI/CLIENT; lib $W NETDDE/SRC/NDDEAGNT; exe $W NETDDE/SRC/NDDEAGNT nddeagnt
 
+# the common controls and the cards, then the accessories, the games, File Manager and the task list
+dll $W SHELL/MSCTLS; dll $W EP/CARDDLL
+for a in SHELL/ACCESORY/NOTEPAD:notepad SHELL/ACCESORY/CALC:calc SHELL/ACCESORY/CLOCK:clock SHELL/ACCESORY/UCHARMAP:charmap \
+         SHELL/GAMES/SOL:sol EP/WINMINE:winmine EP/FREECELL:freecell SHELL/TASKMAN:taskman SHELL/WINFILE:winfile; do
+    lib $W ${a%%:*}; exe $W ${a%%:*} ${a#*:}
+done
+
 exe /work/RASPI/arcfw/apps hello hello

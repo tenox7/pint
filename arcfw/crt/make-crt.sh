@@ -44,7 +44,9 @@ ntsrc misc/arm/chandler.c $DIR/chandler.c && ntcc $DIR/obj/chandler.obj $DIR/cha
 for s in jmpuwind setjmp setjmpex longjmp; do
   ntas $DIR/obj/$s.obj misc/arm/$s.asm -I/work/RASPI/obj/gen && n=$((n+1)) || fail=$((fail+1))
 done
-ntas $DIR/obj/rthelp.obj helper/arm/rthelp.asm -I/work/RASPI/obj/gen && n=$((n+1)) || fail=$((fail+1))
+for s in sdiv udiv sdiv64 udiv64 srsh ursh divby0 chkstk; do
+  ntas $DIR/obj/$s.obj helper/arm/$s.asm -I/work/RASPI/obj/gen && n=$((n+1)) || fail=$((fail+1))
+done
 # The floating point library of FP32NT (trannt.lib), which CRTLIB merges into
 # libcntpr.lib: its SOURCES (CRTLIBTYPE NT) and ARM sources (the TRAN of crt32.arm).
 T=/work/PRIVATE/FP32NT/TRAN

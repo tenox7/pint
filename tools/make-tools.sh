@@ -5,7 +5,7 @@
 # headers of the SDK of Microsoft C, as NT took them from the SDK of the machine it
 # was built on. Then the header pass (arcfw/kernel/mkgen.sh), ksarm.h, NT's C run-time
 # and the import libraries of kernel32, user32 and advapi32; then GENSRV, GENERR (and
-# rtl\error.h), RC, RCPP and MIDL with its parser tools, NT console programs of NT's
+# rtl\error.h), RC, RCPP, MIDL with its parser tools and SOLIDPP, NT console programs of NT's
 # headers and static C run-time (RC is its front end and RCDLL in one program), and the
 # import library of ntdll the registry tools take.
 #
@@ -121,6 +121,11 @@ ntc $T/rcpp $S/RCPP $(macro $S/RCPP C_DEFINES) -- $(srcs $S/RCPP)
 tr -d "\032\r" < $S/RCPP/RCPP.RC > $T/rcpp/rcpp.rc
 (cd $T/rcpp && host rc -r -fo rcpp.res -I. -I/tmp/f/pub -I/tmp/f/crt rcpp.rc > rc.err 2>&1) || { cat $T/rcpp/rc.err; exit 1; }
 prog rcpp libc $T/rcpp/*.obj $T/rcpp/rcpp.res
+
+# SOLIDPP, the id preprocessor of the Solitaire build (WINDOWS\SHELL\GAMES\SOL\MAKEFILE.INC)
+D=/work/PRIVATE/WINDOWS/SHELL/GAMES/SOL
+ntc $T/solidpp $D -- $D/SOLIDPP.C
+prog solidpp libc $T/solidpp/solidpp.obj
 
 # MIDL (RPC\MIDL20), the RPC interface compiler, and the parser tools of RPC\MIDLNEW
 # (midlyacc, midlpg, midleb) MIDL20\MAKEFIL0 makes its IDL and ACF grammars with.
