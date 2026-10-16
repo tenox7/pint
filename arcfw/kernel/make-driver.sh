@@ -19,7 +19,7 @@ COMP=${1:?usage: make-driver.sh COMPONENT}
 [ -f "$NT35/RASPI/obj/hal.lib" ] || { echo "run make-hal.sh first"; exit 1; }
 
 docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" \
-    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
@@ -81,6 +81,6 @@ link -nologo -machine:arm -release -driver -subsystem:native -entry:DriverEntry 
 OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/WINNT/System32/Drivers
 mkdir -p $OUT
 cp $DIR/$NAME.sys $OUT/$F
-[ $TYPE = EXPORT_DRIVER ] && cp $DIR/$NAME.lib $O/$NAME.lib
+[ $TYPE = EXPORT_DRIVER ] && ntimplib $DIR/$NAME.def $DIR/$NAME.lib $O/$NAME.lib
 echo "   wrote $OUT/$F"
 '

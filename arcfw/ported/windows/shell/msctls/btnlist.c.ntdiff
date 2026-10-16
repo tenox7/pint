@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/WINDOWS/SHELL/MSCTLS/BTNLIST.C
+=1 1 1331
++    return CallWindowProc(lpDefListBoxProc,hLB,WM_LBUTTONDOWN,(WPARAM)keyFlags,MAKELPARAM(x,y));
+=1 1333 76
++    return CallWindowProc(lpDefListBoxProc, hLB, WM_LBUTTONUP, (WPARAM)keyFlags, MAKELPARAM(x,y));
+=1 1410 64
+=1 1541 3
+=1 1476 249

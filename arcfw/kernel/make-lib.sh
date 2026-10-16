@@ -12,7 +12,7 @@ NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-lib.sh COMPONENT}
 
 docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
-    -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+    -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 D=$ROOT/$COMP
@@ -41,8 +41,8 @@ INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro INCLUDES)") -I/tmp/f/o
 echo ">> compiling $COMP ($NAME.lib)"
 srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx)$" | tr "\\\\" / | while read -r s; do
   d=$(cd $D && cd $(dirname $s) && pwd); b=$(basename $s | tr A-Z a-z); p=/work/RASPI/arcfw/ported/$(echo ${d#/work/PRIVATE/} | tr A-Z a-z)/$b
-  { n=$(ls $d | grep -ix $b) && echo $d/$n; } || { n=$(ls $d/.. | grep -ix $b) && echo $d/../$n; } ||
-  { [ -f $p ] && echo $p; } || echo /tmp/f/gen/${d#/work/PRIVATE/}/$b; done)
+  { [ -f $p ] && echo $p; } || { n=$(ls $d | grep -ix $b) && echo $d/$n; } ||
+  { n=$(ls $d/.. | grep -ix $b) && echo $d/../$n; } || echo /tmp/f/gen/${d#/work/PRIVATE/}/$b; done)
 # the farmed directory of a source of the tree outside the component (..\x.c),
 # where its quoted includes are found first
 srcinc() { local s=$(realpath $(dirname $1)); [ "$s" = "$(realpath $D)" ] && return; case $s in /work/PRIVATE/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }

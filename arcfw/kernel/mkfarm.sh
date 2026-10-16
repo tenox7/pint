@@ -15,7 +15,7 @@ SUBSYS=${SUBSYS:-KE RTL EX OB PS MM IO SE CONFIG LPC CACHE FSRTL RAW DBGK KD VDM
 
 # the header pass, when its inputs of the ARM port (the arch headers, the ported
 # makefiles, the filters, the tools) are newer than its output
-if [ -z "${MKGEN:-}" ] && { [ ! -f $G/.stamp ] || [ -n "$(find $K/inc $W/RASPI/arcfw/inc $W/RASPI/arcfw/ported/ntos $W/RASPI/arcfw/ported/windows $K/*.sed $K/nmk.awk $K/mkgen.sh $(for t in mc hextract hsplit wcshdr zwapi listmung; do echo $W/RASPI/obj/host/$(echo $t | tr a-z A-Z).EXE; done) -newer $G/.stamp -print -quit 2>/dev/null)" ]; }; then
+if [ -z "${MKGEN:-}" ] && { [ ! -f $G/.stamp ] || [ -n "$(find $K/inc $W/RASPI/arcfw/inc $W/RASPI/arcfw/ported/ntos/makefil0 $W/RASPI/arcfw/ported/windows/makefil0 $K/*.sed $K/nmk.awk $K/mkgen.sh $(for t in mc hextract hsplit wcshdr zwapi listmung; do echo $W/RASPI/obj/host/$(echo $t | tr a-z A-Z).EXE; done) -newer $G/.stamp -print -quit 2>/dev/null)" ]; }; then
     bash $K/mkgen.sh >&2 || exit 1
 fi
 

@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/SHELL/COMDLG/COLOR.C
+=1 1 1182
++    return 0L;
+=1 1183 114

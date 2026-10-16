@@ -14,7 +14,7 @@ NT35="$(cd ../../.. && pwd)"
 TYPE=${1:?usage: make-crt32.sh ST|MT|DLL}
 
 docker run --rm -e TYPE="$TYPE" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt \
-    --entrypoint bash nt-msvc:latest -c '
+    --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh
 A=/work/RASPI/arcfw/crt
@@ -41,7 +41,8 @@ build() {
   rel=$(cat $D/*.[CcHh] 2>/dev/null | tr -d "\r" | sed -nE "s/^[[:space:]]*#[[:space:]]*include[[:space:]]*[\"<](\.\.[\\\\/][^\">]*)[\\\\/][^\\\\/\">]+[\">].*/\1/p" | sort -u | tr "\n" ";")
   incs="-I$A/h -I/work/RASPI/arcfw/ported/fp32/include -I/tmp/f/ovr $(bash $K/incdirs.sh $D "$(bash $K/srcmacro.sh $D/SOURCES INCLUDES)") -I$K/inc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt -I$D $(bash $K/incdirs.sh $D "$rel" | cut -d" " -f3-)"
   for f in $(bash $K/srcmacro.sh $D/SOURCES SOURCES | tr " " "\n" | grep -iE "\.(c|cxx)$") $(awk -v c=$c "\$1 == c {print \$2}" $A/crt32.arm); do
-    if [ -f $A/$f ]; then f=$A/$f; else f=$D/$(ls $D | grep -ix "$f"); fi
+    p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$(echo $f | tr A-Z a-z)
+    if [ -f $A/$f ]; then f=$A/$f; elif [ -f $p ]; then f=$p; else f=$D/$(ls $D | grep -ix "$f"); fi
     b=$(basename "${f%.*}" | tr A-Z a-z)
     case $f in
     *.asm) ntas $o/$b.obj $f $NTDEFINES $defs -I/work/RASPI/obj/gen ;;

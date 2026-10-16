@@ -15,7 +15,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../.. && pwd)"
 K=$NT35/RASPI/arcfw/kernel
 
-docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -eu
 H=/work/RASPI/obj/host
 T=/tmp/tools
@@ -56,7 +56,7 @@ for c in BASE/CLIENT/DAYTONA:kernel32 USER/CLIENT:user32 BASE/ADVAPI:advapi32; d
     [ -f ../obj/um/${c#*:}.lib ] || IMPLIB=1 ROOT=/work/PRIVATE/WINDOWS "$K/make-dll.sh" ${c%:*}
 done
 
-docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -eu
 . ./msvc.sh
 H=/work/RASPI/obj/host

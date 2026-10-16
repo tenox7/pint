@@ -4,10 +4,11 @@
 # sdcard/root (\WINNT\...) with the registry hives of obj/gen/hives, the NLS tables and OEM font
 # of the NT tree and the setup aid of a developer install (arcfw/ported/oak/registry.ini, the
 # program groups in \WINNT\IDW). FAT16 because both the GPU firmware and NT 3.5 read it.
-# Flash it for a real Pi 2, or attach it in QEMU with -drive if=sd.
+# Flash it for a real Pi 2, or attach it in QEMU with -drive if=sd. With -u the disk of
+# the last build is updated in place, keeping what NT wrote on it: the files built since
+# go in (a new disk when the hives changed).
 #
-# Usage:  cd RASPI/build && ./build.sh; cd ../tools/hive && ./make-hives.sh
-#         cd ../sdcard && ./make-sd-image.sh           # -> ../obj/nt-arcfw-sd.img
+# Usage:  cd RASPI/sdcard && ./make-sd-image.sh [-u]           # -> ../obj/nt-arcfw-sd.img
 # Flash:  sudo dd if=../obj/nt-arcfw-sd.img of=/dev/rdiskN bs=4m   (diskutil list)
 set -euo pipefail
 
@@ -15,13 +16,32 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 LOADER="../obj/arcfw.bin"
 IMG="../obj/nt-arcfw-sd.img"
+STAMP="../obj/stamp/sd-image"
 FWCACHE="firmware"
 SIZE_MB=64
+ROOT="$(cd .. && pwd)"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1"; exit 1; }; }
 need docker
 [[ -f "$LOADER" ]] || { echo "missing $LOADER - build it first: (cd ../build && ./build.sh)"; exit 1; }
 [[ -f ../obj/gen/hives/SYSTEM ]] || { echo "missing the hives - build them first: (cd ../tools/hive && ./make-hives.sh)"; exit 1; }
+mkdir -p ../obj/stamp
+
+if [[ "${1:-}" = -u && -f "$IMG" && -f "$STAMP" && -z "$(find ../obj/gen/hives ../arcfw/ported/oak -newer "$STAMP" -print -quit)" ]]; then
+  new=$(cd .. && find sdcard/root sdcard/config.txt obj/arcfw.bin -type f -newer obj/stamp/sd-image)
+  echo ">> updating $IMG: $(echo $new | wc -w | tr -d ' ') files"
+  [[ -z "$new" ]] || docker run --rm -v "$ROOT":/work -w /work --entrypoint bash tenox7/msvc-arm32 -c '
+set -e
+I=obj/nt-arcfw-sd.img@@1M
+for f in "$@"; do
+  case $f in sdcard/root/*) d=${f#sdcard/root/} ;; *) d=${f##*/} ;; esac
+  p=; for c in $(dirname $d | tr / " "); do [ $c = . ] || { p=$p/$c; mmd -D s -i $I ::$p 2>/dev/null || true; }; done
+  mcopy -D o -i $I $f ::/$d
+  echo "   $d"
+done' _ $new
+  touch "$STAMP"
+  exit 0
+fi
 
 mkdir -p "$FWCACHE"
 base="https://raw.githubusercontent.com/raspberrypi/firmware/stable/boot"
@@ -30,13 +50,9 @@ for f in bootcode.bin start.elf fixup.dat bcm2709-rpi-2-b.dtb; do
 done
 
 echo ">> assembling $IMG (MBR + FAT16: firmware, config.txt, arcfw.bin, root/)"
-ROOT="$(cd .. && pwd)"
-docker run --rm -v "$ROOT":/work -v "$ROOT/../PRIVATE":/nt/PRIVATE:ro -v "$ROOT/../PUBLIC":/nt/PUBLIC:ro -w /work/sdcard -e IMG="$IMG" -e SIZE_MB="$SIZE_MB" debian:bookworm bash -c '
+docker run --rm -v "$ROOT":/work -v "$ROOT/../PRIVATE":/nt/PRIVATE:ro -v "$ROOT/../PUBLIC":/nt/PUBLIC:ro -w /work/sdcard -e IMG="$IMG" -e SIZE_MB="$SIZE_MB" \
+    --entrypoint bash tenox7/msvc-arm32 -c '
 set -e
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq dosfstools mtools fdisk >/dev/null
-
 rm -rf /tmp/sd && mkdir -p /tmp/sd
 cp firmware/bootcode.bin firmware/start.elf firmware/fixup.dat firmware/bcm2709-rpi-2-b.dtb /tmp/sd/
 cp config.txt ../obj/arcfw.bin /tmp/sd/
@@ -61,4 +77,5 @@ dd if=/tmp/part.img of="$IMG" bs=512 seek=2048 conv=notrunc status=none
 echo "--- partition table ---"; sfdisk -l "$IMG"
 echo "--- FAT contents ---"; mdir -i /tmp/part.img ::
 '
+touch "$STAMP"
 echo ">> built $IMG ($(du -h "$IMG" | cut -f1))."

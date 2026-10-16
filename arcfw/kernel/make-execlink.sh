@@ -11,17 +11,17 @@ set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/gen/error.h" ] || { echo "make-execlink: build the tools first (tools/make-tools.sh)"; exit 1; }
-./make-ksarm.sh && ../crt/make-crt.sh || exit 1
+[ -f "$NT35/RASPI/obj/gen/ksarm.h" ] && [ -f "$NT35/RASPI/obj/libcntpr.lib" ] || { echo "make-execlink: build ksarm.h and the C run-time first (make-ksarm.sh, ../crt/make-crt.sh)"; exit 1; }
 
 docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
-    --entrypoint bash nt-msvc:latest -c '
+    --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
 SUBSYS="KE RTL EX OB PS MM IO SE CONFIG LPC CACHE FSRTL RAW DBGK KD VDM INIT"
 bash mkfarm.sh /tmp/f
 ALLSUB=""; for S in $SUBSYS; do ALLSUB="$ALLSUB -I/tmp/f/$(echo $S | tr A-Z a-z)"; done
-COMMON="-Iinc -I/tmp/f/ovr $ALLSUB -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+COMMON="-Iinc -Imm -I/tmp/f/ovr $ALLSUB -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 KINCS="-Iinc -I/tmp/f/ovr -I/tmp/f/ke -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 DEFS="$NTDEFINES -D_NTSYSTEM_"
 
@@ -44,7 +44,7 @@ for s in rtl/debugstb.asm rtl/xcptmisc.asm rtl/xxcaptur.asm; do
   ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS $(cdefs RTL) -I$O/gen $KINCS || fail=$((fail+1))
 done
 for c in ke/kearm.c ke/initkr.c ke/thredini.c ke/timindex.c ke/clock.c ke/tbarm.c ke/trapc.c ke/exceptn.c \
-         ke/buserror.c ke/dmpstate.c ke/mpipi.c ke/apcuser.c ke/dataarm.c ke/initarm.c; do
+         ke/buserror.c ke/dmpstate.c ke/mpipi.c ke/apcuser.c; do
   b=$(basename ${c%.c})
   ntsrc $c $DIR/src/$b.c && ntcc $DIR/arch/$b.obj $DIR/src/$b.c $MODE $DEFS $(cdefs KE) $COMMON || fail=$((fail+1))
 done
@@ -54,8 +54,8 @@ for e in EX:/work/PRIVATE/NTOS/EX/MIPS/SPLOCKS.C EX:/work/PRIVATE/NTOS/EX/MIPS/P
          PS:/work/PRIVATE/NTOS/PS/MIPS/KULOOKUP.C PS:/work/PRIVATE/NTOS/PS/MIPS/PSLDT.C \
          PS:/work/PRIVATE/NTOS/PS/MIPS/PSVDM.C CONFIG:/work/PRIVATE/NTOS/CONFIG/MIPS/INIT.C \
          EX:ex/fmutex.c EX:ex/intrlock.c EX:ex/gettick.c EX:ex/evpair.c EX:ex/raisests.c \
-         MM:/work/PRIVATE/NTOS/MM/ALPHA/HYPERMAP.C MM:/work/PRIVATE/NTOS/MM/MIPS/SETDIRTY.C \
-         MM:/work/PRIVATE/NTOS/MM/MIPS/DEBUGSUP.C LPC:lpc/lpcmove.c \
+         MM:mm/initarm.c MM:mm/dataarm.c MM:/work/PRIVATE/NTOS/MM/ALPHA/HYPERMAP.C \
+         MM:/work/PRIVATE/NTOS/MM/MIPS/SETDIRTY.C MM:/work/PRIVATE/NTOS/MM/MIPS/DEBUGSUP.C LPC:lpc/lpcmove.c \
          KD:/work/PRIVATE/NTOS/KD/MIPS/KDCMSUP.C KD:/work/PRIVATE/NTOS/KD/MIPS/KDREBOOT.C \
          KD:kd/kdtrap.c KD:kd/kdcpuapi.c RTL:/work/PRIVATE/NTOS/RTL/MIPS/DEBUG.C KE:/work/PRIVATE/NTOS/KE/MIPS/FLUSH.C \
          KE:/work/PRIVATE/NTOS/KE/MIPS/XXFLSHTB.C KE:ke/intobj.c PS:ps/psctxarm.c \
@@ -99,7 +99,7 @@ link -nologo -machine:arm -release -driver -subsystem:native -entry:KiSystemStar
      $DIR/arch/*.obj $DIR/exec.lib $O/libcntpr.lib $DIR/hal.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -80; exit 1; }
 cp $DIR/ntoskrnl.exe $O/ntoskrnl.exe
-cp $DIR/ntoskrnl.lib $O/ntoskrnl.lib
+ntimplib $DIR/ntoskrnl.def $DIR/ntoskrnl.lib $O/ntoskrnl.lib
 OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/WINNT/System32 && mkdir -p $OUT
 cp $DIR/ntoskrnl.exe $OUT/NTOSKRNL.EXE
 echo "   wrote $OUT/NTOSKRNL.EXE"

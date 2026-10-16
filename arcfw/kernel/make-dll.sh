@@ -19,7 +19,7 @@ NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-dll.sh COMPONENT}
 
 docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e IMPLIB="${IMPLIB:-0}" \
-    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
@@ -61,10 +61,12 @@ fi
 privlib() {
   grep -q PRIVATE $DIR/$NAME.def || return 0
   sed "s/[[:space:]]PRIVATE//" $DIR/$NAME.def > $DIR/${NAME}p.def
-  lib -nologo -machine:arm -def:$DIR/${NAME}p.def -name:$NAME.$EXT -out:$U/${NAME}p.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  lib -nologo -machine:arm -def:$DIR/${NAME}p.def -name:$NAME.$EXT -out:$DIR/${NAME}p.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  ntimplib $DIR/${NAME}p.def $DIR/${NAME}p.lib $U/${NAME}p.lib
 }
 if [ "$IMPLIB" = 1 ]; then
-  lib -nologo -machine:arm -def:$DIR/$NAME.def -name:$NAME.$EXT -out:$U/$NAME.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  lib -nologo -machine:arm -def:$DIR/$NAME.def -name:$NAME.$EXT -out:$DIR/$NAME.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
   privlib
   echo "   wrote obj/um/$NAME.lib (the import library of the .def)"
   exit 0
@@ -122,7 +124,7 @@ link -nologo -machine:arm -release -force:multiple -dll $E -base:$BASE -subsyste
      $DIR/obj/*.obj $LIBS $DIR/newarray.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
 bash /work/RASPI/tools/host.sh pe2img -version 3.50 $DIR/$F || exit 1
-cp $DIR/$NAME.lib $U/$NAME.lib
+ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
 privlib
 OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/WINNT/System32
 cp $DIR/$F $OUT/$F

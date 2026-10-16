@@ -2,19 +2,21 @@
 # Build the NT user mode in link order, as the NT build walks the tree: the C
 # run-time, then each library, DLL and program, the images into
 # sdcard/root/WINNT/System32. The import lists of the DLLs that import each
-# other come first, from their .def files.
+# other come first, from their .def files. Each step runs when its inputs changed
+# (build/stamp.sh).
 #
 # Usage:  build/build-user.sh
 set -euo pipefail
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../arcfw/kernel"
+. "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
 N=/work/PRIVATE/NTOS P=/work/PRIVATE W=/work/PRIVATE/WINDOWS
-lib() { ROOT=$1 ./make-lib.sh $2; }
-dll() { INSTALL=1 ROOT=$1 ./make-dll.sh $2; }
-exe() { INSTALL=1 ROOT=$1 ./make-exe.sh $2 $3; }
-implib() { [ -f ../../obj/um/$3.lib ] || IMPLIB=1 ROOT=$1 ./make-dll.sh $2; }
+lib() { ROOT=$1 cstep lib $1 $2 -- $K/make-lib.sh $2; }
+dll() { INSTALL=1 ROOT=$1 cstep dll $1 $2 link -- $K/make-dll.sh $2; }
+exe() { INSTALL=1 ROOT=$1 cstep exe $1 $2 link -- $K/make-exe.sh $2 $3; }
+implib() { [ -f $R/obj/um/$3.lib ] || IMPLIB=1 ROOT=$1 $K/make-dll.sh $2; }
+umcrt() ( cd $R/arcfw/crt && UM=1 ./make-crt.sh && ./make-crt32.sh ST && ./make-crt32.sh MT && ./make-crt32.sh DLL && INSTALL=1 ./make-crtdll.sh )
 
 implib $W BASE/CLIENT/DAYTONA kernel32
-(cd ../crt && UM=1 ./make-crt.sh && ./make-crt32.sh ST && ./make-crt32.sh MT && ./make-crt32.sh DLL && INSTALL=1 ./make-crtdll.sh)
+step crt-um $CRT $R/obj/um/kernel32.lib -- umcrt
 
 implib $W USER/CLIENT user32; implib $W GDI/CLIENT gdi32; implib $W SPOOLER/SPOOLSS/CLIENT winspool
 implib $W WINSRV/DAYTONA winsrv; implib $P NET/API netapi32; implib $P NET/RAP netrap; implib $P NEWSAM/CLIENT samlib

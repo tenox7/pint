@@ -13,7 +13,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/host/MIDL.EXE" ] || { echo "gen-midl: build the tools first (tools/make-tools.sh)"; exit 1; }
 
-docker run --rm -e ONLY="$*" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+docker run --rm -e ONLY="$*" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -eu
 K=/work/RASPI/arcfw/kernel
 P=/work/PRIVATE

@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/LSA/SERVER/AUCRED.C
+=1 1 382
++    return Status;
+=1 383 458

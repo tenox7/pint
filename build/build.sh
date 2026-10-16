@@ -6,7 +6,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-docker run --rm -v "$ROOT/../msvc":/opt/msvc -v "$ROOT/..":/work -w /work/RASPI/build --entrypoint bash nt-msvc:latest -c '
+docker run --rm -v "$ROOT/../msvc":/opt/msvc -v "$ROOT/..":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh
 A=/work/RASPI/arcfw

@@ -14,7 +14,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 
 docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
-    --entrypoint bash nt-msvc:latest -c '
+    --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj

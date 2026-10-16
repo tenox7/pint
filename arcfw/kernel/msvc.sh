@@ -56,3 +56,10 @@ ntlib() {
     for f in "$@"; do o="$f $o"; done
     rm -f $l; lib -nologo -out:$l $o > $l.err 2>&1 || { echo "   LIB FAIL $(basename $l): $(grep -m1 -E "error|fatal" $l.err)"; return 1; }
 }
+
+# ntimplib DEF LIB OUT: install the import library LIB of DEF as OUT (DEF beside it)
+# when DEF changed: makefile.def made an import library again only from a changed
+# .def, so relinking an image does not relink the images that import from it.
+ntimplib() {
+    [ -f $3 ] && cmp -s $1 ${3%.lib}.def || { cp $2 $3 && cp $1 ${3%.lib}.def; }
+}

@@ -3,7 +3,20 @@
 Windows NT 3.5 ported to 32-bit ARM (ARMv7-A / Cortex-A7, Thumb-2) on the Raspberry Pi 2,
 booted by its own ARC firmware the way NT booted on MIPS.
 
-## Build from scratch
+## Raspberry Pi models
+
+- Supported: Pi 2 Model B v1.1 (BCM2836, Cortex-A7) and QEMU `raspi2b`.
+- Planned:
+  - Pi 2 v1.2, Pi 3B (BCM2837, Cortex-A53): needs the SD slot on SDHOST, serial vs Bluetooth, the I2C clock and the
+    CPU name; the Pi 2 build already reaches Program Manager on QEMU `raspi3b`.
+  - Pi 3B+, 3A+, Zero 2 W: the same plus their USB layouts (two hubs on the 3B+, no hub on the 3A+ and Zero 2 W).
+  - CM4, Pi 4B, Pi 400 (BCM2711, Cortex-A72): needs the new peripheral window, GIC and EMMC2; the 4B and 400 also
+    PCIe and an xHCI USB driver.
+- Not planned:
+  - Pi 1, Zero, Zero W: ARMv6 (ARM1176), no Thumb-2.
+  - Pi 5, Pi 500: the Cortex-A76 runs 32-bit code only in user mode.
+
+## Build
 
 The NT 3.5 source (`PRIVATE`, `PUBLIC`) goes beside this tree and is not part of it; the port's versions of NT
 files are edit scripts (`*.ntdiff`) the build applies to it (`tools/ntdiff.pl`).
@@ -12,21 +25,11 @@ Everything builds in Docker with Microsoft C for ARM ([msvc-arm32](https://hub.d
 installed once into `../msvc` beside the NT source; sources and outputs stay on the host, Docker only runs the tools:
 
     docker run --rm -e ACCEPT_MSVC_LICENSE=yes -v "$PWD/../msvc":/opt/msvc tenox7/msvc-arm32 msvc-setup
-    docker build -t nt-msvc -f build/Dockerfile.msvc build
-    tools/make-tools.sh                     # NT's build tools (RC, MIDL, MC, ...), run on 32-bit ARM Wine
-    tools/midl/gen-midl.sh                  # RPC stubs
-    (cd tools/hive && ./make-hives.sh)      # registry hives
+    build/build-all.sh      # everything from scratch -> obj/arcfw.{elf,bin}, obj/nt-arcfw-sd.img
+    build/build-update.sh   # only what changed since the last build
 
-Then the system, in order:
-
-    cd arcfw/kernel && INSTALL=1 ./make-execlink.sh        # C run-time + kernel
-    (cd ../hal && INSTALL=1 ./make-hal.sh)                 # HAL.DLL
-    for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do ./make-lib.sh $c; done
-    INSTALL=1 ./make-osloader.sh                           # OSLOADER.EXE
-    ../../build/build-drivers.sh                           # kernel-mode drivers
-    ../../build/build-user.sh                              # user mode
-    cd ../../build && ./build.sh                           # ARC firmware -> obj/arcfw.{elf,bin}
-    cd ../sdcard && ./make-sd-image.sh                     # system disk -> obj/nt-arcfw-sd.img
+`build-update.sh` runs only the steps whose files changed (`obj/stamp`) and copies what they made into the existing
+system disk, keeping what NT wrote on it; the disk is made anew when the registry hives change.
 
 ## Run
 

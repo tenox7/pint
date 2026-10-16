@@ -17,7 +17,7 @@ COMP=${1:?usage: make-exe.sh COMPONENT PROGRAM}
 PROG=${2:?usage: make-exe.sh COMPONENT PROGRAM}
 
 docker run --rm -e COMP="$COMP" -e PROG="$PROG" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" \
-    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash nt-msvc:latest -c '
+    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
@@ -47,12 +47,13 @@ console) SUB=console; TYPELIBS="$CRT advapi32 kernel32" ;;
 esac
 
 echo ">> compiling $COMP $PROG.exe (${UMTYPE:-nt})"
-# A PROGRAM is its SOURCES; another program is its source, in the component
-# directory or its parent, and the objects of an UMAPPL_NOLIB are the SOURCES
-# its UMLIBS names (obj\*\name.obj).
+# A PROGRAM is its SOURCES; another program is its source: the version of the port,
+# else the one in the component directory or its parent, and the objects of an
+# UMAPPL_NOLIB are the SOURCES its UMLIBS names (obj\*\name.obj).
 TTYPE=$(macro TARGETTYPE | tr -d " ")
 prog=; srcs=
-[ "$TTYPE" = PROGRAM ] || for p in $D $D/..; do n=$(ls $p | grep -ix "$PROG.c") && { prog=$p/$n; break; }; done
+p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$PROG.c
+[ "$TTYPE" = PROGRAM ] || { [ -f $p ] && prog=$p; } || for p in $D $D/..; do n=$(ls $p | grep -ix "$PROG.c") && { prog=$p/$n; break; }; done
 [ "$TTYPE" = PROGRAM ] || [ -n "$prog" ] || { echo "   no $PROG.c"; exit 1; }
 case $TTYPE in PROGRAM|UMAPPL_NOLIB) srcs=$(bash srclist.sh $COMP $ROOT c) ;; esac
 # the directories of the relative includes of the sources, last

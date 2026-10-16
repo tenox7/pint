@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/USER/SERVER/DMMNEM.C
+=1 1 335
++    return NULL;
++}

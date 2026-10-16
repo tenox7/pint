@@ -5,14 +5,14 @@
 #
 # Usage:  cd RASPI/arcfw/hal && ./make-hal.sh           # -> obj/HAL.DLL
 #         INSTALL=1 ./make-hal.sh                       # -> sdcard/root/os/nt/HAL.DLL (system partition)
-# Needs obj/ntoskrnl.lib and obj/libcntpr.lib from make-execlink.sh.
+# Needs obj/ntoskrnl.lib (make-execlink.sh) and obj/libcntpr.lib (../crt/make-crt.sh).
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
 
 docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/hal \
-    --entrypoint bash nt-msvc:latest -c '
+    --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh
 O=/work/RASPI/obj
@@ -41,6 +41,6 @@ link -nologo -machine:arm -release -dll -noentry -subsystem:native -base:0x81800
      $DIR/obj/*.obj $O/ntoskrnl.lib $O/libcntpr.lib > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
 cp $DIR/hal.dll $OUT/HAL.DLL
-cp $DIR/hal.lib $O/hal.lib
+ntimplib $DIR/hal.def $DIR/hal.lib $O/hal.lib
 echo "   wrote $OUT/HAL.DLL"
 '

@@ -12,7 +12,7 @@ set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 
-docker run --rm -e UM="${UM:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt --entrypoint bash nt-msvc:latest -c '
+docker run --rm -e UM="${UM:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh
 C=/work/PRIVATE/CRT32NT
@@ -25,10 +25,12 @@ MODE="-kernel -Oi-"; OUT=/work/RASPI/obj
 DEFS="$NTDEFINES -DNDEBUG -D_WIN32_=1 -D_NTSUBSET_=1 -D_NTSYSTEM_=1 -D_INTL"
 INCS="-I$A/h -I/tmp/f/crth -I$K/inc -I/tmp/f/ovr -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt -I/work/RASPI/obj/gen"
 
-# The sources, farmed as the build compiles them (some include a sibling .c).
+# The sources, farmed as the build compiles them (some include a sibling .c), the
+# versions of the port over them.
 for d in CONVERT MISC STRING STDIO STARTUP HACK; do
   s=$DIR/src/$(echo $d | tr A-Z a-z); mkdir -p $s
   for f in $C/$d/*.[CcHh]; do ntsrc $f $s/$(basename $f | tr A-Z a-z); done
+  for f in /work/RASPI/arcfw/ported/$(echo ${C#/work/PRIVATE/}/$d | tr A-Z a-z)/*.[ch]; do [ -f $f ] && ntsrc $f $s/$(basename $f); done
 done
 bash crtlist.sh $C > $DIR/list
 for f in MEMCMP MEMCPY MEMMOVE MEMSET STRCAT STRCHR STRCMP STRLEN STRRCHR; do echo $C/STRING/$f.C; done >> $DIR/list
