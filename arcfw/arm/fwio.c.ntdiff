@@ -1,0 +1,245 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/FWIO.C PRIVATE/NTOS/FW/ALPHA/FWIO.C PRIVATE/NTOS/FW/MIPS/JZCOMMON.C
+=1 1 10
++    This module implements the ARC firmware I/O operations for the Raspberry
++    Pi 2 (the ARM FW\MIPS\FWIO.C).
+=1 13 14
++#include "stdlib.h"
++#include "ctype.h"
+=1 27 2
+=1 30 8
+=1 41 3
++
+=1 44 5
++
+=1 49 8
++    CDFS_STRUCTURE_CONTEXT  CdfsContext;
+=1 57 25
+=1 83 5
+=1 280 35
++
+=1 316 40
+=1 357 10
++    This function loads or unloads the media of a removable device. The SD
++    card is always loaded.
+=1 367 3
++    MountPath - Supplies the pathname of the device.
++
++    Operation - Supplies the operation.
+=1 370 3
++    ESUCCESS is returned.
+=1 373 4
++    return ESUCCESS;
++}
++
+=1 381 47
+=1 351 5
+=1 434 9
++    This function determines whether a byte can be read from a file or a
++    device that is open.
+=1 647 7
++    ESUCCESS if a byte is available, otherwise EAGAIN or an access error.
+=1 449 25
++}
++
+=1 478 11
++    This function seeks in a file or a device that is open.
+=1 291 5
++    Offset - Supplies the offset.
++
++    SeekMode - Supplies whether the offset is absolute or relative.
+=1 492 24
++
+=1 517 35
++
+=1 552 11
+=1 351 5
+=1 570 33
+=1 550 3
+=1 605 7
++        (BlFileTable[FileId].DeviceId != DEVICE_DEVICE) &&
++        (BlFileTable[FileId].DeviceEntryTable->GetDirectoryEntry != NULL)) {
++
+=1 619 3 -4
++
++    return EBADF;
++}
++
+=1 628 35
+=1 307 2
++
+=1 664 3
++
+=1 667 1
++
+=1 668 4
++
+=1 672 2
++
+=1 674 3
++
+=1 677 5
++
+=1 682 6
++
+=1 688 3
++
++                return Status;
++
+=1 692 3
+=1 862 3
+=1 696 3
++
+=1 699 9
++
+=1 708 2
+=1 563 6
+=1 715 40
+=1 756 5
++
+=1 761 6
++
+=1 767 4
++    if ((ULONG)(FileName - OpenPath) >= sizeof(DeviceName) / 2) {
++        return ENAMETOOLONG;
+=1 769 6
++
+=1 775 2
++
+=1 777 4
++
++        if ((TempString1 != DeviceName) &&
++            (*TempString2 == ')') && (*(TempString1-1)) == '(') {
+=1 782 2
++
+=1 784 2
++
+=1 786 5
++
+=1 791 3
++
+=1 794 4
++
+=1 798 3
+=1 190 4
+=1 804 2
++
+=1 806 6
+=1 822 2
++
++    Status = ESUCCESS;
+=1 824 2
++
+=1 826 4
++
+=1 830 3
++
+=1 833 3
++
+=1 836 3
++
+=1 839 5
++
+=1 844 6
+=1 865 9 -4
++
+=1 874 6 -4
++                if ((Status = FiGetFileTableEntry(&DeviceId)) != ESUCCESS) {
+=1 881 16 -4
++        if ( i == SIZE_OF_LOOKUP_TABLE ) {
+=1 768 4 4
+=1 904 28
++
+=1 932 17
+=1 793 1
+=1 1030 4
++
+=1 1034 3
++
+=1 951 4 -4
++    if ((Status = FiGetFileTableEntry(FileId)) != ESUCCESS) {
+=1 956 4 -4
+=1 967 28 -4
+=1 996 22 -4
+=1 1019 6 -4
++        FwClose(DeviceId);
+=2 1248 3
++}
+=1 82 4
+=1 1042 21
++
+=1 1063 2
++            BlFileTable[Index].Flags.Read = 0;
++            BlFileTable[Index].Flags.Write = 0;
+=1 1065 4
++
++    return EMFILE;
++}
++
++ULONG
+=1 1072 20
+=1 123 3
++    ULONG  Index;
++
+=1 1097 3
++
+=1 1100 5
++
++    return Index;
++}
++
+=3 534 41
++
+=3 575 4
++
+=3 579 11
++
+=3 590 3
++
+=3 593 3
++
+=3 596 6
++
++        Digits[i] = *Tmp++;
++    }
++
+=3 604 5
+=1 1108 14
+=1 1124 11
+=1 1204 3
+=1 1138 3
++    SYSTEM_BLOCK->FirmwareVector[CloseRoutine] = (PVOID)FwClose;
++    SYSTEM_BLOCK->FirmwareVector[MountRoutine] = (PVOID)FwMount;
++    SYSTEM_BLOCK->FirmwareVector[OpenRoutine] = (PVOID)FwOpen;
++    SYSTEM_BLOCK->FirmwareVector[ReadRoutine] = (PVOID)FwRead;
++    SYSTEM_BLOCK->FirmwareVector[ReadStatusRoutine] = (PVOID)FwGetReadStatus;
++    SYSTEM_BLOCK->FirmwareVector[SeekRoutine] = (PVOID)FwSeek;
++    SYSTEM_BLOCK->FirmwareVector[WriteRoutine] = (PVOID)FwWrite;
++    SYSTEM_BLOCK->FirmwareVector[GetFileInformationRoutine] = (PVOID)FwGetFileInformation;
++    SYSTEM_BLOCK->FirmwareVector[SetFileInformationRoutine] = (PVOID)FwSetFileInformation;
++    SYSTEM_BLOCK->FirmwareVector[GetDirectoryEntryRoutine] = (PVOID)FwGetDirectoryEntry;
+=1 1152 12
++
+=1 1164 7
++
+=1 1171 7
++
+=1 1178 2
+=1 1262 4
+=1 1183 20
+=3 84 3
+=1 1205 4
+=2 1443 4
+=2 1435 5
++    // Call the hard disk driver initialization routine
+=2 1442 5
+=1 1242 7
+=2 1443 4
+=1 1252 14
+=1 77 3
+=2 1565 23
++        return NULL;
+=2 1589 12
++    return NULL;
++}
+=1 71 4
+=1 1306 22

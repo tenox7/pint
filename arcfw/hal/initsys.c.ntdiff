@@ -1,0 +1,83 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/XXINITHL.C
+=1 1 6
++    initsys.c
+=1 8 3
+=1 12 1
++    functions that define the Hardware Architecture Layer (HAL) for the
++    Raspberry Pi 2 (the Jazz HAL's xxinithl.c, allstart.c and xxidle.s).
+=1 19 5
+=1 26 3
+=1 39 8
+=1 91 6
++    This function provides the default bus error handling routine for the
++    Raspberry Pi 2: an external abort on a data or instruction access, which
++    the system cannot recover from.
+=1 353 3
+=1 111 3
+=1 402 2
++                 PhysicalAddress.LowPart,
++                 TrapFrame->Cpsr,
++                 TrapFrame->Pc);
+=1 407 3
++
+=1 87 10
++    This function initializes the Hardware Architecture Layer (HAL) for the
++    Raspberry Pi 2.
+=1 99 15
++    PKPRCB Prcb = PCR->Prcb;
++
+=1 127 2
++
+=1 129 1
+=1 140 4
+=1 155 1
+=1 171 1
+=1 195 1
++        }
+=1 230 3
++    }
++
++    return HalpInitializeDisplay1(LoaderBlock);
++}
++
+=1 411 9
++    This function is called early in the initialization of the kernel to
++    perform platform dependent initialization for each processor before the
++    HAL is fully functional. The processor is in a defined state from the
++    firmware and the kernel startup, so there is nothing to do.
+=1 99 3
++    Number - Supplies the logical processor number.
+=1 300 8
++    UNREFERENCED_PARAMETER(Number);
++}
++
+=1 441 10
++    This function is called to start the next processor. This HAL runs one
++    processor.
+=1 105 3
++    FALSE: there is no other processor to start.
+=1 110 4
++    UNREFERENCED_PARAMETER(LoaderBlock);
++    UNREFERENCED_PARAMETER(ProcessorState);
+=1 407 3
++
++BOOLEAN
++HalAllProcessorsStarted (
+=1 524 7
++    This function executes platform specific operations when all processors
++    have been started. Device interrupts go to the boot processor already.
+=1 105 3
++    TRUE.
+=1 110 4
+=1 510 3 -8
++VOID
++HalProcessorIdle (
+=1 524 7
++    This function is called when the current processor is idle with
++    interrupts disabled. It waits for an interrupt and returns with
++    interrupts enabled.
+=1 110 4
++    __dsb(_ARM_BARRIER_SY);
++    __wfi();
++    _enable();
++}

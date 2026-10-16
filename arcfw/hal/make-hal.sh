@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Build HAL.DLL, the Raspberry Pi 2 HAL (TARGETTYPE HAL), with Microsoft C for ARM:
+# arcfw/hal and the shared NTHALS\DRIVESUP.C, linked with the ntoskrnl import
+# library and the kernel C run-time, exporting hal.src.
+#
+# Usage:  cd RASPI/arcfw/hal && ./make-hal.sh           # -> obj/HAL.DLL
+#         INSTALL=1 ./make-hal.sh                       # -> sdcard/root/os/nt/HAL.DLL (system partition)
+# Needs obj/ntoskrnl.lib and obj/libcntpr.lib from make-execlink.sh.
+set -uo pipefail
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NT35="$(cd ../../.. && pwd)"
+[ -f "$NT35/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
+
+docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/hal \
+    --entrypoint bash nt-msvc:latest -c '
+set -u
+. /work/RASPI/arcfw/kernel/msvc.sh
+O=/work/RASPI/obj
+SUBSYS=" " bash $K/mkfarm.sh /tmp/f
+DIR=/tmp/hal; rm -rf $DIR; mkdir -p $DIR/obj $DIR/src
+DEFS="$NTDEFINES"
+INCS="-I/work/RASPI/arcfw/hal -I/tmp/f/ovr -I/tmp/f/priv -I$K/inc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt -I$O/gen"
+
+echo ">> compiling the HAL"
+n=0; fail=0
+for f in *.c /work/PRIVATE/NTOS/NTHALS/DRIVESUP.C; do
+  b=$(basename "${f%.*}" | tr A-Z a-z)
+  ntsrc $f $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $INCS && n=$((n+1)) || fail=$((fail+1))
+done
+for s in *.asm; do
+  ntas $DIR/obj/$(basename ${s%.asm})_asm.obj $s $DEFS $INCS && n=$((n+1)) || fail=$((fail+1))
+done
+echo "   $n compiled, $fail failed"
+[ $fail -eq 0 ] || exit 1
+
+tr -d "\032\r" < hal.src > $DIR/hal.src
+cl -nologo -EP -D_ARM_ $DIR/hal.src > $DIR/hal.def 2>/dev/null
+OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/os/nt && mkdir -p $OUT
+link -nologo -machine:arm -release -dll -noentry -subsystem:native -base:0x81800000 -nodefaultlib \
+     -debug -pdb:$O/hal.pdb -map:$O/hal.map -def:$DIR/hal.def -out:$DIR/hal.dll \
+     $DIR/obj/*.obj $O/ntoskrnl.lib $O/libcntpr.lib > $DIR/link.err 2>&1 \
+  || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
+cp $DIR/hal.dll $OUT/HAL.DLL
+cp $DIR/hal.lib $O/hal.lib
+echo "   wrote $OUT/HAL.DLL"
+'

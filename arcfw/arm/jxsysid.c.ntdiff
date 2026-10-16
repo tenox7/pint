@@ -1,0 +1,60 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/JXSYSID.C
+=1 3 10
++    This module implements the ARC firmware System ID Query and cache flush
++    functions for the Raspberry Pi 2 (the ARM FW\MIPS\JXSYSID.C). The product
++    id is the board serial number the VideoCore reports, as the Jazz one is
++    the ethernet address.
+=1 23 5
++static SYSTEM_ID SystemId;
++
+=1 70 10
++    VendorId and an eight byte ProductId. The structure is initialized on
++    each call to prevent programs from changing the value.
+=1 91 4
++    static CHAR SystemIdString[] = "RPI2BCM ";
++    ULONG Serial[2];
++    ULONG Index;
++
++    Serial[0] = MailboxGetBoardSerial(&Serial[1]);
++    for (Index = 0; Index < 8; Index += 1) {
+=1 111 1
++        SystemId.ProductId[Index] = (UCHAR)(Serial[Index / 4] >> (8 * (Index % 4)));
+=1 112 5
+=1 118 9
++    This function cleans and invalidates the data cache to the point of
++    coherency and invalidates the instruction cache and branch predictor.
+=1 91 4
++    ULONG Clidr, Ccsidr, Level, Way, Set, Ways, Sets, LineShift, WayShift;
++
++    Clidr = _MoveFromCoprocessor(15, 1, 0, 0, 1);
++    for (Level = 0; Level < 7; Level += 1) {
++        if (((Clidr >> (Level * 3)) & 7) < 2) {
++            continue;
++        }
++
++        _MoveToCoprocessor(Level << 1, 15, 2, 0, 0, 0);
++        __isb(_ARM_BARRIER_SY);
++        Ccsidr = _MoveFromCoprocessor(15, 1, 0, 0, 0);
++        LineShift = (Ccsidr & 7) + 4;
++        Ways = ((Ccsidr >> 3) & 0x3ff) + 1;
++        Sets = ((Ccsidr >> 13) & 0x7fff) + 1;
++        WayShift = Ways > 1 ? _CountLeadingZeros(Ways - 1) : 0;
++        for (Way = 0; Way < Ways; Way += 1) {
++            for (Set = 0; Set < Sets; Set += 1) {
++                _MoveToCoprocessor((Way << WayShift) | (Set << LineShift) | (Level << 1), 15, 0, 7, 14, 2);
++            }
++        }
++    }
++
++    __dsb(_ARM_BARRIER_SY);
++    _MoveToCoprocessor(0, 15, 0, 7, 5, 0);
++    _MoveToCoprocessor(0, 15, 0, 7, 5, 6);
++    __dsb(_ARM_BARRIER_SY);
++    __isb(_ARM_BARRIER_SY);
++}
++
+=1 34 4
++{
++    SYSTEM_BLOCK->FirmwareVector[GetSystemIdRoutine] = (PVOID)FwGetSystemId;
++    SYSTEM_BLOCK->FirmwareVector[FlushAllCachesRoutine] = (PVOID)FwFlushAllCaches;
++}

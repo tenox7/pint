@@ -1,0 +1,56 @@
+#ntdiff PRIVATE/NTOS/KE/MIPS/XXMPIPI.C PRIVATE/NTOS/KE/ALPHA/IPI.C
++/*++
+=1 4 3
++    mpipi.c
+=1 8 3
++    Interprocessor-interrupt support routines for ARM (the ARM KE/MIPS/
++    XXMPIPI.C): the generic broadcast call and the processor control state
++    save used by bug check and the debugger. The Pi 2 kernel is built NT_UP,
++    where a broadcast runs only on the current processor.
+=1 16 5
+=1 23 3
++
+=1 39 10
++    This function executes the specified function on every processor in the
++    host configuration in a synchronous manner.
+=1 53 3
++    BroadcastFunction - Supplies the address of function that is executed on
++        each of the target processors.
++
++    Context - Supplies the value of the context parameter that is passed to
++        each function.
+=1 61 3
++    The value returned by the specified function on the source processor.
+=1 66 4
++    KIRQL OldIrql;
++    ULONG Status;
+=1 75 3
++    // avoid a possible context switch, then execute the function.
+=1 79 3
+=1 106 1
+=1 124 3
++
+=1 285 9
++    This routine saves the processor's control state for the debugger: the
++    system control and translation registers (MIPS saves its TB entries).
+=1 53 3
++    ProcessorState - Supplies a pointer to the processor state.
+=1 66 4
++    ProcessorState->Sctlr = _MoveFromCoprocessor(15, 0, 1, 0, 0);
++    ProcessorState->Ttbr0 = _MoveFromCoprocessor(15, 0, 2, 0, 0);
++    ProcessorState->Ttbr1 = _MoveFromCoprocessor(15, 0, 2, 0, 1);
++    ProcessorState->Ttbcr = _MoveFromCoprocessor(15, 0, 2, 0, 2);
++    ProcessorState->Dacr = _MoveFromCoprocessor(15, 0, 3, 0, 0);
++    ProcessorState->Contextidr = _MoveFromCoprocessor(15, 0, 13, 0, 1);
++}
++
+=1 185 27
+=1 213 21
++
+=1 235 27
+=1 167 3
++    // Get the address of the current processor block, move the specified
++    // register state from specified trap and exception frames to the current
++    // processor context structure, and save the processor control state.
+=1 269 8
+=1 281 3

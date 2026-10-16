@@ -1,0 +1,2 @@
+# CSR\SERVER ARM_SOURCES (its MIPS_SOURCES: evpair.s)
+csr/evpair.asm

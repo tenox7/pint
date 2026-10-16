@@ -1,0 +1,328 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/JXSYSINT.C
+=1 1 6
++    sysint.c
+=1 8 3
++    This module implements the HAL interrupt support for the Raspberry Pi 2:
++    the BCM2835 interrupt controller behind the processor's IRQ input (the
++    Jazz HAL's jxsysint.c and its device interrupt dispatch).
++
++    The controller has no priority logic and no end of interrupt, and the
++    processor has a single interrupt enable, so IRQL is held in the PCR and
++    enforced here as interrupts are dispatched (the lazy IRQL of the i386 HAL).
++    The kernel dispatches an IRQ through PCR->InterruptRoutine[IRQ_VECTOR] to
++    HalpInterruptDispatch, which takes the pending source of highest IRQL. If
++    it is above the current IRQL, the sources at or below its level are masked,
++    IRQL is raised to it and interrupts are enabled, so higher level interrupts
++    nest, while the routine connected to its vector, DEVICE_VECTORS + the IRQ
++    number, is called. Otherwise the pending sources at or below the current
++    IRQL are masked and their levels requested in the PCR; when IRQL drops below
++    a requested level, the kernel calls PCR->InterruptRoutine[level],
++    HalpUnmaskInterrupts, which unmasks them so they interrupt again. A source
++    is acknowledged at the device.
+=1 18 3
++    Kernel mode only.
+=1 24 4
++
++//
++// The IRQL each system interrupt vector was enabled at; by bank, the enabled
++// sources, those masked for IRQL and those of them that are requested; and,
++// for each IRQL, the enabled sources at or below it.
++//
++
++static KIRQL HalpVectorIrql[HAL_MAXIMUM_BCM_VECTOR + 1];
++static ULONG HalpEnabled[2];
++static ULONG HalpMasked[2];
++static ULONG HalpRequested[2];
++static ULONG HalpLevelSources[HIGH_LEVEL + 1][2];
++
++//
++// An interrupt routine is called with its own address, which locates the
++// interrupt object of a connected vector (the MIPS a0), and the trap frame of
++// the interrupt (the MIPS s8).
++//
++
++typedef VOID (*PHALP_INTERRUPT_ROUTINE)(PVOID Routine, PKTRAP_FRAME TrapFrame);
++
++ULONG
++HalpDisableInterrupts (
++    VOID
++    );
++
++VOID
++HalpRestoreInterrupts (
++    IN ULONG Psr
++    );
++
++#define HalpEnableInterrupts() _enable()
++
++static VOID
++HalpMaskSources (
++    IN ULONG Bank1,
++    IN ULONG Bank2
++    )
++{
++    HalpMasked[0] |= Bank1;
++    HalpMasked[1] |= Bank2;
++    if (Bank1 != 0) {
++        HAL_REG(HAL_IRQ_DISABLE1) = Bank1;
++    }
++
++    if (Bank2 != 0) {
++        HAL_REG(HAL_IRQ_DISABLE2) = Bank2;
++    }
++}
++
++static VOID
++HalpUnmaskSources (
++    IN ULONG Bank1,
++    IN ULONG Bank2
++    )
++{
++    HalpMasked[0] &= ~Bank1;
++    HalpMasked[1] &= ~Bank2;
++    Bank1 &= HalpEnabled[0];
++    Bank2 &= HalpEnabled[1];
++    if (Bank1 != 0) {
++        HAL_REG(HAL_IRQ_ENABLE1) = Bank1;
++    }
++
++    if (Bank2 != 0) {
++        HAL_REG(HAL_IRQ_ENABLE2) = Bank2;
++    }
++}
++
++static VOID
++HalpComputeLevelSources (
++    VOID
++    )
++{
++    ULONG Vector;
++    ULONG Irql;
++
++    RtlZeroMemory(HalpLevelSources, sizeof(HalpLevelSources));
++    for (Vector = 0; Vector <= HAL_MAXIMUM_BCM_VECTOR; Vector += 1) {
++        if ((HalpEnabled[Vector / 32] & (1 << HAL_VECTOR_BIT(Vector))) == 0) {
++            continue;
++        }
++
++        for (Irql = HalpVectorIrql[Vector]; Irql <= HIGH_LEVEL; Irql += 1) {
++            HalpLevelSources[Irql][Vector / 32] |= 1 << HAL_VECTOR_BIT(Vector);
++        }
++    }
++}
++
++BOOLEAN
++HalpInitializeInterrupts (
++    VOID
+=1 33 6
++    This function initializes interrupts for the Raspberry Pi 2: it masks every
++    source at both controllers, connects the interrupt dispatcher to the
++    processor's IRQ vector and the unmask routine to the levels above
++    DISPATCH_LEVEL, and starts the interval timer.
+=1 46 3
++    TRUE.
+=1 50 4
++    PKPCR Pcr = PCR;
++    ULONG Irql;
++
++    HAL_REG(HAL_FIQ_CONTROL) = 0;
++    HAL_REG(HAL_IRQ_DISABLE1) = 0xFFFFFFFF;
++    HAL_REG(HAL_IRQ_DISABLE2) = 0xFFFFFFFF;
++    HAL_REG(HAL_IRQ_DISABLE_BASIC) = 0xFFFFFFFF;
++    HAL_REG(HAL_CORE_TIMER_CTL(0)) = 0;
++    HAL_REG(HAL_CORE_MBOX_CTL(0)) = 0;
++
++    Pcr->InterruptRoutine[IRQ_VECTOR] = (PKINTERRUPT_ROUTINE)HalpInterruptDispatch;
++    Pcr->ReservedVectors |= (1 << IRQ_VECTOR);
++    for (Irql = DISPATCH_LEVEL + 1; Irql <= HIGH_LEVEL; Irql += 1) {
++        Pcr->InterruptRoutine[Irql] = (PKINTERRUPT_ROUTINE)HalpUnmaskInterrupts;
++        Pcr->ReservedVectors |= (1 << Irql);
++    }
++
++    HalpStartClock();
++    return TRUE;
++}
++
++VOID
++HalpInterruptDispatch (
++    IN PVOID Routine,
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This function is entered from the kernel's IRQ entry with interrupts
++    disabled. It takes the pending source with the highest IRQL. If its level
++    is above the current IRQL, it masks the sources at or below the level,
++    raises IRQL to it and calls the routine connected to the source's vector
++    with interrupts enabled, then unmasks them; if no enabled source is above
++    the level, the routine runs with interrupts disabled and nothing is
++    masked. Otherwise it masks the pending sources at or below the current
++    IRQL and requests their levels. It returns with interrupts disabled, and
++    the kernel restores the previous IRQL.
+=1 40 3
++    Routine - Supplies the address of this routine.
++
++    TrapFrame - Supplies a pointer to the trap frame of the interrupt.
+=1 46 8
++    PHALP_INTERRUPT_ROUTINE Service;
++    ULONG Pending[2];
++    ULONG Masked[2];
++    ULONG Vector;
++    ULONG Best = (ULONG)-1;
++    KIRQL OldIrql;
++    KIRQL Irql;
++    ULONG Bank;
++    ULONG Bits;
++
++    Pending[0] = HAL_REG(HAL_IRQ_PEND1) & HalpEnabled[0] & ~HalpMasked[0];
++    Pending[1] = HAL_REG(HAL_IRQ_PEND2) & HalpEnabled[1] & ~HalpMasked[1];
++
++    for (Bank = 0; Bank < 2; Bank += 1) {
++        for (Bits = Pending[Bank]; Bits != 0; Bits &= Bits - 1) {
++            Vector = Bank * 32 + (31 - _CountLeadingZeros(Bits & -(LONG)Bits));
++            if (Best == (ULONG)-1 || HalpVectorIrql[Vector] > HalpVectorIrql[Best]) {
++                Best = Vector;
++            }
++        }
++    }
++
++    if (Best == (ULONG)-1) {
++        return;
++    }
++
++    OldIrql = PCR->CurrentIrql;
++    Irql = HalpVectorIrql[Best];
++    if (Irql <= OldIrql) {
++        Masked[0] = Pending[0] & HalpLevelSources[OldIrql][0];
++        Masked[1] = Pending[1] & HalpLevelSources[OldIrql][1];
++        HalpMaskSources(Masked[0], Masked[1]);
++        HalpRequested[0] |= Masked[0];
++        HalpRequested[1] |= Masked[1];
++        for (Bank = 0; Bank < 2; Bank += 1) {
++            for (Bits = Masked[Bank]; Bits != 0; Bits &= Bits - 1) {
++                PCR->InterruptRequest |= 1 << HalpVectorIrql[Bank * 32 + (31 - _CountLeadingZeros(Bits & -(LONG)Bits))];
++            }
++        }
++
++        return;
++    }
++
++    Service = (PHALP_INTERRUPT_ROUTINE)PCR->InterruptRoutine[DEVICE_VECTORS + Best];
++    KeRaiseIrql(Irql, &OldIrql);
++    if (((HalpEnabled[0] & ~HalpLevelSources[Irql][0]) |
++         (HalpEnabled[1] & ~HalpLevelSources[Irql][1])) == 0) {
++        Service((PVOID)Service, TrapFrame);
++        return;
++    }
++
++    Masked[0] = HalpLevelSources[Irql][0] & ~HalpMasked[0];
++    Masked[1] = HalpLevelSources[Irql][1] & ~HalpMasked[1];
++    HalpMaskSources(Masked[0], Masked[1]);
++    HalpEnableInterrupts();
++    Service((PVOID)Service, TrapFrame);
++    HalpDisableInterrupts();
++    HalpUnmaskSources(Masked[0], Masked[1]);
++}
++
++VOID
++HalpUnmaskInterrupts (
++    IN PVOID Routine,
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This function is called by the kernel, with interrupts disabled, when IRQL
++    drops below a level at which interrupts were requested. It unmasks the
++    requested sources above the current IRQL, which interrupt again if they
++    are still asserted.
+=1 40 3
++    Routine - Supplies the address of this routine.
++
++    TrapFrame - Not used.
+=1 46 8
++    KIRQL Irql = PCR->CurrentIrql;
++    ULONG Unmask[2];
++
++    Unmask[0] = HalpRequested[0] & ~HalpLevelSources[Irql][0];
++    Unmask[1] = HalpRequested[1] & ~HalpLevelSources[Irql][1];
++    HalpRequested[0] &= ~Unmask[0];
++    HalpRequested[1] &= ~Unmask[1];
++    HalpUnmaskSources(Unmask[0], Unmask[1]);
++}
++
+=1 29 25
++    ULONG Irq = Vector - DEVICE_VECTORS;
++    ULONG Bit;
++    ULONG Psr;
++
++    UNREFERENCED_PARAMETER(Irql);
++
++    if (Vector < DEVICE_VECTORS || Irq > HAL_MAXIMUM_BCM_VECTOR) {
++        return;
++    }
++
++    Bit = 1 << HAL_VECTOR_BIT(Irq);
++    Psr = HalpDisableInterrupts();
++    HalpEnabled[Irq / 32] &= ~Bit;
++    HalpMasked[Irq / 32] &= ~Bit;
++    HalpRequested[Irq / 32] &= ~Bit;
++    HAL_REG(HAL_VECTOR_BANK(Irq) == 2 ? HAL_IRQ_DISABLE2 : HAL_IRQ_DISABLE1) = Bit;
++    HalpComputeLevelSources();
++    HalpRestoreInterrupts(Psr);
++}
++
+=1 95 11
++    This routine enables the specified system interrupt. The controller has no
++    edge or level configuration, so the interrupt mode needs no programming.
++    A source interrupts above DISPATCH_LEVEL.
+=1 107 12
++    TRUE if the system interrupt was enabled.
+=1 50 4
++    ULONG Irq = Vector - DEVICE_VECTORS;
++    ULONG Bit;
++    ULONG Psr;
++
++    UNREFERENCED_PARAMETER(InterruptMode);
++
++    if (Vector < DEVICE_VECTORS || Irq > HAL_MAXIMUM_BCM_VECTOR ||
++        Irql <= DISPATCH_LEVEL || Irql > HIGH_LEVEL) {
++        return FALSE;
++    }
++
++    Bit = 1 << HAL_VECTOR_BIT(Irq);
++    Psr = HalpDisableInterrupts();
++    HalpVectorIrql[Irq] = Irql;
++    HalpEnabled[Irq / 32] |= Bit;
++    if ((HalpMasked[Irq / 32] & Bit) == 0) {
++        HAL_REG(HAL_VECTOR_BANK(Irq) == 2 ? HAL_IRQ_ENABLE2 : HAL_IRQ_ENABLE1) = Bit;
++    }
++
++    HalpComputeLevelSources();
++    HalpRestoreInterrupts(Psr);
++    return TRUE;
++}
++
++ULONG
++HalGetInterruptVector (
++    IN INTERFACE_TYPE InterfaceType,
+=1 168 12
++    corresponding to the specified bus interrupt level and/or vector. The
++    system interrupt vector and IRQL are suitable for use in a subsequent
++    call to KeInitializeInterrupt.
++
++    The only bus is the Internal bus, whose interrupt vectors are the
++    interrupt controller's IRQ numbers.
+=1 183 22
++    UNREFERENCED_PARAMETER(BusNumber);
++
++    *Affinity = 1;
++    if (InterfaceType != Internal || BusInterruptVector > HAL_MAXIMUM_BCM_VECTOR) {
+=1 227 2
++        return 0;
++    }
++
+=1 217 1 -4
++    return DEVICE_VECTORS + BusInterruptVector;
++}
++
+=1 264 10
++    This HAL runs one processor, so there is never another to interrupt.
+=1 277 13
++    UNREFERENCED_PARAMETER(Mask);
++}

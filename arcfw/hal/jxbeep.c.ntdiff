@@ -1,0 +1,44 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/JXBEEP.C
+=1 1 10
++    This module implements the HAL speaker and x86 BIOS routines for the
++    Raspberry Pi 2 (the Jazz HAL's jxbeep.c and x86bios.c). The Pi has no
++    speaker timer and no x86 option ROM bus.
+=1 16 5
+=1 23 3
++
+=1 28 20
++    FALSE: the system has no speaker.
+=1 51 4
++    UNREFERENCED_PARAMETER(Frequency);
++
++    return FALSE;
++}
++
++BOOLEAN
++HalCallBios (
++    IN ULONG BiosCommand,
++    IN OUT PULONG Eax,
++    IN OUT PULONG Ebx,
++    IN OUT PULONG Ecx,
++    IN OUT PULONG Edx,
++    IN OUT PULONG Esi,
++    IN OUT PULONG Edi,
++    IN OUT PULONG Ebp
+=1 31 6
++    This function provides the platform specific interface between a device
++    driver and the execution of the x86 ROM bios code for the specified ROM
++    bios command.
+=1 45 3
++    FALSE: there is no x86 ROM BIOS on this system.
+=1 51 4
++    UNREFERENCED_PARAMETER(BiosCommand);
++    UNREFERENCED_PARAMETER(Eax);
++    UNREFERENCED_PARAMETER(Ebx);
++    UNREFERENCED_PARAMETER(Ecx);
++    UNREFERENCED_PARAMETER(Edx);
++    UNREFERENCED_PARAMETER(Esi);
++    UNREFERENCED_PARAMETER(Edi);
++    UNREFERENCED_PARAMETER(Ebp);
++
++    return FALSE;
++}

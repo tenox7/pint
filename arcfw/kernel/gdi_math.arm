@@ -1,0 +1,6 @@
+# GDI\MATH ARM_SOURCES (its MIPS_SOURCES: math.cxx convert.s hardsqrt.s softsqrt.c xformer.cxx;
+# softsqrt.c is the R3000 square root)
+/work/PRIVATE/WINDOWS/GDI/MATH/MIPS/MATH.CXX
+gdi/convert.asm
+gdi/hardsqrt.asm
+/work/PRIVATE/WINDOWS/GDI/MATH/MIPS/XFORMER.CXX

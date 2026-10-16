@@ -1,0 +1,5 @@
+# BASE\CLIENT ARM_SOURCES (its MIPS_SOURCES: context.c critsect.s muldiv.s thunk.s)
+base/context.c
+base/critsect.asm
+base/muldiv.asm
+base/thunk.asm

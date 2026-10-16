@@ -1,0 +1,11 @@
+#include <windows.h>
+
+#include <ntverp.h>
+
+#define VER_FILETYPE                VFT_DRV
+#define VER_FILESUBTYPE             VFT2_DRV_KEYBOARD
+#define VER_FILEDESCRIPTION_STR     "USB Keyboard Port Driver"
+#define VER_INTERNALNAME_STR        "bcmusb.sys"
+#define VER_ORIGINALFILENAME_STR    "bcmusb.sys"
+
+#include "common.ver"

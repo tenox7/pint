@@ -1,0 +1,126 @@
+#ntdiff PRIVATE/NTOS/RTL/I386/XCPTMISC.ASM
++;++
+=1 5 8
++;    support exception handling (the ARM port of RTL\MIPS\XCPTMISC.S).
++;    Functions are provided to call an exception handler for an exception,
++;    call an exception handler for unwinding, and get the stack limits of the
++;    caller.
+=1 94 3
++#include "ksarm.h"
++#include "kxarm.h"
++
++        TEXTAREA
++
+=1 52 5
++;    IN ULONG EstablisherFrame,
+=1 58 1
++;    IN OUT PDISPATCHER_CONTEXT DispatcherContext,
+=1 60 5
++;    This function stores the address of the dispatcher context in its frame,
++;    establishes an exception handler, and then calls the specified exception
++;    handler as an exception handler. If a nested exception occurs, then the
++;    exception handler of this function is called and the establisher frame
++;    pointer is returned to the exception dispatcher via the dispatcher
+=1 71 1
++;    disposition status is returned to the exception dispatcher.
++;
++;    N.B. The dispatcher context address is at the establisher frame of this
++;       function less eight.
+=1 94 3
++        NESTED_ENTRY RtlpExecuteHandlerForException,,RtlpExceptionHandler
++        PROLOG_PUSH {r3, lr}
++        ldr     r12, [sp, #8]                   ; exception routine
++        blx     r12                             ; call the exception handler
++        EPILOG_POP {r3, pc}
++        NESTED_END RtlpExecuteHandlerForException
++
+=1 52 3
++; RtlpExceptionHandler (
+=1 56 1
++;    IN ULONG EstablisherFrame,
+=1 58 1
++;    IN OUT PDISPATCHER_CONTEXT DispatcherContext
+=1 228 5
++;    is to retrieve the establisher frame pointer from its establisher call
++;    frame, store this information in the dispatcher context record, and
++;    return a disposition value of nested exception.
+=1 248 9
++        LEAF_ENTRY RtlpExceptionHandler
++        ldr     r12, [r0, #ErExceptionFlags]
++        tst     r12, #EXCEPTION_UNWIND
++        bne     %F10                            ; unwind in progress
++        ldr     r12, [r1, #-8]                  ; dispatcher context of the establisher
++        ldr     r12, [r12, #DcEstablisherFrame]
++        str     r12, [r3, #DcEstablisherFrame]
++        movs    r0, #ExceptionNestedException
++        bx      lr
++10      movs    r0, #ExceptionContinueSearch
++        bx      lr
++        LEAF_END RtlpExceptionHandler
++
+=1 107 5
++;    IN ULONG EstablisherFrame,
+=1 58 1
++;    IN OUT PDISPATCHER_CONTEXT DispatcherContext,
+=1 60 5
++;    This function stores the address of the dispatcher context in its frame,
++;    establishes an exception handler, and then calls the specified exception
++;    handler as an unwind handler. If a collided unwind occurs, then the
++;    exception handler of this function is called and the dispatcher context
++;    of this unwind is returned to the unwind dispatcher via the dispatcher
+=1 71 1
++;    disposition status is returned to the unwind dispatcher.
+=1 94 3
++        NESTED_ENTRY RtlpExecuteHandlerForUnwind,,RtlpUnwindHandler
++        PROLOG_PUSH {r3, lr}
++        ldr     r12, [sp, #8]                   ; exception routine
++        blx     r12                             ; call the unwind handler
++        EPILOG_POP {r3, pc}
++        NESTED_END RtlpExecuteHandlerForUnwind
++
+=1 52 3
++; RtlpUnwindHandler (
+=1 286 9
++;    is to retrieve the establisher dispatcher context, copy it to the
++;    current dispatcher context, and return a disposition value of collided
++;    unwind.
+=1 310 4
++;    in progress. Otherwise, a value of ExceptionContinueSearch is returned.
+=1 94 3
++        LEAF_ENTRY RtlpUnwindHandler
++        ldr     r12, [r0, #ErExceptionFlags]
++        tst     r12, #EXCEPTION_UNWIND
++        beq     %F10                            ; unwind not in progress
++        ldr     r12, [r1, #-8]                  ; dispatcher context of the establisher
++        ldm     r12!, {r0-r2}                   ; copy it to the current one
++        stm     r3!, {r0-r2}
++        ldm     r12!, {r0-r2}
++        stm     r3!, {r0-r2}
++        ldm     r12!, {r0-r2}
++        stm     r3!, {r0-r2}
++        movs    r0, #ExceptionCollidedUnwind
++        bx      lr
++10      movs    r0, #ExceptionContinueSearch
++        bx      lr
++        LEAF_END RtlpUnwindHandler
++
+=1 504 10
++;    This function returns the current stack limits: in kernel mode, those
++;    of the current kernel stack; in user mode, those of the thread stack.
+=1 94 3
++        LEAF_ENTRY RtlpGetStackLimits
++#if defined(NTOS_KERNEL_RUNTIME)
++        CP_READ r12, 15, 0, 13, 0, 4            ; PCR
++        ldr     r2, [r12, #PcInitialStack]      ; high limit of the kernel stack
++        sub     r3, r2, #KERNEL_STACK_SIZE      ; low limit of the kernel stack
++#else
++        CP_READ r12, 15, 0, 13, 0, 3            ; TEB
++        ldr     r2, [r12, #TeStackBase]         ; high limit of the user stack
++        ldr     r3, [r12, #TeStackLimit]        ; low limit of the user stack
++#endif
++        str     r3, [r0]
++        str     r2, [r1]
++        bx      lr
++        LEAF_END RtlpGetStackLimits
++
++        END

@@ -1,0 +1,43 @@
+#ntdiff PRIVATE/NTOS/MM/MIPS/INITMIPS.C PRIVATE/NTOS/MM/ALPHA/INIALPHA.C
+=1 1 6
++    initarm.c
+=1 8 5
++    ARM environment.
++
++    ARM port of MM/MIPS/INITMIPS.C (R4000). KSEG0 maps the first gigabyte
++    of physical memory, so the PFN database may be placed there when it lies
++    below 1 GB. The data cache is physically indexed, so pages take one
++    primary color as on Alpha (INIALPHA.C).
+=1 14 9
++#include "mi.h"
+=1 24 70
++    // Initialize color tables and cache policy fields of static data.
+=1 775 3
+=1 99 34
+=1 135 268
++    if ((PagesLeft >= PfnAllocation) && (HighPage <= (1 << (30 - 12)))) {
+=1 404 81
++    Pfn1->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (PointerPde));
+=1 486 20
++            Pfn1->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (Pde));
+=1 507 16
++                        Pfn2->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (
++                                                Pfn2->PteAddress));
+=1 525 9
++                       Pfn2->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (
++                                                Pfn2->PteAddress));
+=1 536 29
++        Pfn1->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (Pde));
+=1 566 48
++                        Pfn1->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (
++                                                    Pfn1->PteAddress));
+=1 616 25
++                    Pfn1->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE (
++                                                    PointerPte));
+=1 643 64
++                    Pfn1->u3.e1.PageColor = MI_GET_COLOR_FROM_SECONDARY(MI_GET_PAGE_COLOR_FROM_PTE(Pfn1->PteAddress));
+=1 708 102
+=2 889 12
+=1 824 46
+=1 872 11
+=1 885 10

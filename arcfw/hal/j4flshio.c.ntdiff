@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/J4FLSHIO.C
+=1 1 10
+=1 12 1
++    the data cache for I/O transfers on the Raspberry Pi 2 (Cortex-A7):
++    the Jazz HAL's j4flshio.c over the ARM cache primitives (j4cache.S).
+=1 15 56
++    // The Cortex-A7 uses a write back data cache and, therefore, must be
+=1 72 137

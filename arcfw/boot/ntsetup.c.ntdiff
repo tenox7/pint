@@ -1,0 +1,149 @@
+#ntdiff PRIVATE/NTOS/BOOT/LIB/MIPS/NTSETUP.C PRIVATE/NTOS/BOOT/LIB/ALPHA/NTSETUP.C
+=1 1 10
++    This module implements the ARM specific routines necessary to set up the
++    NT specific data structures (the ARM BOOT\LIB\MIPS\NTSETUP.C).
+=1 18 3
++    Kernel mode only.
+=1 24 4
++#include "stdio.h"
++#include "string.h"
+=1 74 6
++
++static VOID
++BlpCacheGeometry (
++    IN PLOADER_PARAMETER_BLOCK BlLoaderBlock,
++    IN CONFIGURATION_TYPE Type,
++    OUT PULONG CacheSize,
++    OUT PULONG FillSize
+=1 84 6
++    This function computes the size and fill size of a cache from its entry
++    in the configuration tree, or returns zero for both if there is none.
+=1 101 4
+=1 106 1
+=1 110 2
+=1 182 3
++                                           Type,
++                                           NULL);
++
++    if (ConfigEntry == NULL) {
++        *CacheSize = 0;
++        *FillSize = 0;
++        return;
++    }
++
+=1 189 2 -4
++    *FillSize = LinesPerBlock * LineSize;
++    *CacheSize = 1 << ((ConfigEntry->ComponentEntry.Key & 0xffff) + PAGE_SHIFT);
++}
++
++static ARC_STATUS
++BlpAllocateStack (
+=2 90 1
++    OUT PULONG StackTop
+=1 84 6
++    This function allocates the pages of a kernel stack and returns the KSEG0
++    address of its top.
+=1 101 4
++    ULONG KernelPage;
++    ARC_STATUS Status;
++
++    Status = BlAllocateDescriptor(MemoryType,
+=1 279 4
++    if (Status == ESUCCESS) {
++        *StackTop = (KSEG0_BASE | (KernelPage << PAGE_SHIFT)) + KERNEL_STACK_SIZE;
++    }
++
++    return Status;
++}
++
++ARC_STATUS
++BlSetupForNt (
+=1 83 7
++    This function initializes the ARM specific kernel data structures
+=1 91 14
++    PARM_LOADER_BLOCK Arm = &BlLoaderBlock->u.Arm;
+=1 106 3
+=1 112 2
++    ULONG Page;
+=1 114 4
++    // the processor and floating point identification to the processor
++    // identification string: the variant and revision of the main ID and
++    // of the floating point system ID registers.
+=1 120 13
++                    (ProcessorId >> 20) & 0xf,
++                    ProcessorId & 0xf,
++                    (FloatingId >> 4) & 0xf,
++                    FloatingId & 0xf);
+=1 137 11
+=1 178 2
++    // be present on all ARC compliant systems. The secondary cache is
++    // optional and unified.
++    //
++
++    BlpCacheGeometry(BlLoaderBlock, PrimaryDcache,
++                     &Arm->FirstLevelDcacheSize, &Arm->FirstLevelDcacheFillSize);
++
++    BlpCacheGeometry(BlLoaderBlock, PrimaryIcache,
++                     &Arm->FirstLevelIcacheSize, &Arm->FirstLevelIcacheFillSize);
++
++    if (Arm->FirstLevelDcacheSize == 0 || Arm->FirstLevelIcacheSize == 0) {
+=1 196 3
++    BlpCacheGeometry(BlLoaderBlock, SecondaryCache,
++                     &Arm->SecondLevelDcacheSize, &Arm->SecondLevelDcacheFillSize);
++
++    Arm->SecondLevelIcacheSize = 0;
++    Arm->SecondLevelIcacheFillSize = 0;
++
++    //
++    // Allocate the DPC, idle thread kernel, and panic stacks for the boot
++    // processor.
++    //
++
++    Status = BlpAllocateStack(LoaderStartupDpcStack, &Arm->InterruptStack);
+=1 283 1
++        return Status;
++    }
++
++    Status = BlpAllocateStack(LoaderStartupKernelStack, &BlLoaderBlock->KernelStack);
+=1 283 1
++        return Status;
++    }
++
++    Status = BlpAllocateStack(LoaderStartupPanicStack, &Arm->PanicStack);
+=1 283 1
++        return Status;
+=1 145 3
+=1 323 3
++    Status = BlAllocateDescriptor(LoaderStartupPcrPage, 0, 2, &Arm->PcrPage);
+=1 283 1
++        return Status;
++    }
++
++    Arm->PcrPage2 = Arm->PcrPage + 1;
++    RtlZeroMemory((PVOID)(KSEG0_BASE | (Arm->PcrPage << PAGE_SHIFT)), PAGE_SIZE * 2);
+=1 338 5
++    Status = BlAllocateDescriptor(LoaderStartupPdrPage, 0, 2, &Arm->PdrPage);
+=1 283 1
++        return Status;
++    }
++
++    RtlZeroMemory((PVOID)(KSEG0_BASE | (Arm->PdrPage << PAGE_SHIFT)), PAGE_SIZE * 2);
++
++    //
++    // ARM has no exception page whose second half could hold the processor
++    // control block, the idle thread object, and the idle process object (the
++    // MIPS KERNEL_STRUCTURES), so a page is allocated for each and zeroed.
++    //
++
++    Status = BlAllocateDescriptor(LoaderStartupPdrPage, 0, 3, &Page);
+=1 283 1
++        return Status;
++    }
++
++    RtlZeroMemory((PVOID)(KSEG0_BASE | (Page << PAGE_SHIFT)), PAGE_SIZE * 3);
++    BlLoaderBlock->Prcb = KSEG0_BASE | (Page << PAGE_SHIFT);
++    BlLoaderBlock->Process = KSEG0_BASE | ((Page + 1) << PAGE_SHIFT);
++    BlLoaderBlock->Thread = KSEG0_BASE | ((Page + 2) << PAGE_SHIFT);
+=1 375 9
++    return ESUCCESS;
++}

@@ -1,0 +1,31 @@
+#ntdiff PRIVATE/NTOS/KE/MIPS/BUSERROR.C
+=1 1 13
++    ARM port of KE/MIPS/BUSERROR.C. A bus error is a synchronous external
++    abort; the faulting data address is reported by the processor.
+=1 13 9
+=1 24 3
++
+=1 28 46
++                 TrapFrame->Cpsr,
++                 TrapFrame->Pc);
+=1 76 3
++
+=1 80 26
++    // If the address is a KSEG0 address, then subtract the base of KSEG0 and
++    // return the result as the physical address. Otherwise, call memory
++    // management to convert the virtual address to a physical address.
+=1 110 3
++        ((ULONG)VirtualAddress < KSEG2_BASE)) {
++        PhysicalAddress.LowPart = (ULONG)VirtualAddress - KSEG0_BASE;
+=1 115 7
++
+=1 123 35
+=1 251 3
++    VirtualAddress = (PVOID)ExceptionRecord->ExceptionInformation[1];
+=1 195 1
+=1 203 11
++
+=1 215 35
+=1 251 3
+=1 258 2
+=1 267 11

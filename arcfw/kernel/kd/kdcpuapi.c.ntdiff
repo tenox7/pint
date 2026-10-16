@@ -1,0 +1,23 @@
+#ntdiff PRIVATE/NTOS/KD/MIPS/KDCPUAPI.C PRIVATE/NTOS/KD/I386/KDCPUAPI.C
+=1 1 12
++    ARM port of KD/MIPS/KDCPUAPI.C. Control space is the processor control
++    state: the system control and translation registers.
+=1 12 12
+=1 27 188
++    PKPRCB Prcb;
++    ULONG Offset;
+=1 220 18
++    Offset = (ULONG)a->TargetBaseAddress;
++    if ((m->Processor < (USHORT)KeNumberProcessors) &&
++        (Offset + Length <= sizeof(KPROCESSOR_STATE) - FIELD_OFFSET(KPROCESSOR_STATE, Sctlr))) {
++
++        //
++        // Read the processor control state.
++        //
++
+=1 259 1
++        AdditionalData->Length = (USHORT)Length;
++        RtlMoveMemory(AdditionalData->Buffer,
++                      (PUCHAR)&Prcb->ProcessorState.Sctlr + Offset,
++                      Length);
+=1 268 250

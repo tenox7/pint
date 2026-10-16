@@ -1,0 +1,806 @@
+#ntdiff PRIVATE/NTOS/RTL/ALPHA/EXDSPTCH.C PRIVATE/NTOS/RTL/MIPS/EXDSPTCH.C
+=2 1 6
++    vunwind.c
+=1 9 3
++    This module implements the virtual unwind of a procedure call frame for
++    ARM (the RtlVirtualUnwind of RTL\MIPS\EXDSPTCH.C).
++
++    The prologue and epilogues of a function are described by the unwind data
++    Microsoft C for ARM and the ARM assembler (kxarm.h) make: the packed
++    unwind data of a function of canonical form, held in its function table
++    entry, or the unwind codes in the .xdata section. Each unwind code undoes
++    one prologue instruction; the prologue codes are in the reverse of the
++    order of the instructions, an epilogue's in the order of its instructions.
++    The codes of the system, which execute no instruction, describe a machine
++    frame, a context record or a trap frame at the stack pointer, through
++    which the frame of an exception, interrupt or system call is unwound to
++    the interrupted code.
+=2 13 14
++
++//
++// Define the system unwind codes, the second byte of the 0xEE code.
++//
++
++#define UNWIND_MACHINE_FRAME 1
++#define UNWIND_CONTEXT 2
++#define UNWIND_TRAP_FRAME 3
++#define UNWIND_REDZONE_LR 4
++
++//
++// Define the maximum length of the unwind codes synthesized from packed
++// unwind data.
++//
++
++#define MAXIMUM_PACKED_CODES 16
++
++//
++// Define the integer registers of a context record by number: r0 - r12, sp,
++// lr and pc.
++//
++
++#define REGISTER(Context, Number) (((PULONG)&(Context)->R0)[Number])
++#define SP 13
++#define LR 14
++
++static ULONG
++RtlpUnwindCodeLength (
++    IN PUCHAR Code,
++    OUT PULONG InstructionSize
+=1 105 6
++    This function returns the length of an unwind code and the size of the
++    instruction it describes.
+=1 125 3
++    Code - Supplies a pointer to the unwind code.
++
++    InstructionSize - Supplies a pointer to a variable that receives the size
++        in bytes of the instruction, zero for an end code or a system code.
+=1 131 3
++    The length of the unwind code in bytes.
+=1 136 5
++    UCHAR Op;
++
++    Op = Code[0];
++    if (Op < 0x80) {
++        *InstructionSize = 2;
++        return 1;
++
++    } else if (Op < 0xc0) {
++        *InstructionSize = 4;
++        return 2;
++
++    } else if (Op < 0xd8) {
++        *InstructionSize = 2;
++        return 1;
++
++    } else if (Op < 0xe8) {
++        *InstructionSize = 4;
++        return 1;
++
++    } else if (Op < 0xec) {
++        *InstructionSize = 4;
++        return 2;
++
++    } else if (Op < 0xee) {
++        *InstructionSize = 2;
++        return 2;
++
++    } else if (Op == 0xee) {
++        *InstructionSize = 0;
++        return 2;
++
++    } else if (Op == 0xef) {
++        *InstructionSize = 4;
++        return 2;
++
++    } else if (Op < 0xf5) {
++        *InstructionSize = 0;
++        return 1;
++
++    } else if (Op < 0xf7) {
++        *InstructionSize = 4;
++        return 2;
++
++    } else if (Op == 0xf7) {
++        *InstructionSize = 2;
++        return 3;
++
++    } else if (Op == 0xf8) {
++        *InstructionSize = 2;
++        return 4;
++
++    } else if (Op == 0xf9) {
++        *InstructionSize = 4;
++        return 3;
++
++    } else if (Op == 0xfa) {
++        *InstructionSize = 4;
++        return 4;
++
++    } else if ((Op == 0xfb) || (Op == 0xfd)) {
++        *InstructionSize = 2;
++        return 1;
++
++    } else if ((Op == 0xfc) || (Op == 0xfe)) {
++        *InstructionSize = 4;
++        return 1;
++    }
++
++    *InstructionSize = 0;
++    return 1;
++}
++
++static ULONG
++RtlpUnwindSequenceSize (
++    IN PUCHAR Code,
++    IN PUCHAR CodeEnd,
++    IN BOOLEAN Epilogue
+=1 105 6
++    This function returns the size of the instructions a sequence of unwind
++    codes describes. The end code of an epilogue may also describe its final
++    branch.
+=1 136 5
++    ULONG Size;
++    ULONG Total;
++
++    Total = 0;
++    while (Code < CodeEnd) {
++        if (Code[0] >= 0xfd) {
++            if (Epilogue && (Code[0] != 0xff)) {
++                Total += (Code[0] == 0xfd) ? 2 : 4;
+=1 352 3 -8
++        }
++
++        Code += RtlpUnwindCodeLength(Code, &Size);
++        Total += Size;
++    }
++
++    return Total;
++}
++
++static VOID
++RtlpPopRegisters (
+=1 1424 1
++    IN ULONG Mask,
+=1 1427 7
++    This function pops the integer registers of a mask, bit n for register n,
++    from the stack of a context, in ascending register order.
+=1 136 5
++    ULONG Number;
++    PULONG Sp;
++
++    Sp = (PULONG)ContextRecord->Sp;
++    for (Number = 0; Number <= LR; Number += 1) {
++        if ((Mask & (1 << Number)) == 0) {
++            continue;
++        }
++
+=1 1849 1 -8
++            if ((Number >= 4) && (Number <= 11)) {
++                (&ContextPointers->R4)[Number - 4] = Sp;
++
++            } else if (Number == LR) {
++                ContextPointers->Lr = Sp;
+=1 395 3
++        REGISTER(ContextRecord, Number) = *Sp++;
++    }
++
++    ContextRecord->Sp = (ULONG)Sp;
++}
++
++static VOID
++RtlpPopFloatingRegisters (
+=1 1424 1
++    IN ULONG First,
++    IN ULONG Last,
+=1 1427 7
++    This function pops the floating registers First - Last from the stack of
++    a context.
+=1 136 5
++    ULONG Number;
++    PULONGLONG Sp;
++
++    Sp = (PULONGLONG)ContextRecord->Sp;
++    for (Number = First; Number <= Last; Number += 1) {
++        if (ARGUMENT_PRESENT(ContextPointers) && (Number >= 8) && (Number <= 15)) {
++            (&ContextPointers->D8)[Number - 8] = Sp;
++        }
++
++        ContextRecord->u.D[Number] = *Sp++;
++    }
++
++    ContextRecord->Sp = (ULONG)Sp;
++}
++
++static BOOLEAN
++RtlpExecuteUnwindCodes (
++    IN PUCHAR Code,
++    IN PUCHAR CodeEnd,
++    IN ULONG SkipSize,
+=1 1424 1
+=1 1427 7
++    This function executes a sequence of unwind codes on a context, after
++    skipping the codes of the first SkipSize bytes of instructions.
+=1 125 3
++    Code - Supplies a pointer to the first unwind code.
++
++    CodeEnd - Supplies a pointer to the end of the unwind codes.
++
++    SkipSize - Supplies the size of the instructions whose codes are skipped.
+=1 1465 3
+=1 1476 5
++    TRUE if a system code restored the program counter from a frame, FALSE
++    if the return address is in the link register.
+=1 136 5
++    PCONTEXT Context;
++    BOOLEAN Frame;
++    ULONG Length;
++    ULONG Number;
++    UCHAR Op;
++    ULONG Size;
++    PKTRAP_FRAME TrapFrame;
++    ULONG Value;
++
++    Frame = FALSE;
++    while (Code < CodeEnd) {
++        Op = Code[0];
++        if (Op >= 0xfd) {
++            break;
++        }
++
++        Length = RtlpUnwindCodeLength(Code, &Size);
++        if (SkipSize != 0) {
++            SkipSize = (SkipSize > Size) ? SkipSize - Size : 0;
++            Code += Length;
++            continue;
++        }
++
++        if (Op < 0x80) {
++
++            //
++            // add sp, sp, #X
++            //
++
++            ContextRecord->Sp += (Op & 0x7f) * 4;
++
++        } else if (Op < 0xc0) {
++
++            //
++            // pop {r0 - r12, lr}
++            //
++
++            Value = ((Op & 0x3f) << 8) | Code[1];
++            RtlpPopRegisters(ContextRecord,
++                             (Value & 0x1fff) | (((Value >> 13) & 1) << LR),
++                             ContextPointers);
++
++        } else if (Op < 0xd0) {
++
++            //
++            // mov sp, rX
++            //
++
++            ContextRecord->Sp = REGISTER(ContextRecord, Op & 0xf);
++
++        } else if (Op < 0xe0) {
++
++            //
++            // pop {r4 - rX, lr}, X = 4 - 7 or 8 - 11
++            //
++
++            Number = (Op & 3) + ((Op < 0xd8) ? 4 : 8);
++            RtlpPopRegisters(ContextRecord,
++                             (((1 << (Number + 1)) - 1) & ~0xf) | (((Op >> 2) & 1) << LR),
++                             ContextPointers);
++
++        } else if (Op < 0xe8) {
++
++            //
++            // vpop {d8 - dX}
++            //
++
++            RtlpPopFloatingRegisters(ContextRecord, 8, 8 + (Op & 7), ContextPointers);
++
++        } else if (Op < 0xec) {
++
++            //
++            // addw sp, sp, #X
++            //
++
++            ContextRecord->Sp += (((Op & 3) << 8) | Code[1]) * 4;
++
++        } else if (Op < 0xee) {
++
++            //
++            // pop {r0 - r7, lr}
++            //
++
++            RtlpPopRegisters(ContextRecord,
++                             Code[1] | ((Op & 1) << LR),
++                             ContextPointers);
++
++        } else if (Op == 0xee) {
++
++            //
++            // A system code: a machine frame, a context record or a trap frame
++            // at the stack pointer, or the link register saved below it.
++            //
++
++            switch (Code[1] & 0xf) {
++            case UNWIND_MACHINE_FRAME :
++                ContextRecord->Pc = ((PULONG)ContextRecord->Sp)[1];
++                ContextRecord->Sp = ((PULONG)ContextRecord->Sp)[0];
++                Frame = TRUE;
++                break;
++
++            case UNWIND_CONTEXT :
++                Context = (PCONTEXT)ContextRecord->Sp;
++                RtlMoveMemory(&ContextRecord->R0, &Context->R0, 17 * sizeof(ULONG));
++                ContextRecord->Fpscr = Context->Fpscr;
++                RtlMoveMemory(&ContextRecord->u.D[0], &Context->u.D[0], sizeof(Context->u.D));
++                Frame = TRUE;
++                break;
++
++            case UNWIND_TRAP_FRAME :
++                TrapFrame = (PKTRAP_FRAME)ContextRecord->Sp;
++                ContextRecord->R0 = TrapFrame->R0;
++                ContextRecord->R1 = TrapFrame->R1;
++                ContextRecord->R2 = TrapFrame->R2;
++                ContextRecord->R3 = TrapFrame->R3;
++                ContextRecord->R12 = TrapFrame->R12;
++                ContextRecord->Lr = TrapFrame->Lr;
++                ContextRecord->Pc = TrapFrame->Pc;
++                ContextRecord->Cpsr = TrapFrame->Cpsr;
++                ContextRecord->Fpscr = TrapFrame->Fpscr;
++                ContextRecord->Sp = TrapFrame->Sp;
++                Frame = TRUE;
++                break;
++
++            case UNWIND_REDZONE_LR :
++                ContextRecord->Lr = ((PULONG)ContextRecord->Sp)[-2];
++                break;
++            }
++
++        } else if (Op == 0xef) {
++
++            //
++            // ldr lr, [sp], #X
+=1 1847 3 -4
++                ContextPointers->Lr = (PULONG)ContextRecord->Sp;
++            }
++
++            ContextRecord->Lr = *(PULONG)ContextRecord->Sp;
++            ContextRecord->Sp += (Code[1] & 0xf) * 4;
++
++        } else if ((Op == 0xf5) || (Op == 0xf6)) {
++
++            //
++            // vpop {dS - dE}
++            //
++
++            Number = (Op == 0xf6) ? 16 : 0;
++            RtlpPopFloatingRegisters(ContextRecord,
++                                     Number + (Code[1] >> 4),
++                                     Number + (Code[1] & 0xf),
++                                     ContextPointers);
++
++        } else if ((Op == 0xf7) || (Op == 0xf9)) {
++
++            //
++            // add sp, sp, #X
++            //
++
++            ContextRecord->Sp += ((Code[1] << 8) | Code[2]) * 4;
++
++        } else if ((Op == 0xf8) || (Op == 0xfa)) {
++
++            //
++            // add sp, sp, #X
++            //
++
++            ContextRecord->Sp += ((Code[1] << 16) | (Code[2] << 8) | Code[3]) * 4;
++        }
++
++        Code += Length;
++    }
++
++    return Frame;
++}
++
++static ULONG
++RtlpPushPopCode (
++    OUT PUCHAR Code,
++    IN ULONG Mask,
++    IN BOOLEAN Pop
+=1 105 6
++    This function makes the unwind code of a push or pop of the integer
++    registers of a mask (bit 15 the program counter, popped by an epilogue
++    into the place of the link register), 16-bit if the instruction is.
+=1 136 5
++    BOOLEAN Narrow;
++    ULONG Link;
++
++    Link = Mask & ((1 << LR) | (1 << 15));
++    Mask &= 0x1fff;
++    Narrow = ((Mask & ~0xff) == 0) &&
++             ((Link == 0) || (Link == (ULONG)(1 << (Pop ? 15 : LR))));
++
++    if (Narrow) {
++        Code[0] = (UCHAR)(0xec | (Link != 0));
++        Code[1] = (UCHAR)Mask;
++
++    } else {
++        Mask |= (Link != 0) << 13;
++        Code[0] = (UCHAR)(0x80 | (Mask >> 8));
++        Code[1] = (UCHAR)Mask;
++    }
++
++    return 2;
++}
++
++static ULONG
++RtlpStackAdjustCode (
++    OUT PUCHAR Code,
++    IN ULONG Words
++    )
+=1 138 3
++    if (Words <= 0x7f) {
++        Code[0] = (UCHAR)Words;
++        return 1;
++    }
++
++    Code[0] = (UCHAR)(0xe8 | (Words >> 8));
++    Code[1] = (UCHAR)Words;
++    return 2;
++}
++
++static PEXCEPTION_ROUTINE
++RtlpUnwindPacked (
++    IN ULONG ImageBase,
+=1 1422 3
++    OUT PBOOLEAN Frame,
+=1 1427 7
++    This function unwinds a function of canonical form from its packed unwind
++    data, by the unwind codes of the prologue and epilogue the data describes.
+=1 136 5
++    UCHAR Epilogue[MAXIMUM_PACKED_CODES];
++    BOOLEAN EpilogueFold;
++    ULONG EpilogueMask;
++    ULONG EpilogueSize;
++    ULONG First;
++    ULONG FunctionLength;
++    BOOLEAN C, H, L, R;
++    ULONG Last;
++    ULONG Offset;
++    UCHAR Prologue[MAXIMUM_PACKED_CODES];
++    BOOLEAN PrologueFold;
++    ULONG PrologueMask;
++    ULONG PrologueSize;
++    ULONG Reg;
++    ULONG Ret;
++    ULONG StackAdjust;
++    ULONG StackWords;
++    ULONG Data;
++    ULONG e;
++    ULONG p;
++
++    Data = FunctionEntry->UnwindData;
++    FunctionLength = ((Data >> 2) & 0x7ff) * 2;
++    Ret = (Data >> 13) & 3;
++    H = (BOOLEAN)((Data >> 15) & 1);
++    Reg = (Data >> 16) & 7;
++    R = (BOOLEAN)((Data >> 19) & 1);
++    L = (BOOLEAN)((Data >> 20) & 1);
++    C = (BOOLEAN)((Data >> 21) & 1);
++    StackAdjust = (Data >> 22) & 0x3ff;
++    Offset = ControlPc - (ImageBase + (FunctionEntry->BeginAddress & ~1));
++
++    //
++    // A stack adjustment of 0x3f4 or more is one to four words, which the
++    // prologue or the epilogue may fold into its push or pop.
++    //
++
++    PrologueFold = FALSE;
++    EpilogueFold = FALSE;
++    StackWords = StackAdjust;
++    if (StackAdjust >= 0x3f4) {
++        PrologueFold = (BOOLEAN)((StackAdjust & 4) != 0);
++        EpilogueFold = (BOOLEAN)((StackAdjust & 8) != 0);
++        StackWords = (StackAdjust & 3) + 1;
+=1 566 3
++    // The integer registers pushed and popped: r4 - rN, N = 4 + Reg, unless
++    // the floating registers are saved, preceded by the words of a folded
++    // stack adjustment, r11 if a frame chain is made, and the link register,
++    // which the epilogue pops into the program counter if it returns so.
++    //
++
++    PrologueMask = 0;
++    EpilogueMask = 0;
++    Last = R ? 3 : Reg + 4;
++    if (!R || PrologueFold) {
++        First = PrologueFold ? (~StackAdjust & 3) : 4;
++        PrologueMask = ((1 << (Last + 1)) - 1) & ~((1 << First) - 1);
++    }
++
++    if (!R || EpilogueFold) {
++        First = EpilogueFold ? (~StackAdjust & 3) : 4;
++        EpilogueMask = ((1 << (Last + 1)) - 1) & ~((1 << First) - 1);
++    }
++
++    if (C) {
++        PrologueMask |= 1 << 11;
++        EpilogueMask |= 1 << 11;
++    }
++
++    if (L) {
++        PrologueMask |= 1 << LR;
++        if (Ret != 0) {
++            EpilogueMask |= 1 << LR;
++
++        } else if (!H) {
++            EpilogueMask |= 1 << 15;
+=1 565 4
++    // Make the prologue codes, in the reverse of the order of the
++    // instructions: the stack allocation, the push of the floating
++    // registers, the frame chain, the push of the integer registers and the
++    // push of the argument registers.
++    //
++
++    p = 0;
++    if ((StackWords != 0) && !PrologueFold) {
++        p += RtlpStackAdjustCode(&Prologue[p], StackWords);
++    }
++
++    if (R && (Reg != 7)) {
++        Prologue[p++] = (UCHAR)(0xe0 | Reg);
++    }
++
++    if (C) {
++        Prologue[p++] = (UCHAR)((R && !PrologueFold) ? 0xfb : 0xfc);
++    }
++
++    if (PrologueMask != 0) {
++        p += RtlpPushPopCode(&Prologue[p], PrologueMask, FALSE);
++    }
++
++    if (H) {
++        Prologue[p++] = 0x04;
++    }
++
++    Prologue[p++] = 0xff;
++
++    //
++    // Make the epilogue codes, in the order of the instructions: the stack
++    // deallocation, the pop of the floating registers, the pop of the integer
++    // registers, the deallocation of the argument registers, and the return.
++    //
++
++    e = 0;
++    if ((StackWords != 0) && !EpilogueFold) {
++        e += RtlpStackAdjustCode(&Epilogue[e], StackWords);
++    }
++
++    if (R && (Reg != 7)) {
++        Epilogue[e++] = (UCHAR)(0xe0 | Reg);
++    }
++
++    if (EpilogueMask != 0) {
++        e += RtlpPushPopCode(&Epilogue[e], EpilogueMask, TRUE);
++    }
++
++    if (H) {
++        if (L && (Ret == 0)) {
++            Epilogue[e++] = 0xef;
++            Epilogue[e++] = 0x05;
++
++        } else {
++            Epilogue[e++] = 0x04;
+=1 565 3
++    Epilogue[e++] = (UCHAR)((Ret == 1) ? 0xfd : ((Ret == 2) ? 0xfe : 0xff));
++
++    //
++    // If the control PC is within the prologue, then undo the instructions
++    // that executed. A function fragment has no prologue.
++    //
++
++    if ((FunctionEntry->UnwindData & 3) == 1) {
++        PrologueSize = RtlpUnwindSequenceSize(Prologue, &Prologue[p], FALSE);
++        if (Offset < PrologueSize) {
++            *Frame = RtlpExecuteUnwindCodes(Prologue,
++                                            &Prologue[p],
++                                            PrologueSize - Offset,
++                                            ContextRecord,
++                                            ContextPointers);
++
++            return NULL;
+=1 565 4
++    // If the control PC is within the epilogue at the end of the function,
++    // then execute the instructions that remain.
++    //
++
++    if (Ret != 3) {
++        EpilogueSize = RtlpUnwindSequenceSize(Epilogue, &Epilogue[e], TRUE);
++        if ((Offset < FunctionLength) && (Offset >= FunctionLength - EpilogueSize)) {
++            *Frame = RtlpExecuteUnwindCodes(Epilogue,
++                                            &Epilogue[e],
++                                            Offset - (FunctionLength - EpilogueSize),
++                                            ContextRecord,
++                                            ContextPointers);
++
++            return NULL;
+=1 565 4
++    // The control PC is within the body of the function: undo the whole
++    // prologue.
++    //
++
++    *Frame = RtlpExecuteUnwindCodes(Prologue, &Prologue[p], 0, ContextRecord, ContextPointers);
++    return NULL;
++}
++
++static PEXCEPTION_ROUTINE
++RtlpUnwindFull (
++    IN ULONG ImageBase,
+=1 1422 3
++    OUT PVOID *HandlerData,
++    OUT PBOOLEAN Frame,
+=1 1427 7
++    This function unwinds a function by the unwind codes of its .xdata
++    record: its header, the epilogue scopes, the unwind codes, and the image
++    relative address of the exception handler and the handler data.
+=1 136 5
++    PUCHAR Code;
++    PUCHAR CodeEnd;
++    ULONG CodeWords;
++    BOOLEAN EBit;
++    ULONG EpilogueCount;
++    ULONG EpilogueSize;
++    ULONG EpilogueStart;
++    BOOLEAN FBit;
++    ULONG FunctionLength;
++    ULONG Header;
++    ULONG Index;
++    ULONG Offset;
++    ULONG PrologueSize;
++    PULONG Scope;
++    ULONG ScopeCount;
++    PULONG XData;
++
++    XData = (PULONG)(ImageBase + FunctionEntry->UnwindData);
++    Header = XData[0];
++    FunctionLength = (Header & 0x3ffff) * 2;
++    EBit = (BOOLEAN)((Header >> 21) & 1);
++    FBit = (BOOLEAN)((Header >> 22) & 1);
++    EpilogueCount = (Header >> 23) & 0x1f;
++    CodeWords = (Header >> 28) & 0xf;
++    Scope = &XData[1];
++    if ((EpilogueCount == 0) && (CodeWords == 0)) {
++        EpilogueCount = XData[1] & 0xffff;
++        CodeWords = (XData[1] >> 16) & 0xff;
++        Scope = &XData[2];
++    }
++
++    ScopeCount = EBit ? 0 : EpilogueCount;
++    Code = (PUCHAR)&Scope[ScopeCount];
++    CodeEnd = Code + CodeWords * 4;
++    Offset = ControlPc - (ImageBase + (FunctionEntry->BeginAddress & ~1));
++
++    //
++    // If the control PC is within the prologue, then undo the instructions
++    // that executed. A function fragment has no prologue.
++    //
++
++    if (!FBit) {
++        PrologueSize = RtlpUnwindSequenceSize(Code, CodeEnd, FALSE);
++        if (Offset < PrologueSize) {
++            *Frame = RtlpExecuteUnwindCodes(Code,
++                                            CodeEnd,
++                                            PrologueSize - Offset,
++                                            ContextRecord,
++                                            ContextPointers);
++
++            return NULL;
+=1 565 4
++    // If the control PC is within an epilogue, then execute the instructions
++    // that remain. A single epilogue described in the header ends the
++    // function.
++    //
++
++    if (EBit) {
++        EpilogueSize = RtlpUnwindSequenceSize(Code + EpilogueCount, CodeEnd, TRUE);
++        EpilogueStart = FunctionLength - EpilogueSize;
++        if ((Offset >= EpilogueStart) && (Offset < FunctionLength)) {
++            *Frame = RtlpExecuteUnwindCodes(Code + EpilogueCount,
++                                            CodeEnd,
++                                            Offset - EpilogueStart,
++                                            ContextRecord,
++                                            ContextPointers);
++
++            return NULL;
+=1 365 3 -4
++        for (Index = 0; Index < ScopeCount; Index += 1) {
++            EpilogueStart = (Scope[Index] & 0x3ffff) * 2;
++            if (Offset < EpilogueStart) {
++                continue;
++            }
++
++            EpilogueSize = RtlpUnwindSequenceSize(Code + (Scope[Index] >> 24), CodeEnd, TRUE);
++            if (Offset < EpilogueStart + EpilogueSize) {
++                *Frame = RtlpExecuteUnwindCodes(Code + (Scope[Index] >> 24),
++                                                CodeEnd,
++                                                Offset - EpilogueStart,
++                                                ContextRecord,
++                                                ContextPointers);
++
++                return NULL;
+=1 564 5
++    // The control PC is within the body of the function: undo the whole
++    // prologue, and return the exception handler of the function, if any.
++    //
++
++    *Frame = RtlpExecuteUnwindCodes(Code, CodeEnd, 0, ContextRecord, ContextPointers);
++    if (((Header >> 20) & 1) == 0) {
++        return NULL;
++    }
++
++    *HandlerData = (PVOID)((PULONG)CodeEnd + 1);
++    return (PEXCEPTION_ROUTINE)(ImageBase + *(PULONG)CodeEnd);
++}
++
++PEXCEPTION_ROUTINE
++RtlVirtualUnwind (
++    IN ULONG ImageBase,
+=1 1422 3
++    OUT PVOID *HandlerData,
+=2 1050 9
++    prologue code backwards, or its epilogue code forward.
+=1 1438 5
++    the previous frame is the return address the prologue saved. Otherwise,
++    an exception or interrupt entry to the system is being unwound and its
++    prologue restores the program counter from the frame it describes.
+=2 1072 7
++    ImageBase - Supplies the base of the image that contains the function.
+=1 1459 9
++    HandlerData - Supplies a pointer to a variable that receives the address
++        of the data of the exception handler.
+=1 2288 2
++        the establisher frame pointer value: the stack pointer at the entry
++        of the function.
+=1 1475 6
++    The exception handler of the function if the control PC is within the
++    body of the function and the function has one, otherwise NULL. The
++    program counter of the context is set to the address where control left
++    the previous frame; if it is the return address of a call, the context
++    is marked unwound to a call.
+=1 136 5
++    BOOLEAN Frame;
++    PEXCEPTION_ROUTINE Handler;
++
++    *HandlerData = NULL;
++    Frame = FALSE;
++    Handler = NULL;
+=1 219 1 -4
++        if ((FunctionEntry->UnwindData & 3) != 0) {
++            Handler = RtlpUnwindPacked(ImageBase,
++                                       ControlPc,
+=1 1005 2
++                                       &Frame,
++                                       ContextPointers);
++
++        } else {
++            Handler = RtlpUnwindFull(ImageBase,
++                                     ControlPc,
+=1 944 2 7
++                                     HandlerData,
++                                     &Frame,
++                                     ContextPointers);
+=1 565 3
++    if (Frame) {
++        ContextRecord->ContextFlags &= ~CONTEXT_UNWOUND_TO_CALL;
++
++    } else {
++        ContextRecord->Pc = ContextRecord->Lr & ~1;
++        ContextRecord->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
++    }
++
++    *EstablisherFrame = ContextRecord->Sp;
++    return Handler;
++}

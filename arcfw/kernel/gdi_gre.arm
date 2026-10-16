@@ -1,0 +1,5 @@
+# GDI\GRE ARM_SOURCES (its MIPS_SOURCES: tiler.s mutexs.s palsrch.s xxmvmem.s cachea.s;
+# ARM has the portable palette search, glyph metrics and memory moves, and the
+# portable C++ pattern tiler of the Alpha)
+/work/PRIVATE/WINDOWS/GDI/GRE/ALPHA/TILER.CXX
+gdi/mutexs.asm

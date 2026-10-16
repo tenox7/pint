@@ -1,0 +1,21 @@
+#ntdiff PRIVATE/NTOS/MM/MIPS/DATAMIPS.C PRIVATE/NTOS/MM/ALPHA/DATALPHA.C
+=1 1 6
++   dataarm.c
+=1 8 6
++    ARM port of MM/MIPS/DATAMIPS.C (the R4000 PTE format); the color tables
++    have the single primary color of a physically indexed data cache.
+=1 13 5
++--*/
++
++#include "mi.h"
+=1 23 12
+=1 40 1
+=2 38 2
+=1 52 4
+=1 58 22
+=2 62 20
+=1 132 6
+=2 119 13
+=1 161 1
+=2 133 7
+=1 170 11

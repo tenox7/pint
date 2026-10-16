@@ -1,0 +1,177 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/JXHALP.H PRIVATE/NTOS/NTHALS/HAL0JENS/ALPHA/JXHALP.H PRIVATE/NTOS/NTHALS/HALFXS/MIPS/HALP.H
+=1 1 2
+=3 3 9
++    interfaces for the Raspberry Pi 2 (BCM2836, Cortex-A7): the analog of the
++    Jazz HAL's halp.h and jxhalp.h.
++
++    The Pi 2 peripherals are the BCM2835 set at physical 0x3F000000, reached
++    through KSEG0, and the BCM2836 per-core controller at 0x40000000, which the
++    kernel maps at LOCAL_PERIPHERAL_VIRTUAL. There is one bus, the on-chip
++    Internal bus; there is no ISA, EISA or PCI.
+=3 20 6
++#include "nthal.h"
++#include "arc.h"
++#include "hal.h"
++
++//
++// Peripheral registers are 32-bit, device memory.
++//
++
++#define HAL_REG(a)              (*(volatile ULONG *)(ULONG)(a))
++
++//
++// Legacy BCM2835 interrupt controller (armctrl). Its enable and disable
++// registers hold independent write-1-to-act bits, never read-modify-written.
++//
++
++#define HAL_ARMCTRL_BASE        (PERIPHERAL_VIRTUAL + 0xB200u)
++#define HAL_IRQ_BASIC_PEND      (HAL_ARMCTRL_BASE + 0x00u)
++#define HAL_IRQ_PEND1           (HAL_ARMCTRL_BASE + 0x04u)
++#define HAL_IRQ_PEND2           (HAL_ARMCTRL_BASE + 0x08u)
++#define HAL_FIQ_CONTROL         (HAL_ARMCTRL_BASE + 0x0Cu)
++#define HAL_IRQ_ENABLE1         (HAL_ARMCTRL_BASE + 0x10u)
++#define HAL_IRQ_ENABLE2         (HAL_ARMCTRL_BASE + 0x14u)
++#define HAL_IRQ_ENABLE_BASIC    (HAL_ARMCTRL_BASE + 0x18u)
++#define HAL_IRQ_DISABLE1        (HAL_ARMCTRL_BASE + 0x1Cu)
++#define HAL_IRQ_DISABLE2        (HAL_ARMCTRL_BASE + 0x20u)
++#define HAL_IRQ_DISABLE_BASIC   (HAL_ARMCTRL_BASE + 0x24u)
++
++//
++// BCM2836 per-core controller.
++//
++
++#define HAL_CORE_TIMER_CTL(c)   (LOCAL_PERIPHERAL_VIRTUAL + 0x40u + 4u * (c))
++#define HAL_CORE_MBOX_CTL(c)    (LOCAL_PERIPHERAL_VIRTUAL + 0x50u + 4u * (c))
++#define HAL_CORE_IRQ_SRC(c)     (LOCAL_PERIPHERAL_VIRTUAL + 0x60u + 4u * (c))
++
++//
++// A system interrupt vector is the legacy controller's IRQ number, 0-63: bank 1
++// holds IRQs 0-31, bank 2 IRQs 32-63.
++//
++
++#define HAL_MAXIMUM_BCM_VECTOR  63u
++#define HAL_VECTOR_BANK(v)      ((v) < 32u ? 1u : 2u)
++#define HAL_VECTOR_BIT(v)       ((v) & 31u)
++
++//
++// Define the interrupt levels of the Raspberry Pi 2 devices.
++//
++
++#define DEVICE_LEVEL            3       // device interrupt level
++#define CLOCK_LEVEL             6       // interval clock level
++#define CLOCK2_LEVEL            CLOCK_LEVEL
++
++//
++// The second-level dispatch slots of the device vectors in the PCR interrupt
++// routine table: the IRQ number offset by DEVICE_VECTORS, above the vectors
++// indexed by IRQL (as on Jazz).
++//
++
++#define DEVICE_VECTORS          16u
++
++//
++// BCM2835 system timer (1 MHz free-running counter, four compare channels).
++// Channel 3 is the interval clock, channel 1 the profile clock.
++//
++
++#define HAL_SYSTIMER_BASE       (PERIPHERAL_VIRTUAL + 0x3000u)
++#define HAL_ST_CS               (HAL_SYSTIMER_BASE + 0x00u)
++#define HAL_ST_CLO              (HAL_SYSTIMER_BASE + 0x04u)
++#define HAL_ST_CHI              (HAL_SYSTIMER_BASE + 0x08u)
++#define HAL_ST_C1               (HAL_SYSTIMER_BASE + 0x10u)
++#define HAL_ST_C3               (HAL_SYSTIMER_BASE + 0x18u)
++
++#define HAL_PROFILE_IRQ         1u
++#define HAL_CLOCK_IRQ           3u
++
++//
++// The interval clock rate (the Jazz values), in 100-ns units: a 10 ms tick
++// with 1 ms granularity.
++//
++
++#define MAXIMUM_INCREMENT       100000u
++#define MINIMUM_INCREMENT       10000u
++
++//
++// PL011 UART0, the debug and serial console port.
++//
++
++#define HAL_UART_BASE           (PERIPHERAL_VIRTUAL + 0x201000u)
++
++//
++// Power management (the watchdog resets the system).
++//
++
++#define HAL_PM_BASE             (PERIPHERAL_VIRTUAL + 0x100000u)
++#define HAL_PM_RSTC             (HAL_PM_BASE + 0x1Cu)
++#define HAL_PM_WDOG             (HAL_PM_BASE + 0x24u)
++#define HAL_PM_PASSWORD         0x5A000000u
++#define HAL_PM_RSTC_FULL_RESET  0x00000020u
++
++//
++// GPIO function select, and the BSC1 I2C controller of the expansion header
++// (GPIO 2 and 3), the bus of the realtime clock. The divider makes 100 kHz of
++// the 250 MHz core clock.
++//
++
++#define HAL_GPFSEL0             (PERIPHERAL_VIRTUAL + 0x200000u)
++
++#define HAL_BSC1_BASE           (PERIPHERAL_VIRTUAL + 0x804000u)
++#define HAL_BSC1_C              (HAL_BSC1_BASE + 0x00u)
++#define HAL_BSC1_S              (HAL_BSC1_BASE + 0x04u)
++#define HAL_BSC1_DLEN           (HAL_BSC1_BASE + 0x08u)
++#define HAL_BSC1_A              (HAL_BSC1_BASE + 0x0Cu)
++#define HAL_BSC1_FIFO           (HAL_BSC1_BASE + 0x10u)
++#define HAL_BSC1_DIV            (HAL_BSC1_BASE + 0x14u)
++
++#define HAL_BSC_C_I2CEN         0x8000u
++#define HAL_BSC_C_ST            0x0080u
++#define HAL_BSC_C_CLEAR         0x0010u
++#define HAL_BSC_C_READ          0x0001u
++#define HAL_BSC_S_CLKT          0x0200u
++#define HAL_BSC_S_ERR           0x0100u
++#define HAL_BSC_S_RXD           0x0020u
++#define HAL_BSC_S_TXD           0x0010u
++#define HAL_BSC_S_DONE          0x0002u
++#define HAL_BSC_DIVIDER         2500u
+=1 35 8
+=1 44 1
+=1 46 4
+=2 76 1
+=2 78 1
+=1 60 6
++VOID
++HalpClockInterrupt (
++    IN PVOID Routine,
+=2 121 3
+=3 106 16
++HalpInterruptDispatch (
++    IN PVOID Routine,
+=2 121 4
+=3 137 1
++    IN PVOID Routine,
+=2 121 4
++HalpUnmaskInterrupts (
++    IN PVOID Routine,
+=2 121 4
++HalpStartClock (
+=1 78 4
++HalFlushDcachePage (
++    IN PVOID Color,
++    IN ULONG PageFrame,
++    IN ULONG Length
+=1 69 3
++HalPurgeDcachePage (
++    IN PVOID Color,
++    IN ULONG PageFrame,
++    IN ULONG Length
+=1 69 3
++HalPurgeIcachePage (
++    IN PVOID Color,
++    IN ULONG PageFrame,
++    IN ULONG Length
+=3 168 6
+=3 176 1
++extern BOOLEAN HalpDisplaySerial;
++
++#endif // _HALP_

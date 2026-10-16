@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HAL.SRC
+=1 1 102
++#if defined(MIPS) || defined(ALPHA) || defined(_ARM_)
+=1 104 49

@@ -1,0 +1,32 @@
+#ntdiff PRIVATE/NET/RAS/SRC/AUTH/COMMON/CRYPT/DES.C
++/*
++** The DES routines of the LSA crypt engine (LSA\CRYPT\ENGINE), whose source is
++** not in the tree: those of its RAS copy (NET\RAS\SRC\AUTH\COMMON\CRYPT\DES.C)
++** with the key setup the engine objects define, InitLanManKey (the RAS InitKey)
++** and InitNormalKey.
++*/
++
+=1 1 430
++void _cdecl InitLanManKey(const char *Key)
+=1 432 15
++
++/*
++** Set up the key table from an 8 byte key, each byte low order bit first.
++*/
++unsigned char   KeyBuilder[64];
++
++void _cdecl InitNormalKey(const char *Key)
++{
++   register int   i, j;
++   int            k;
++
++   memset((void *)KeyBuilder, 0, 64);
++   for (i = 0; i < 8 ; i++ ) {
++      k = Key[i];
++      for (j = 0 ; j < 8 ; j++ ) {
++         KeyBuilder[8*i + j] = (unsigned char) (k & 01);
++         k >>= 1;
++      }
++   }
++   key_table(KeyBuilder);
++}

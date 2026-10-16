@@ -1,0 +1,16 @@
+#ntdiff PRIVATE/NTOS/INIT/MIPSDEF.SRC
+=1 1 4
++    ExArmInterlockedDecrementLong
++    ExArmInterlockedIncrementLong
++    ExArmInterlockedExchangeUlong
+=1 8 4
+=1 13 12
+=1 26 5
+=1 32 11
++    __rt_sdiv
++    __rt_udiv
++    __rt_sdiv64
++    __rt_udiv64
++    __rt_srsh
++    __rt_ursh
++    __chkstk

@@ -1,0 +1,3 @@
+# VIDEO\PORT ARM_SOURCES (its MIPS_SOURCES: mips\portmips.c, the video port
+# routines of a machine without int 10, VDM or I/O port emulation)
+/work/PRIVATE/NTOS/VIDEO/PORT/MIPS/PORTMIPS.C

@@ -1,0 +1,17 @@
+    setjmp
+    _setjmpex
+    longjmp
+    RtlCaptureContext
+    RtlLookupFunctionEntry
+    RtlVirtualUnwind
+    __C_specific_handler
+    __C_ExecuteExceptionFilter
+    __C_ExecuteTerminationHandler
+    __jump_unwind
+    __rt_sdiv
+    __rt_udiv
+    __rt_sdiv64
+    __rt_udiv64
+    __rt_srsh
+    __rt_ursh
+    __chkstk

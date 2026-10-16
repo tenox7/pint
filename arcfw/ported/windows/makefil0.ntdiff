@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/MAKEFIL0
+=1 1 23
++                $(SDKINC)\ntarm.h \
+=1 24 292

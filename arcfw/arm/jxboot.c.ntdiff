@@ -1,0 +1,166 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/JXBOOT.C PRIVATE/NTOS/FW/ALPHA/JXBOOT.C PRIVATE/NTOS/FW/ALPHA/JNSETCOM.C PRIVATE/NTOS/FW/MIPS/JZCOMMON.C
+=1 1 10
++    This module implements the ARC firmware boot manager for the Raspberry
++    Pi 2 (the ARM FW\MIPS\JXBOOT.C FwBootSystem): it offers the boot
++    selections of the environment, running a program, and the ARC DOS shell,
++    which takes the place of the Jazz setup program, and executes the chosen
++    one.
++
++    A boot selection is a segment of each of the SYSTEMPARTITION, OSLOADER,
++    OSLOADPARTITION, OSLOADFILENAME, OSLOADOPTIONS and LOADIDENTIFIER
++    variables, separated by semicolons. Its program, the OS loader, is given
++    those variables as arguments and the environment.
+=2 28 4
++#include "string.h"
++#include "stdlib.h"
++#include "ctype.h"
+=1 32 2
+=1 35 2
++int ArcDosMain(void);
+=3 691 11
+=4 655 12
+=3 715 8
+=3 725 2
++    ULONG Index = 0;
++    ULONG Count;
+=3 731 5
++    VariableValue = FwGetEnvironmentVariable(Segment);
+=3 742 2
+=3 749 1
+=3 647 3 4
++    while ((TempPointer = strchr(VariableValue, ';')) != NULL) {
+=3 761 1
+=3 763 7
++        Index += 1;
++    }
++
++    strcpy(Segment, VariableValue);
+=3 647 3
+=4 171 14
++    found, StringLength is reached, or ESC is pushed (the FW\MIPS\JZCOMMON.C
++    FwGetString).
+=4 186 60
++        FwSetPosition(CurrentRow, CurrentColumn);
++        FwPrint(String);
++        FwPrint("\x9bK");
+=3 326 5
++        FwSetScreenAttributes(TRUE,FALSE,TRUE);
++        FwSetPosition(CurrentRow, (Cursor - String) + CurrentColumn);
++        if (Cursor >= Buffer) {
++            FwPrint(" ");
++        } else {
++            FwWrite(ARC_CONSOLE_OUTPUT,Cursor,1,&Count);
++        }
++        FwSetScreenAttributes(TRUE,FALSE,FALSE);
++
++        while (FwGetReadStatus(ARC_CONSOLE_INPUT) != ESUCCESS) {
++        }
++        Status = FwRead(ARC_CONSOLE_INPUT,&c,1,&Count);
+=4 269 20
++            FwStallExecution(10000);
++
+=1 328 1
++                FwRead(ARC_CONSOLE_INPUT, &c, 1, &Count);
+=3 373 11
++            FwRead(ARC_CONSOLE_INPUT, &c, 1, &Count);
+=4 305 54
++        case ASCII_DEL:
+=4 359 31
+=4 391 7
++    FwSetPosition(CurrentRow, (Cursor - String) + CurrentColumn);
++    if (Cursor >= Buffer) {
++        FwPrint(" ");
++    } else {
++        FwWrite(ARC_CONSOLE_OUTPUT,Cursor,1,&Count);
+=4 403 3
++        FwWrite(ARC_CONSOLE_OUTPUT,FW_CRLF_MSG,2,&Count);
+=3 498 13
+=2 147 9
++    This routine is the main ARC firmware code. It displays the boot menu and
++    executes the selected commands.
+=1 148 16
++    PCHAR LoadArgv[MAX_NUMBER_OF_ENVIRONMENT_VARIABLES];
+=1 165 19
++    ULONG PreviousTime = 0;
+=1 185 6
+=1 200 5
++    FwInitialize();
+=1 212 4
+=1 222 3
++        strcpy(SystemPartition, "SYSTEMPARTITION");
++        strcpy(Osloader, "OSLOADER");
++        strcpy(OsloadPartition, "OSLOADPARTITION");
++        strcpy(OsloadFilename, "OSLOADFILENAME");
++        strcpy(OsloadOptions, "OSLOADOPTIONS");
++        strcpy(LoadIdentifier, "LOADIDENTIFIER");
+=1 231 30
++
+=1 261 5
++
+=1 266 2
++        Choices[NumberOfBootChoices + 1] = FW_RUN_ARCDOS_MSG;
++
++        if (DefaultChoice >= (LONG)NumberOfMenuChoices) {
+=1 271 13
++        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
+=1 285 15
+=1 308 17
+=1 326 27
++                        if (DefaultChoice == (LONG)NumberOfMenuChoices) {
+=1 354 15
+=1 399 36
++        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
+=1 436 8
++        if (DefaultChoice < (LONG)NumberOfBootChoices) {
+=1 445 13
+=1 459 4
++        } else if (DefaultChoice == (LONG)NumberOfBootChoices) {
+=1 464 8
++                Action = FwGetString( TempName,
++                                      sizeof(TempName),
++                                      NULL,
++                                      5,
++                                      5 + strlen(FW_PROGRAM_TO_RUN_MSG));
+=1 473 41
++
++                    if (EnvironmentValue == NULL) {
+=1 531 6
++                    }
++
+=1 517 1 -4
+=1 538 1 -4
+=1 540 35
+=1 576 7
++        // Run the ARC DOS shell.
+=1 584 5
++            ArcDosMain();
+=1 590 22
++            // the next envp value to point there.
++            //
++
++            while (*LoadEnvp[Index] && (Index < MAX_NUMBER_OF_ENVIRONMENT_VARIABLES - 1)) {
+=1 617 16
++        if (DefaultChoice < (LONG)NumberOfBootChoices) {
+=1 662 4
+=2 939 23
++            ArgCount = 8;
+=1 585 3
+=1 663 14
++                    if ((Index == 0) || (TempArgs[Index - 1] == 0)) {
+=1 678 21
+=1 705 8
+=1 714 1
++            ((EnvironmentValue = FwGetEnvironmentVariable("ConsoleIn")) == NULL)) {
++            EnvironmentValue = "multi(0)serial(0)";
++        }
++
++        FwOpen(EnvironmentValue, ArcOpenReadOnly, &Count);
+=1 720 2
++            ((EnvironmentValue = FwGetEnvironmentVariable("ConsoleOut")) == NULL)) {
++            EnvironmentValue = "multi(0)serial(0)";
++        }
++
++        FwOpen(EnvironmentValue, ArcOpenWriteOnly, &Count);
+=1 727 8
++            if (DefaultChoice < (LONG)NumberOfBootChoices) {
+=1 736 20

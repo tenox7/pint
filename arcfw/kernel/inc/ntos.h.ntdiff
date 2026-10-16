@@ -1,0 +1,10 @@
+#ntdiff PRIVATE/NTOS/INC/NTOS.H
+=1 1 12
++    ARM32 port: verbatim copy of PRIVATE/NTOS/INC/NTOS.H with an _ARM_ arch
++    branch added so the kernel pulls in arm.h (the MIPS.H analog). This shadow
++    copy is first on the include path; everything else resolves to the real
++    headers. See CLAUDE.md "header method".
+=1 19 32
++#ifdef _ARM_
++#include "arm.h"
+=1 49 30

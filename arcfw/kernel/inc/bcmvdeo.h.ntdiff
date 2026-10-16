@@ -1,0 +1,41 @@
+#ntdiff PRIVATE/NTOS/INC/JAZZVDEO.H
++/*++
+=1 4 3
++    bcmvdeo.h
+=1 8 3
++    This module defines the VideoCore display controller of the BCM2835 (the
++    Raspberry Pi 2 analog of jazzvdeo.h): the configuration data the firmware
++    gives its display controller component, a 32 bit per pixel frame buffer
++    the VideoCore allocated through the mailbox.
+=1 15 3
++#ifndef _BCMVDEO_
++#define _BCMVDEO_
++
++#define BCM_VIDEO_IDENTIFIER "BCM2835 VideoCore"
++
++//
++// Define the frame buffer pixel orders.
++//
++
++#define BCM_PIXEL_ORDER_BGR 0
++#define BCM_PIXEL_ORDER_RGB 1
++
++//
++// Define the VideoCore configuration data structure.
++//
++
++typedef struct _BCM_VIDEO_CONFIGURATION_DATA {
+=1 330 2
+=1 334 2
+=1 338 2
++    ULONG BytesPerScanLine;
++    USHORT BitsPerPixel;
++    USHORT PixelOrder;
++} BCM_VIDEO_CONFIGURATION_DATA, *PBCM_VIDEO_CONFIGURATION_DATA;
++
++//
++// Define the configuration data of the monitor peripheral (the ARC monitor
++// configuration data, as jazzvdeo.h defines it for the miniport drivers).
+=1 348 17
++
++#endif // _BCMVDEO_

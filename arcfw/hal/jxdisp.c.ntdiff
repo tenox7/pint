@@ -1,0 +1,181 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/JXDISP.C
+=1 1 11
++    for the Raspberry Pi 2: the Jazz HAL's jxdisp.c over the VideoCore frame
++    buffer.
++
++    The display controller is the frame buffer the VideoCore allocated, which
++    the firmware describes in the configuration tree: 32 bits per pixel and
++    reached through KSEG0, so there is no display controller to program and
++    nothing to map. The display output is echoed to the serial console, unless
++    the kernel debugger owns the port.
+=1 18 5
+=1 25 3
++#include "bcmvdeo.h"
++#include "string.h"
++
+=1 33 12
++
+=1 46 14
+=1 126 4
+=1 115 11
+=1 130 1
++BOOLEAN HalpDisplaySerial = TRUE;
+=1 138 1
++
++PULONG HalpFrameBuffer;
++ULONG HalpFramePitch;
++ULONG HalpFrameHeight;
++ULONG HalpForeground;
++ULONG HalpBackground;
++
++static ULONG
++HalpColor (
++    IN ULONG PixelOrder,
++    IN ULONG Red,
++    IN ULONG Green,
++    IN ULONG Blue
++    )
++{
++    if (PixelOrder == BCM_PIXEL_ORDER_RGB) {
++        return (Blue << 16) | (Green << 8) | Red;
++    }
++
++    return (Red << 16) | (Green << 8) | Blue;
++}
++
++static VOID
++HalpClearDisplay (
++    VOID
++    )
++{
++    ULONG Index;
++
++    for (Index = 0; Index < HalpFramePitch * HalpFrameHeight; Index += 1) {
++        HalpFrameBuffer[Index] = HalpBackground;
++    }
+=1 694 3
++}
++
++static VOID
++HalpSerialOutput (
++    IN PUCHAR String
++    )
++{
++    for (; *String != 0; String += 1) {
++        if (*String == '\n') {
++            while ((HAL_REG(HAL_UART_BASE + 0x18) & 0x20) != 0) {
++            }
++            HAL_REG(HAL_UART_BASE) = '\r';
++        }
++
++        while ((HAL_REG(HAL_UART_BASE + 0x18) & 0x20) != 0) {
++        }
++        HAL_REG(HAL_UART_BASE) = *String;
+=1 298 3 -4
+=1 142 13
++    On the Pi the firmware has configured the frame buffer: this routine
++    takes its address and geometry from the configuration tree, computes the
++    character output parameters for the OEM font and clears the screen.
+=1 154 7
++    If the video was successfully initialized, then a value of TRUE is
++    returned. Otherwise, a value of FALSE is returned.
+=1 163 4
+=1 168 3
++    PBCM_VIDEO_CONFIGURATION_DATA VideoData;
++    ULONG MatchKey;
+=1 178 31
++    // Determine which video controller is present in the system, and copy
++    // the monitor parameters.
++    //
++
++    if (strcmp(ConfigurationEntry->ComponentEntry.Identifier, BCM_VIDEO_IDENTIFIER) != 0) {
+=1 205 3
++    VideoData = (PBCM_VIDEO_CONFIGURATION_DATA)ConfigurationEntry->ConfigurationData;
+=1 301 5
++    HalpFrameBuffer = (PULONG)(KSEG0_BASE | VideoData->FrameBase);
++    HalpFramePitch = VideoData->BytesPerScanLine / sizeof(ULONG);
++    HalpFrameHeight = HalpMonitorConfigurationData.VerticalResolution;
++    HalpForeground = HalpColor(VideoData->PixelOrder, 0xff, 0xff, 0xff);
++    HalpBackground = HalpColor(VideoData->PixelOrder, 0x00, 0x00, 0xaa);
+=1 305 8
++    HalpScrollLine = HalpFramePitch * HalpCharacterHeight;
+=1 316 1
+=1 318 3
++    HalpClearDisplay();
+=1 697 1
++    return TRUE;
++}
++
+=1 454 24
++    PVOID FontHeader;
++
++    UNREFERENCED_PARAMETER(LoaderBlock);
++
++    if (HalpFontHeader == NULL) {
++        return TRUE;
++    }
+=1 485 10
++
+=1 496 30
++    UNREFERENCED_PARAMETER(ResetDisplayParameters);
+=1 530 2
++}
++
+=1 1412 22
++    KIRQL OldIrql;
++
++    //
++    // Raise IRQL to the highest level so the output is not interleaved.
+=1 1442 4
++    if (HalpDisplaySerial) {
++        HalpSerialOutput(String);
++    }
++
++    if (HalpFrameBuffer != NULL) {
++
++        //
++        // If ownership of the display has been switched to the system
++        // display driver, then reinitialize the display and revert
++        // ownership to the HAL.
+=1 1463 3 4
++            HalpClearDisplay();
+=1 697 1 8
+=1 1468 9 4
++    }
+=1 1492 2
++}
+=1 49 4
+=1 1500 22
++    PULONG Destination;
+=1 1524 13
++            RtlMoveMemory((PVOID)HalpFrameBuffer,
++                          (PVOID)(HalpFrameBuffer + HalpScrollLine),
++                          HalpScrollLength * sizeof(ULONG));
++
++            Destination = HalpFrameBuffer + HalpScrollLength;
+=1 1542 1
++                *Destination++ = HalpBackground;
+=1 1544 15
++}
++
+=1 1563 36
+=1 1604 4
++}
++
+=1 1611 25
+=1 1641 10
++}
+=1 54 4
+=1 1657 12
++    Glyph - Supplies a pointer to the glyph bitmap to be displayed.
+=1 518 8
++    PULONG Destination;
+=1 1680 17
++    Destination = HalpFrameBuffer +
++                (HalpRow * HalpScrollLine) + (HalpColumn * HalpCharacterWidth);
+=1 1699 9
++            *Destination++ = (FontValue >> 31) ? HalpForeground : HalpBackground;
+=1 1709 3
++        Destination += (HalpFramePitch - HalpCharacterWidth);
+=1 1714 3
++}

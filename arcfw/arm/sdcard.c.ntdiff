@@ -1,0 +1,613 @@
+#ntdiff PRIVATE/NTOS/BOOT/LIB/SCSIDISK.C PRIVATE/NTOS/BOOT/LIB/I386/ARCEMUL.C PRIVATE/NTOS/FW/DUOBASE/MIPS/SCSIDISK.C
++/*++
+=1 5 3
++    sdcard.c
+=1 9 3
++    This module implements the hard disk boot driver for the Raspberry Pi 2
++    (the ARM BOOT\LIB\SCSIDISK.C ScsiDiskEntryTable) over its SD card, the
++    system disk, which sits on the BCM2836 EMMC controller (an Arasan SD host
++    controller, SDHCI 3.0). The card is disk 0 of SCSI adapter 0, the adapter
++    the configuration tree describes: scsi(0)disk(0)rdisk(0).
++
++    The controller is driven by programmed I/O: each 512-byte block passes
++    through the data port. Card bring-up follows the SD physical layer
++    specification: CMD0, CMD8, ACMD41, CMD2, CMD3, CMD9 (capacity), CMD7,
++    ACMD6 (4-bit bus). A standard capacity card is byte addressed, a high
++    capacity card block addressed.
++
++    The EMMC loses a register write that follows another within two SD clocks
++    (a clock domain crossing), so every register write but the data port's is
++    followed by a delay longer than two clocks at the 400 kHz identification
++    clock.
+=1 23 3
+=3 28 2
++#include "string.h"
++
++#define EMMC_BASE           0x3F300000u
++#define EMMC(r)             (*(volatile ULONG *)(EMMC_BASE + (r)))
++
++#define BLKSIZECNT          0x04
++#define ARG1                0x08
++#define CMDTM               0x0C
++#define RESP0               0x10
++#define RESP1               0x14
++#define RESP2               0x18
++#define RESP3               0x1C
++#define DATA                0x20
++#define STATUS              0x24
++#define CONTROL0            0x28
++#define CONTROL1            0x2C
++#define INTERRUPT           0x30
++#define IRPT_MASK           0x34
++#define IRPT_EN             0x38
++
++#define STATUS_CMD_INHIBIT  0x00000001
++#define STATUS_DAT_INHIBIT  0x00000002
++
++#define C0_HCTL_DWIDTH      0x00000002
++#define C0_POWER_330        0x00000F00
++
++#define C1_CLK_INTLEN       0x00000001
++#define C1_CLK_STABLE       0x00000002
++#define C1_CLK_EN           0x00000004
++#define C1_TOUNIT_MAX       0x000E0000
++#define C1_SRST_HC          0x01000000
++#define C1_SRST_CMD         0x02000000
++#define C1_SRST_DATA        0x04000000
++
++#define INT_CMD_DONE        0x00000001
++#define INT_DATA_DONE       0x00000002
++#define INT_WRITE_RDY       0x00000010
++#define INT_READ_RDY        0x00000020
++#define INT_ERR             0x00008000
++
++#define TM_BLKCNT_EN        0x00000002
++#define TM_AUTO_CMD12       0x00000004
++#define TM_DAT_DIR_READ     0x00000010
++#define TM_MULTI_BLOCK      0x00000020
++
++#define RSP_NONE            0x00000000
++#define RSP_136             0x00010000
++#define RSP_48              0x00020000
++#define RSP_48_BUSY         0x00030000
++#define CMD_CRCCHK          0x00080000
++#define CMD_IXCHK           0x00100000
++#define CMD_ISDATA          0x00200000
++
++#define R1                  (RSP_48 | CMD_CRCCHK | CMD_IXCHK)
++#define R1B                 (RSP_48_BUSY | CMD_CRCCHK | CMD_IXCHK)
++#define R2                  (RSP_136 | CMD_CRCCHK)
++#define R3                  RSP_48
++#define R6                  R1
++#define R7                  R1
++
++#define CMD(n)              ((ULONG)(n) << 24)
++#define APP                 0x80000000
++
++#define POWER_DEVID_SD      0
++#define CLOCK_ID_EMMC       1
++#define IDENT_CLOCK         400000
++#define TRANSFER_CLOCK      25000000
++#define TIMEOUT_US          1000000
++
++static ULONG SdBaseClock;
++static ULONG SdRca;
++static ULONG SdSectors;
++static BOOLEAN SdHighCapacity;
++static ULONG SdBounce[SECTOR_SIZE / sizeof(ULONG)];
++
++static VOID
++SdWrite(
++    IN ULONG Register,
++    IN ULONG Value
++    )
++{
++    EMMC(Register) = Value;
++    FwStallExecution(6);
++}
++
++static BOOLEAN
++SdWait(
++    IN ULONG Register,
++    IN ULONG Mask,
++    IN ULONG Value
++    )
++{
++    ULONG start = FwGetMicroseconds();
++
++    while ((EMMC(Register) & Mask) != Value) {
++        if ((FwGetMicroseconds() - start) > TIMEOUT_US) {
++            return FALSE;
++        }
++    }
+=1 3213 3 -4
++//
++// Program the SD clock: the 10-bit divided clock is base / (2 * divisor).
++//
++static BOOLEAN
++SdSetClock(
++    IN ULONG Hz
++    )
++{
++    ULONG divisor = (SdBaseClock + 2 * Hz - 1) / (2 * Hz);
++    ULONG c1;
++
++    if (divisor > 0x3FF) {
++        divisor = 0x3FF;
++    }
++    c1 = EMMC(CONTROL1) & ~(C1_CLK_EN | 0xFFE0);
++    SdWrite(CONTROL1, c1);
++    c1 |= ((divisor & 0xFF) << 8) | ((divisor >> 8) << 6) | C1_CLK_INTLEN | C1_TOUNIT_MAX;
++    SdWrite(CONTROL1, c1);
++    if (!SdWait(CONTROL1, C1_CLK_STABLE, C1_CLK_STABLE)) {
++        return FALSE;
++    }
++    SdWrite(CONTROL1, c1 | C1_CLK_EN);
+=1 3213 3 -4
++static VOID
++SdResetLines(
++    IN ULONG Lines
++    )
++{
++    SdWrite(CONTROL1, EMMC(CONTROL1) | Lines);
++    SdWait(CONTROL1, Lines, 0);
+=1 375 3 -4
++// Issue a command; for a data command the caller moves the blocks afterwards.
++// An application command is prefixed with CMD55.
++//
++static BOOLEAN
++SdCommand(
++    IN ULONG Command,
++    IN ULONG Argument,
++    IN ULONG Blocks
++    )
++{
++    ULONG busy = STATUS_CMD_INHIBIT;
++    ULONG status;
++
++    if ((Command & APP) != 0 && !SdCommand(CMD(55) | R1, SdRca << 16, 0)) {
++        return FALSE;
++    }
++    Command &= ~APP;
++
++    if ((Command & (CMD_ISDATA | RSP_48_BUSY)) != 0) {
++        busy |= STATUS_DAT_INHIBIT;
++    }
++    if (!SdWait(STATUS, busy, 0)) {
++        return FALSE;
++    }
++
++    SdWrite(INTERRUPT, 0xFFFFFFFF);
++    if (Blocks != 0) {
++        SdWrite(BLKSIZECNT, (Blocks << 16) | SECTOR_SIZE);
++    }
++    SdWrite(ARG1, Argument);
++    SdWrite(CMDTM, Command);
++
++    if (!SdWait(INTERRUPT, INT_CMD_DONE | INT_ERR, INT_CMD_DONE) ||
++        ((status = EMMC(INTERRUPT)) & INT_ERR) != 0) {
++        SdWrite(INTERRUPT, 0xFFFFFFFF);
++        SdResetLines(C1_SRST_CMD | C1_SRST_DATA);
++        return FALSE;
++    }
++    SdWrite(INTERRUPT, INT_CMD_DONE);
++
++    if ((Command & RSP_48_BUSY) == RSP_48_BUSY && (Command & CMD_ISDATA) == 0) {
++        SdWait(INTERRUPT, INT_DATA_DONE, INT_DATA_DONE);
++        SdWrite(INTERRUPT, INT_DATA_DONE);
++    }
+=1 3213 3 -4
++//
++// Move Blocks 512-byte blocks through the data port, then wait for the transfer
++// (and the automatic CMD12 of a multiple block transfer) to complete.
++//
++static BOOLEAN
++SdTransfer(
++    IN PULONG Buffer,
++    IN ULONG Blocks,
++    IN BOOLEAN Read
++    )
++{
++    ULONG ready = Read ? INT_READ_RDY : INT_WRITE_RDY;
++    ULONG i;
++
++    while (Blocks--) {
++        if (!SdWait(INTERRUPT, ready | INT_ERR, ready) || (EMMC(INTERRUPT) & INT_ERR) != 0) {
++            SdWrite(INTERRUPT, 0xFFFFFFFF);
++            SdResetLines(C1_SRST_CMD | C1_SRST_DATA);
++            return FALSE;
++        }
++        SdWrite(INTERRUPT, ready);
++        for (i = 0; i < SECTOR_SIZE / sizeof(ULONG); i += 1) {
++            if (Read) {
++                *Buffer++ = EMMC(DATA);
++            } else {
++                EMMC(DATA) = *Buffer++;
+=1 1677 4
++    if (!SdWait(INTERRUPT, INT_DATA_DONE | INT_ERR, INT_DATA_DONE)) {
++        SdResetLines(C1_SRST_CMD | C1_SRST_DATA);
++        return FALSE;
++    }
++    SdWrite(INTERRUPT, 0xFFFFFFFF);
+=1 3213 3 -4
++static BOOLEAN
++SdBlocks(
++    IN ULONG Lba,
++    IN ULONG Count,
++    IN PULONG Buffer,
++    IN BOOLEAN Read
++    )
++{
++    ULONG command;
++    ULONG address = SdHighCapacity ? Lba : Lba * SECTOR_SIZE;
++
++    if (Count == 1) {
++        command = Read ? (CMD(17) | R1 | CMD_ISDATA | TM_DAT_DIR_READ) : (CMD(24) | R1 | CMD_ISDATA);
++    } else {
++        command = (Read ? (CMD(18) | TM_DAT_DIR_READ) : CMD(25)) |
++                  R1 | CMD_ISDATA | TM_MULTI_BLOCK | TM_BLKCNT_EN | TM_AUTO_CMD12;
++    }
++    return SdCommand(command, address, Count) && SdTransfer(Buffer, Count, Read);
+=1 375 3 -4
++// The card's capacity in sectors from its CSD (the controller drops the CRC byte, so
++// RESP0-3 hold CSD bits 127:8).
++//
++static ULONG
++SdCapacity(
+=2 1099 3
++    ULONG r1 = EMMC(RESP1), r2 = EMMC(RESP2);
++    ULONG size, mult, blockLength;
++
++    if (((EMMC(RESP3) >> 22) & 3) == 1) {
++        size = (r1 >> 8) & 0x3FFFFF;
++        return (size + 1) * 1024;
++    }
++
++    size = ((r2 & 0x3) << 10) | (r1 >> 22);
++    mult = (r1 >> 7) & 0x7;
++    blockLength = (r2 >> 8) & 0xF;
++    return ((size + 1) << (mult + 2 + blockLength)) / SECTOR_SIZE;
+=1 375 3 -4
++// Define the partition table of a master boot record.
++//
++
++#define BOOT_SIGNATURE_OFFSET       ((0x200 / 2) - 1)
++#define BOOT_RECORD_SIGNATURE       0xAA55
++#define PARTITION_TABLE_OFFSET      (0x1BE / 2)
++
++ARC_STATUS
++SdDiskClose (
+=1 78 4
++SdDiskMount (
+=1 83 5
++SdDiskOpen (
+=1 89 6
++SdDiskRead (
+=2 125 7
++SdDiskGetReadStatus (
+=1 78 4
++SdDiskSeek (
+=1 109 6
++SdDiskWrite (
+=1 96 7
++SdDiskGetFileInformation (
+=1 124 4
+=1 187 4
++BL_DEVICE_ENTRY_TABLE SdDiskEntryTable = {
++    SdDiskClose,
++    SdDiskMount,
++    SdDiskOpen,
++    SdDiskRead,
++    SdDiskGetReadStatus,
++    SdDiskSeek,
++    SdDiskWrite,
++    SdDiskGetFileInformation,
+=1 200 3
++PCHAR SdDiskDevicePath = "scsi(0)disk(0)rdisk(0)";
++
++static BOOLEAN
++SdDiskBootInitialize (
+=2 1139 7
++    This routine resets the controller and brings the card to the transfer
++    state.
+=1 231 3
++    TRUE if a card is ready, FALSE otherwise.
+=1 235 4
++    ULONG ocr;
++    ULONG i;
++    BOOLEAN v2;
++
++    MailboxSetPowerState(POWER_DEVID_SD, TRUE);
++    SdBaseClock = MailboxGetClockRate(CLOCK_ID_EMMC);
++    if (SdBaseClock == 0) {
++        SdBaseClock = 50000000;
++    }
++
++    SdWrite(CONTROL0, 0);
++    SdWrite(CONTROL1, C1_SRST_HC);
++    if (!SdWait(CONTROL1, C1_SRST_HC, 0)) {
++        FwPrint("SD: controller reset timed out\r\n");
++        return FALSE;
++    }
++
++    SdWrite(CONTROL0, C0_POWER_330);
++    if (!SdSetClock(IDENT_CLOCK)) {
++        FwPrint("SD: clock did not stabilize\r\n");
++        return FALSE;
++    }
++
++    SdWrite(IRPT_EN, 0);
++    SdWrite(IRPT_MASK, 0xFFFFFFFF);
++    SdWrite(INTERRUPT, 0xFFFFFFFF);
++
++    SdRca = 0;
++    SdCommand(CMD(0) | RSP_NONE, 0, 0);
++    v2 = SdCommand(CMD(8) | R7, 0x1AA, 0) && (EMMC(RESP0) & 0xFFF) == 0x1AA;
++
++    for (i = 0; i < 1000; i += 1) {
++        if (!SdCommand(APP | CMD(41) | R3, (v2 ? 0x40000000 : 0) | 0x00FF8000, 0)) {
++            FwPrint("SD: no card\r\n");
++            return FALSE;
++        }
++
++        ocr = EMMC(RESP0);
++        if ((ocr & 0x80000000) != 0) {
+=1 597 3
++        FwStallExecution(1000);
++    }
++
++    if ((ocr & 0x80000000) == 0) {
++        FwPrint("SD: card did not power up\r\n");
++        return FALSE;
++    }
++
++    SdHighCapacity = (ocr & 0x40000000) != 0;
++
++    if (!SdCommand(CMD(2) | R2, 0, 0) || !SdCommand(CMD(3) | R6, 0, 0)) {
++        FwPrint("SD: card identification failed\r\n");
++        return FALSE;
++    }
++
++    SdRca = EMMC(RESP0) >> 16;
++
++    if (!SdCommand(CMD(9) | R2, SdRca << 16, 0)) {
++        FwPrint("SD: CSD read failed\r\n");
++        return FALSE;
++    }
++
++    SdSectors = SdCapacity();
++
++    if (!SdCommand(CMD(7) | R1B, SdRca << 16, 0) || !SdSetClock(TRANSFER_CLOCK)) {
++        FwPrint("SD: card select failed\r\n");
++        return FALSE;
++    }
++
++    if (SdCommand(APP | CMD(6) | R1, 2, 0)) {
++        SdWrite(CONTROL0, EMMC(CONTROL0) | C0_HCTL_DWIDTH);
++    }
++
++    if (!SdHighCapacity) {
++        SdCommand(CMD(16) | R1, SECTOR_SIZE, 0);
++    }
++
++    FwPrint("SD: %s card, %d MB\r\n", SdHighCapacity ? "SDHC" : "SD", SdSectors / 2048);
+=1 3213 3 -4
++static ARC_STATUS
++SdDiskSectors(
++    IN ULONG Lba,
++    IN ULONG Count,
++    IN PVOID Buffer,
++    IN BOOLEAN Read
+=1 218 6
++    This routine transfers whole sectors of the disk. The buffer may have any
++    alignment; a misaligned transfer goes through the bounce block.
+=1 235 4
++    PUCHAR p = Buffer;
++
++    if ((Lba + Count) > SdSectors) {
+=1 651 3 -4
++    if (((ULONG)p & 3) == 0) {
++        return SdBlocks(Lba, Count, (PULONG)p, Read) ? ESUCCESS : EIO;
++    }
++
++    while (Count--) {
++        if (!Read) {
++            memcpy(SdBounce, p, SECTOR_SIZE);
++        }
++
++        if (!SdBlocks(Lba, 1, SdBounce, Read)) {
+=1 651 3
++        if (Read) {
++            memcpy(p, SdBounce, SECTOR_SIZE);
++        }
++
++        Lba += 1;
++        p += SECTOR_SIZE;
+=1 755 4
++
++static ARC_STATUS
++SdDiskBootPartitionOpen(
++    IN ULONG   FileId,
+=1 1061 7
++    This routine sets the partition information of the given partition in
++    the file table. It reads the partition information until the requested
++    partition is found or no more partitions are defined: the primary
++    partitions of the master boot record are counted first, then the logical
++    volumes of the extended partition.
+=1 1075 5
+=1 1082 1
+=1 231 3
++    ESUCCESS if the partition was found, otherwise ENODEV.
+=1 235 4
+=2 1255 2
+=1 1101 4
+=1 1106 3
+=1 1110 9
++    do {
++        if (SdDiskSectors(PartitionOffset, 1, DataBuffer, TRUE) != ESUCCESS) {
+=1 411 4 4
+=2 1294 5 -4
+=1 411 4 4
+=1 1167 3 -4
++
++        Partition = (PPARTITION_DESCRIPTOR)(DataBuffer+PARTITION_TABLE_OFFSET);
++
+=1 1171 3 -4
++
+=1 1174 4 -4
++
+=1 1178 9 -4
++
+=1 1187 9 -4
++                Context->PartitionLength.QuadPart = (ULONGLONG)PartitionLength << Context->SectorShift;
+=1 1200 2 -4
+=2 1341 8 -4
++
++        Partition = (PPARTITION_DESCRIPTOR)(DataBuffer + PARTITION_TABLE_OFFSET);
++        PartitionOffset = 0;
++
+=1 1171 3 -4
++
+=1 1215 12 -4
++
+=1 1228 2
++
+=1 353 3 -4
++ARC_STATUS
++SdDiskOpen (
+=1 311 9
++    This routine fills in the file table entry: the disk is determined from
++    the name, and the partition information is read from the disk.
+=1 324 18
+=1 344 3
++    RtlZeroMemory(Context, sizeof(PARTITION_CONTEXT));
++
++    //
++    // The card is logical unit 0 of disk 0 on SCSI adapter 0.
+=1 364 3
++    if (FwGetPathMnemonicKey(OpenPath, "scsi", &Id) || (Id != 0) ||
++        FwGetPathMnemonicKey(OpenPath, "disk", &Id) || (Id != 0) ||
++        FwGetPathMnemonicKey(OpenPath, "rdisk", &Id) || (Id != 0)) {
+=1 353 3
++    Context->SectorShift = 9;
++    Context->PartitionLength.QuadPart = (ULONGLONG)SdSectors << Context->SectorShift;
++    Context->EndingSector = SdSectors;
++    BlFileTable[*FileId].Position.QuadPart = 0;
+=1 421 9
++        return SdDiskBootPartitionOpen(*FileId, (UCHAR)Partition);
+=1 755 4
++
++static ARC_STATUS
++SdDiskTransfer(
++    IN ULONG FileId,
++    IN PUCHAR Buffer,
++    IN ULONG Length,
++    OUT PULONG Count,
++    IN BOOLEAN Read
+=1 218 6
++    This routine transfers bytes at the position of an open partition: whole
++    sectors directly, and the partial sectors at the edges through the bounce
++    block.
+=1 235 4
++    PBL_FILE_TABLE f = &BlFileTable[FileId];
++    ULONG base = f->u.PartitionContext.StartingSector;
++    ULONGLONG pos = f->Position.QuadPart;
++    ULONG done = 0;
++
++    *Count = 0;
++    if ((pos + Length) > (ULONGLONG)f->u.PartitionContext.PartitionLength.QuadPart) {
+=1 651 3 -4
++    while (done < Length) {
++        ULONG lba = base + (ULONG)((pos + done) / SECTOR_SIZE);
++        ULONG offset = (ULONG)((pos + done) % SECTOR_SIZE);
++        ULONG chunk = Length - done;
++
++        if (offset == 0 && chunk >= SECTOR_SIZE) {
++            chunk &= ~(SECTOR_SIZE - 1);
++            if (SdDiskSectors(lba, chunk / SECTOR_SIZE, Buffer + done, Read) != ESUCCESS) {
+=1 651 3 4
++        } else {
++            if (chunk > SECTOR_SIZE - offset) {
++                chunk = SECTOR_SIZE - offset;
++            }
++
++            if (!SdBlocks(lba, 1, SdBounce, TRUE)) {
+=1 651 3 4
++            if (Read) {
++                memcpy(Buffer + done, (PUCHAR)SdBounce + offset, chunk);
++            } else {
++                memcpy((PUCHAR)SdBounce + offset, Buffer + done, chunk);
++                if (!SdBlocks(lba, 1, SdBounce, FALSE)) {
++                    return EIO;
+=1 1677 4 4
++        done += chunk;
++    }
++
++    f->Position.QuadPart = pos + Length;
++    *Count = Length;
+=1 255 3
++ARC_STATUS
++SdDiskRead (
+=2 931 5
++{
++    return SdDiskTransfer(FileId, Buffer, Length, Count, TRUE);
+=2 1082 3
++SdDiskWrite (
+=1 442 5
++{
++    return SdDiskTransfer(FileId, Buffer, Length, Count, FALSE);
+=2 1082 3
++SdDiskSeek (
+=1 717 9
++    This routine sets the position of an open partition.
+=1 235 4
++    if (SeekMode == SeekRelative) {
++        BlFileTable[FileId].Position.QuadPart += Offset->QuadPart;
++    } else {
+=1 750 1
+=1 755 4
++
++ARC_STATUS
++SdDiskClose (
++    IN ULONG FileId
++    )
++{
+=1 282 3
++
++ARC_STATUS
++SdDiskMount (
+=1 288 3
++{
++    return EINVAL;
+=2 1082 3
++SdDiskGetReadStatus (
++    IN ULONG FileId
++    )
+=1 305 3
++
++ARC_STATUS
++SdDiskGetFileInformation (
+=1 216 8
++    This routine returns information on the partition.
+=1 225 14
+=1 240 6
++    Finfo->StartingAddress.QuadPart = (ULONGLONG)Context->StartingSector << Context->SectorShift;
++    Finfo->EndingAddress.QuadPart = Finfo->StartingAddress.QuadPart +
++                                    Context->PartitionLength.QuadPart;
++    Finfo->CurrentPosition = BlFileTable[FileId].Position;
+=1 253 1
+=1 255 3
+=3 633 10
++    This routine brings up the SD card and initializes its entry in the
++    driver lookup table.
+=1 225 3
++    LookupTable - Supplies a pointer to the first free location in the
++                  driver lookup table.
++
++    Entries - Supplies the number of free entries in the driver lookup table.
+=1 1267 8
++    if (!SdDiskBootInitialize()) {
+=1 1307 3
++    LookupTable->DevicePath = SdDiskDevicePath;
++    LookupTable->DispatchTable = &SdDiskEntryTable;
++}

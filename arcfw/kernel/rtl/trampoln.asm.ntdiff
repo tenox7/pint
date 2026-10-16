@@ -1,0 +1,78 @@
+#ntdiff PRIVATE/NTOS/RTL/I386/USERDISP.ASM
++;++
+=1 5 3
++;    trampoln.asm
+=1 9 3
++;    The user mode dispatchers: the ARM port of RTL\MIPS\TRAMPOLN.S. The
++;    kernel redirects a thread returning to user mode here to deliver a user
++;    mode APC or to dispatch an exception, with the context record of the
++;    interrupted code at the stack pointer, which the unwind data of the
++;    dispatchers describes: an exception that reaches a dispatcher's frame is
++;    unwound to the interrupted code.
+=1 130 3
++#include "ksarm.h"
++#include "kxarm.h"
++
++        IMPORT  ZwContinue
++        IMPORT  ZwRaiseException
++        IMPORT  RtlDispatchException
++        IMPORT  RtlRaiseException
++        IMPORT  RtlRaiseStatus
++
++        TEXTAREA
++
+=1 48 4
+=1 53 3
++;    IN PKNORMAL_ROUTINE NormalRoutine
+=1 57 5
++;    in user mode, with the context frame at sp. It calls the APC routine,
++;    then continues with the context frame. Should that fail, its status is
++;    raised as a noncontinuable exception.
+=1 130 3
++        NESTED_ENTRY KiUserApcDispatcher
++        PROLOG_PUSH_CONTEXT
++        blx     r3                              ; call the APC routine
++        mov     r0, sp                          ; context frame
++        movs    r1, #1                          ; test alert
++        bl      ZwContinue
++        mov     r4, r0                          ; status
++10      mov     r0, r4
++        bl      RtlRaiseStatus
++        b       %B10
++        NESTED_END KiUserApcDispatcher
++
+=1 103 11
++;    mode exception, with r4 = the exception record and r5 = the context
++;    record, at sp. If a frame based handler handles the exception, execution
++;    continues with the context, which it may have changed; otherwise last
++;    chance processing is performed. Should either service fail, its status
++;    is raised as a noncontinuable exception.
+=1 130 3
++        NESTED_ENTRY KiUserExceptionDispatcher
++        PROLOG_PUSH_CONTEXT
++        PROLOG_STACK_ALLOC ExceptionRecordLength
++        mov     r0, r4                          ; exception record
++        mov     r1, r5                          ; context record
++        bl      RtlDispatchException
++        cbz     r0, %F10
++        mov     r0, r5                          ; handled: continue
++        movs    r1, #0
++        bl      ZwContinue
++        b       %F20
++10      mov     r0, r4                          ; not handled: last chance
++        mov     r1, r5
++        movs    r2, #0                          ; not first chance
++        bl      ZwRaiseException
++20      mov     r6, r0                          ; status
++        mov     r0, sp
++        str     r6, [r0, #ErExceptionCode]
++        movs    r1, #EXCEPTION_NONCONTINUABLE
++        str     r1, [r0, #ErExceptionFlags]
++        str     r4, [r0, #ErExceptionRecord]
++        movs    r1, #0
++        str     r1, [r0, #ErNumberParameters]
++        bl      RtlRaiseException
++        b       %B20
++        NESTED_END KiUserExceptionDispatcher
++
++        END

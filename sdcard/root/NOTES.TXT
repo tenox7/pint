@@ -1,0 +1,2 @@
+Edit this file (or add new ones) under loader/ramdisk/root/, re-run
+make-ramdisk.sh, rebuild, and it shows up in arcdos: dir / type NOTES.TXT.

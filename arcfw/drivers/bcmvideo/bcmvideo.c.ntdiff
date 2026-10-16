@@ -1,0 +1,288 @@
+#ntdiff PRIVATE/NTOS/VIDEO/JAZZG364/JAZZG364.C PRIVATE/NTOS/VIDEO/JAZZG300/JAZZG300.C PRIVATE/NTOS/VIDEO/JZVXL484/JZVXL484.C
+=1 1 6
++    bcmvideo.c
+=1 8 3
++    This module contains the code that implements the video miniport driver
++    of the VideoCore of the BCM2835 in the Raspberry Pi 2.
++
++    The firmware has the VideoCore allocate a frame buffer through the mailbox
++    property channel and describes it as the display controller of the
++    system: its identifier and configuration data (bcmvdeo.h) give the frame
++    buffer and its pixel format, the monitor peripheral below it the screen.
++    The driver offers that one mode, a direct color frame buffer; there is
++    no palette and no hardware pointer.
+=1 13 5
+=1 20 8
++#include "bcmvdeo.h"
++
++//
++// The identifier of the display controller component.
++//
++
++#define BCM_VIDEO_NAME          L"BCM2835 VideoCore"
++#define BCM_VIDEO_NAME_LENGTH   (sizeof(BCM_VIDEO_NAME) - sizeof(WCHAR))
++
++//
++// The configuration data of a component follows the header of the full
++// resource descriptor the registry keeps it in.
++//
++
++#define CONFIGURATION_DATA_OFFSET 8
++
+=1 62 5
+=1 73 2
++    PVOID FrameAddress;
++    ULONG ScreenStride;
++    USHORT BitsPerPixel;
++    USHORT PixelOrder;
+=1 97 1
+=1 103 1
+=1 102 1
+=1 107 1
+=1 113 2
+=1 116 3
++// Functions that start with 'Bcm' are entry points for the OS port driver.
+=1 120 3
++BcmFindAdapter(
+=1 124 8
++BcmInitialize(
+=1 133 4
++BcmStartIO(
+=1 143 4
++VP_STATUS
++BcmGetDeviceDataCallback(
+=1 153 11
++
+=1 200 31
+=1 235 2
+=1 241 2
++    hwInitData.HwFindAdapter = BcmFindAdapter;
++    hwInitData.HwInitialize = BcmInitialize;
++    hwInitData.HwStartIO = BcmStartIO;
+=1 255 4
++    // The VideoCore is on the internal bus of the BCM2835.
+=1 267 10
++
++VP_STATUS
++BcmFindAdapter(
+=1 280 12
++    is present in the system. It is when the firmware described the
++    VideoCore frame buffer as the display controller; the monitor below it
++    gives the screen.
+=1 295 9
++    ArgumentString - Supplies a NULL terminated ASCII string. This string
+=1 305 3
++        filled by the miniport driver.
+=1 312 3
++        and the same config info.
+=1 220 3
++    NO_ERROR if the adapter was found, ERROR_INVALID_PARAMETER otherwise.
+=1 224 5
+=1 343 6
++    if (VideoPortGetDeviceData(HwDeviceExtension,
++                               VpControllerData,
++                               &BcmGetDeviceDataCallback,
++                               ConfigInfo)) {
++
++        VideoDebugPrint((2, "BcmVideo: VideoPort get controller info failed\n"));
+=1 344 5
++    if (VideoPortGetDeviceData(HwDeviceExtension,
++                               VpMonitorData,
++                               &BcmGetDeviceDataCallback,
++                               NULL)) {
++
++        VideoDebugPrint((2, "BcmVideo: VideoPort get monitor info failed\n"));
+=1 366 20
++    *Again = 0;
+=1 409 3
++} // end BcmFindAdapter()
++
++VP_STATUS
++BcmGetDeviceDataCallback(
+=1 416 15
++    Callback routine for the VideoPortGetDeviceData function: the frame
++    buffer of the display controller, and the screen of the monitor.
+=1 432 34
+=1 335 2
++    PBCM_VIDEO_CONFIGURATION_DATA videoData;
++    PMONITOR_CONFIG_DATA monitorData;
++    VIDEO_ACCESS_RANGE accessRange;
+=1 472 6
++        VideoDebugPrint((2, "BcmVideo: controller identifier is %ws\n", Identifier));
++
++        if (BCM_VIDEO_NAME_LENGTH !=
++            VideoPortCompareMemory(Identifier,
++                                   BCM_VIDEO_NAME,
++                                   BCM_VIDEO_NAME_LENGTH)) {
+=2 438 2
+=1 565 3
++        if (ConfigurationDataLength <
++            CONFIGURATION_DATA_OFFSET + sizeof(BCM_VIDEO_CONFIGURATION_DATA)) {
+=1 586 5
++        videoData = (PBCM_VIDEO_CONFIGURATION_DATA)
++                    ((PUCHAR)ConfigurationData + CONFIGURATION_DATA_OFFSET);
++
++        //
++        // The frame buffer is the one memory range of the adapter.
++        //
++
++        accessRange.RangeStart.HighPart = 0;
++        accessRange.RangeStart.LowPart = videoData->FrameBase;
++        accessRange.RangeLength = videoData->FrameSize;
++        accessRange.RangeInIoSpace = 0;
++        accessRange.RangeVisible = 0;
++        accessRange.RangeShareable = 0;
+=1 557 2
++                                             1,
++                                             &accessRange);
+=1 561 7
++        hwDeviceExtension->PhysicalFrameAddress = accessRange.RangeStart;
++        hwDeviceExtension->FrameLength = videoData->FrameSize;
++        hwDeviceExtension->ScreenStride = videoData->BytesPerScanLine;
++        hwDeviceExtension->BitsPerPixel = videoData->BitsPerPixel;
++        hwDeviceExtension->PixelOrder = videoData->PixelOrder;
++
++        //
++        // Map the frame buffer into the system virtual address space so we
+=1 608 3
++        if ((hwDeviceExtension->FrameAddress =
+=1 582 1 -1
++                                    accessRange.RangeStart,
++                                    accessRange.RangeLength,
++                                    FALSE)) == NULL) {
+=1 616 7
++    case VpMonitorData:
++
++        if (ConfigurationDataLength <
++            CONFIGURATION_DATA_OFFSET + sizeof(MONITOR_CONFIG_DATA)) {
+=1 586 5
++        monitorData = (PMONITOR_CONFIG_DATA)
++                      ((PUCHAR)ConfigurationData + CONFIGURATION_DATA_OFFSET);
++
++        hwDeviceExtension->HorizontalResolution = monitorData->HorizontalResolution;
++        hwDeviceExtension->VerticalResolution = monitorData->VerticalResolution;
++        hwDeviceExtension->HorizontalScreenSize = monitorData->HorizontalScreenSize;
++        hwDeviceExtension->VerticalScreenSize = monitorData->VerticalScreenSize;
+=1 620 3
++    default:
++
++        VideoDebugPrint((2, "BcmVideo: callback has bad device type\n"));
+=1 683 4
++} // end BcmGetDeviceDataCallback()
++
++BOOLEAN
++BcmInitialize(
+=1 691 7
++    This routine does one time initialization of the device. The firmware
++    left the VideoCore displaying the frame buffer, so there is none to do.
+=3 617 13
++    return TRUE;
++
++} // end BcmInitialize()
++
++BOOLEAN
++BcmStartIO(
+=1 723 9
++    accepts a Video Request Packet, performs the request, and then returns
+=1 733 11
+=1 1261 5
+=1 335 2
+=1 751 2
++    PVIDEO_POINTER_CAPABILITIES pointerCapabilities;
++    ULONG inIoSpace;
++    VP_STATUS status;
+=2 682 5
++        VideoDebugPrint((2, "BcmStartIO - MapVideoMemory\n"));
++
++        if ((RequestPacket->OutputBufferLength <
+=1 777 2 -1
++            (RequestPacket->InputBufferLength < sizeof(VIDEO_MEMORY))) {
+=1 959 6
+=1 784 5
++        memoryInformation->VideoRamLength = hwDeviceExtension->FrameLength;
+=1 791 10
++        // The frame buffer and the video memory are the same.
++        //
++
++        memoryInformation->FrameBufferBase = memoryInformation->VideoRamBase;
++        memoryInformation->FrameBufferLength = memoryInformation->VideoRamLength;
+=1 622 3
+=1 814 2
++        VideoDebugPrint((2, "BcmStartIO - UnMapVideoMemory\n"));
+=1 817 4
+=1 961 4
+=1 823 8
+=1 832 3
++        VideoDebugPrint((2, "BcmStartIO - Query(Available/Current)Modes\n"));
+=1 836 5
++                                    sizeof(VIDEO_MODE_INFORMATION))) {
+=1 959 6
+=1 847 2 -4
++        modeInformation->VisScreenWidth = hwDeviceExtension->HorizontalResolution;
+=1 852 1 -4
++        modeInformation->ScreenStride = hwDeviceExtension->ScreenStride;
+=1 855 1 -4
++        modeInformation->BitsPerPlane = hwDeviceExtension->BitsPerPixel;
+=1 860 1 -4
++        modeInformation->XMillimeter = hwDeviceExtension->HorizontalScreenSize ?
++                                       hwDeviceExtension->HorizontalScreenSize : 320;
++        modeInformation->YMillimeter = hwDeviceExtension->VerticalScreenSize ?
++                                       hwDeviceExtension->VerticalScreenSize : 240;
+=1 862 4 -4
++        if (hwDeviceExtension->PixelOrder == BCM_PIXEL_ORDER_RGB) {
++
++            modeInformation->RedMask = 0x000000FF;
++            modeInformation->GreenMask = 0x0000FF00;
++            modeInformation->BlueMask = 0x00FF0000;
+=1 494 3
++            modeInformation->RedMask = 0x00FF0000;
++            modeInformation->GreenMask = 0x0000FF00;
++            modeInformation->BlueMask = 0x000000FF;
+=1 565 3
++        modeInformation->AttributeFlags = VIDEO_MODE_COLOR | VIDEO_MODE_GRAPHICS;
+=1 913 5
+=1 881 2
++        VideoDebugPrint((2, "BcmStartIO - QueryNumAvailableModes\n"));
+=1 838 2
++            (RequestPacket->StatusBlock->Information = sizeof(VIDEO_NUM_MODES))) {
+=1 959 6
+=1 900 5 -4
+=1 622 3
+=1 910 2
++        VideoDebugPrint((2, "BcmStartIO - SetCurrentMode\n"));
++
++        if (RequestPacket->InputBufferLength < sizeof(VIDEO_MODE)) {
+=1 959 6
++        if ((((PVIDEO_MODE)RequestPacket->InputBuffer)->RequestedMode &
++             ~VIDEO_MODE_NO_ZERO_MEMORY) != 0) {
+=1 974 6
++        if (!(((PVIDEO_MODE)RequestPacket->InputBuffer)->RequestedMode &
++              VIDEO_MODE_NO_ZERO_MEMORY)) {
++
++            VideoPortZeroDeviceMemory(hwDeviceExtension->FrameAddress,
++                                      hwDeviceExtension->FrameLength);
+=3 1151 7
+=1 919 3
++        // There is no other mode to return to; the frame buffer stays.
+=1 927 6
+=1 1001 2
++        VideoDebugPrint((2, "BcmStartIO - QueryPointerCapabilities\n"));
+=1 838 3
++                                    sizeof(VIDEO_POINTER_CAPABILITIES))) {
+=1 959 7
++        // There is no hardware pointer: the display driver draws it.
++        //
++
++        pointerCapabilities = RequestPacket->OutputBuffer;
++        pointerCapabilities->Flags = 0;
++        pointerCapabilities->MaxWidth = 0;
++        pointerCapabilities->MaxHeight = 0;
++        pointerCapabilities->HWPtrBitmapStart = (ULONG)-1;
++        pointerCapabilities->HWPtrBitmapEnd = (ULONG)-1;
+=1 913 5
++    default:
++
++        VideoDebugPrint((1, "BcmStartIO - invalid IOCTL %x\n",
++                         RequestPacket->IoControlCode));
+=1 1231 11
++} // end BcmStartIO()

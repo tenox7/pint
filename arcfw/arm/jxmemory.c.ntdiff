@@ -1,0 +1,121 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/JXMEMORY.C PRIVATE/NTOS/FW/ALPHA/JENSEN/ALPHA/JXMEMORY.C
+=1 3 11
++    for the Raspberry Pi 2 (the ARM FW\MIPS\JXMEMORY.C).
++
++    Page 0 holds the exception vectors and page 1 the system parameter block;
++    the firmware image, its data and stack follow at 0x8000, where the GPU
++    loads it; the rest of the ARM's memory, whose size the VideoCore reports,
++    is free. A loaded program is described within the free memory.
+=1 22 4
++
++extern char FwStart[];
+=2 39 5
++static VOID
++FwpAddDescriptor (
+=1 233 4
++{
++    PFW_MEMORY_DESCRIPTOR Descriptor = &FwMemoryTable[FwMemoryFree++];
++
++    Descriptor->MemoryEntry.MemoryType = MemoryType;
++    Descriptor->MemoryEntry.BasePage = BasePage;
++    Descriptor->MemoryEntry.PageCount = PageCount;
++    InsertTailList(&FwMemoryListHead, &Descriptor->ListEntry);
+=1 343 3
+=1 38 11
+=1 57 3
++    ULONG Image = (ULONG)FwStart & ~3;
++    ULONG FirmwareBase = Image >> PAGE_SHIFT;
++    ULONG FirmwareEnd = (Image + ((PULONG)Image)[2] + PAGE_SIZE - 1) >> PAGE_SHIFT;
++    ULONG MemoryPages = MailboxGetArmMemory() >> PAGE_SHIFT;
+=1 65 2
++    FwMemoryFree = 0;
++
++    //
++    // The exception vectors and the system parameter block.
++    //
++
++    FwpAddDescriptor(MemoryFirmwarePermanent, 0, 2);
++
++    //
++    // The memory below the firmware, where the GPU left the boot arguments.
++    //
++
++    FwpAddDescriptor(MemoryFree, 2, FirmwareBase - 2);
++
++    //
++    // The firmware code, data and stack.
++    //
++
++    FwpAddDescriptor(MemoryFirmwarePermanent, FirmwareBase, FirmwareEnd - FirmwareBase);
++
++    //
++    // The free memory above the firmware.
++    //
++
++    FwpAddDescriptor(MemoryFree, FirmwareEnd, MemoryPages - FirmwareEnd);
++
++    SYSTEM_BLOCK->FirmwareVector[MemoryRoutine] = (PVOID)FwGetMemoryDescriptor;
++}
++
+=1 173 14
+=1 57 3
+=1 201 3
++    if (!ARGUMENT_PRESENT(MemoryDescriptor)) {
+=1 226 2
++
++    TableEntry = CONTAINING_RECORD(MemoryDescriptor, FW_MEMORY_DESCRIPTOR, MemoryEntry);
+=1 215 1 -4
++    if (NextEntry == &FwMemoryListHead) {
+=1 222 3 -4
++    return &(CONTAINING_RECORD(NextEntry, FW_MEMORY_DESCRIPTOR, ListEntry)->MemoryEntry);
+=1 343 3
+=1 231 15
+=1 57 3
++    ULONG Offset = BasePage - MemoryDescriptor->MemoryEntry.BasePage;
+=1 268 3
++    // additional descriptors need to be allocated.
++    //
++
+=1 278 1
+=1 284 1
+=1 342 3 4
++    FwpAddDescriptor(MemoryType, BasePage, PageCount);
++
++    //
++    // The specified region lies at the start, at the end or in the middle of
++    // the free region; in the middle another descriptor is generated for the
++    // free memory above it.
++    //
++
++    if (Offset == 0) {
+=1 311 2 -4
+=1 314 1 -4
+=1 312 1 -4
++    } else {
++        FwpAddDescriptor(MemoryFree,
++                         BasePage + PageCount,
++                         MemoryDescriptor->MemoryEntry.PageCount - (PageCount + Offset));
+=1 338 4 -4
++VOID
++FwResetMemory (
+=1 39 7
++    This routine calls FwInitializeMemory to reset the memory descriptors and
++    then clears the free memory below 8 megabytes, as the Jazz firmware does.
+=1 364 5
++    ULONG Pages;
+=1 369 2
++    for (MemoryDescriptor = FwGetMemoryDescriptor(NULL);
++         MemoryDescriptor != NULL;
++         MemoryDescriptor = FwGetMemoryDescriptor(MemoryDescriptor)) {
++
++        if ((MemoryDescriptor->MemoryType == MemoryFree) &&
+=1 382 1
++            Pages = 0x800 - MemoryDescriptor->BasePage;
++            if (Pages > MemoryDescriptor->PageCount) {
++                Pages = MemoryDescriptor->PageCount;
++            }
+=2 624 2
++                          Pages << PAGE_SHIFT);
++        }
++    }
++}

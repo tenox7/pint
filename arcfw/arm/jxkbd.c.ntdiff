@@ -1,0 +1,207 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/JXKBD.C PRIVATE/NTOS/FW/ALPHA/JXKBD.C PRIVATE/NTOS/FW/MIPS/JXDISP.C PRIVATE/NTOS/FW/MIPS/FWSIGNAL.C PRIVATE/NTOS/FW/ALPHA/IODEVICE.H
+=1 4 10
++    This module implements the keyboard boot driver for the Raspberry Pi 2
++    (the ARM FW\MIPS\JXKBD.C) over a USB keyboard in the boot protocol. The
++    reports of the keyboard are polled from the USB host (usb.c), and each
++    key pressed is translated into the keyboard buffer as the Jazz keyboard
++    interrupt translates scan codes (FW\MIPS\FWSIGNAL.C TranslateScanCode).
+=1 15 9
+=1 25 5
++#include "string.h"
++
++#define ASCII_SYSRQ 0x80
++
++//
++// Define the keyboard buffer.
++//
++
++#define KBD_BUFFER_SIZE 32
+=5 182 7
++//
++// Define the usages of the USB keyboard page.
++//
++
++#define KEY_A               0x04
++#define KEY_SLASH           0x38
++#define KEY_ESC             0x29
++#define KEY_CAPS_LOCK       0x39
++#define KEY_F1              0x3A
++#define KEY_F10             0x43
++#define KEY_PRINT_SCREEN    0x46
++#define KEY_INSERT          0x49
++#define KEY_HOME            0x4A
++#define KEY_PAGE_UP         0x4B
++#define KEY_DELETE          0x4C
++#define KEY_END             0x4D
++#define KEY_PAGE_DOWN       0x4E
++#define KEY_RIGHT_ARROW     0x4F
++#define KEY_LEFT_ARROW      0x50
++#define KEY_DOWN_ARROW      0x51
++#define KEY_UP_ARROW        0x52
++#define KEY_ROLLOVER        0x01
++
++#define MODIFIER_CONTROL    0x11
++#define MODIFIER_LEFT_SHIFT 0x02
++#define MODIFIER_ALT        0x44
++#define MODIFIER_RIGHT_SHIFT 0x20
+=2 37 56
++
+=1 94 13
+=1 108 1
+=1 110 5
++static UCHAR KeysDown[6];
++
++//
++// The characters of the usages from A to slash, without and with shift.
++//
++
++static UCHAR NormalLookup[] =
++    "abcdefghijklmnopqrstuvwxyz1234567890\n\0\b\0 -=[]\\\0;'`,./";
++static UCHAR ShiftedLookup[] =
++    "ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()\n\0\b\0 _+{}|\0:\"~<>?";
++static UCHAR FunctionLookup[] = "PQwxtuqrpM";
++
++static VOID
+=4 232 3
+=1 132 5
+=4 239 5
++    Character - Supplies the translated character to store into the buffer
+=3 1873 10
++    // Store character in buffer if there is room.
++    //
++
+=4 255 6
++static VOID
++TranslateUsage(
++    IN UCHAR Usage
+=1 131 6
++    This routine translates the usage of a key just pressed into an ASCII
++    character or a control sequence and puts it in the circular buffer.
+=1 139 3
++    Usage - Supplies the usage of the key.
+=4 277 9
++    UCHAR FwFunctionCharacter=0;
++    UCHAR Char;
++
++    switch (Usage) {
+=4 350 40 -4
++        case KEY_PRINT_SCREEN:
+=4 391 9 -4
+=4 331 3
++            if ((Usage >= KEY_F1) && (Usage <= KEY_F10)) {
+=4 406 1
++                FwFunctionCharacter = FunctionLookup[Usage - KEY_F1];
+=3 978 3
++            if ((Usage < KEY_A) || (Usage > KEY_SLASH)) {
+=4 111 3 12
++            //
++            // An alphabetic key is shifted by CapsLock too.
++            //
++
++            if ((Usage < KEY_A + 26) &&
++                ((FwLeftShift || FwRightShift) != FwCapsLock)) {
++                Char = ShiftedLookup[Usage - KEY_A];
++            } else if ((Usage >= KEY_A + 26) && (FwLeftShift || FwRightShift)) {
++                Char = ShiftedLookup[Usage - KEY_A];
++            } else {
++                Char = NormalLookup[Usage - KEY_A];
++            }
++
+=4 502 2 -4
++            }
++            return;
++    }
++
+=4 509 5 -8
++}
++
++static VOID
++KeyboardPoll(
+=1 461 7
++    This routine polls the keyboard for a report, and translates the keys it
++    holds that the previous report did not.
+=1 147 4
++    UCHAR Report[8];
++    ULONG Index;
++    ULONG Down;
++
++    if (!UsbKeyboardReport(Report) || (Report[2] == KEY_ROLLOVER)) {
+=4 111 3 4
++    FwControl = (Report[0] & MODIFIER_CONTROL) != 0;
++    FwLeftShift = (Report[0] & MODIFIER_LEFT_SHIFT) != 0;
++    FwRightShift = (Report[0] & MODIFIER_RIGHT_SHIFT) != 0;
++    FwAlt = (Report[0] & MODIFIER_ALT) != 0;
++
++    for (Index = 2; Index < 8; Index += 1) {
++        if (Report[Index] == 0) {
+=3 1368 3
++        for (Down = 0; Down < 6; Down += 1) {
++            if (KeysDown[Down] == Report[Index]) {
+=3 949 4 -8
++        if (Down == 6) {
++            TranslateUsage(Report[Index]);
+=3 1248 3
++    memcpy(KeysDown, &Report[2], 6);
+=3 1583 3
+=1 128 26
+=1 155 22
+=1 178 3
+=1 43 5
+=1 131 6
++    A keyboard has no media.
+=1 147 7
+=1 205 6
+=1 132 5
+=1 215 18
+=3 477 3
++
++    if (!UsbKeyboardPresent()) {
+=3 1425 3
+=3 389 9
+=1 56 7
+=1 131 6
+=1 256 18
++
+=1 274 7
+=1 282 16
++
++        //
++        // Wait for a key.
++        //
++
+=1 484 1 4
++            KeyboardPoll();
++        }
++
+=1 486 1 4
++        *OutputBuffer++ = KbdBuffer.Buffer[KbdBuffer.ReadIndex];
+=1 299 6
+=3 1581 5
+=1 310 3
+=1 132 5
+=1 317 11
++
+=1 328 2
++        KeyboardPoll();
++    }
+=2 331 6
+=3 1583 3
+=1 338 11
++    A keyboard takes no output.
+=1 350 10
+=1 69 6
+=1 131 6
++    A keyboard has no position.
+=1 350 10
++
+=1 384 10
++    This routine initializes the keyboard entry in the driver lookup table.
+=3 1866 17
+=1 413 15
+=1 429 3
++    // Initialize the USB host and find the keyboard.
++    //
++
++    UsbInitialize();
++    return;
++}

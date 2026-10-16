@@ -1,0 +1,36 @@
+#ntdiff PUBLIC/OAK/BIN/REGISTRY.INI
+=1 1 2
+=1 4 8
++// The Raspberry Pi 2: no network adapters, no paging file.                 //
+=1 14 3
+=1 30 2
++;  The ID the machine uses for its internal domain (WinNt product).
++;
+=1 38 2
+=1 29 3
++;  The name of the machine.
++;
++MachineName
++    RASPI
+=1 29 3
++;  The account the Logon screen shows by default.
++;
++UserName
++    Administrator
+=1 29 3
++; The environment variables established at the beginning of each logon.
++;
++Environment
++    tmp = c:\tmp
+=1 29 3
++; The time zone.
++;
+=1 191 3
+=1 229 6
+=1 251 4
++ProductType
++    WinNt
++
++Domain
++    WORKGROUP
+=1 449 3

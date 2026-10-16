@@ -1,0 +1,11 @@
+# The NT build: MSVC for 32-bit ARM (tenox7/msvc-arm32; MSVC is mounted from ../msvc)
+# under Wine, and the 32-bit ARM Wine its build tools run on (tools/host.sh). cl stays
+# on the arm64 Wine.
+FROM tenox7/msvc-arm32:latest
+RUN dpkg --add-architecture armhf && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wine32:armhf \
+ && rm -rf /var/lib/apt/lists/* \
+ && printf '#!/bin/sh\nexec /usr/lib/wine/wine64 "$@"\n' > /usr/local/bin/wine && chmod +x /usr/local/bin/wine
+RUN mkdir /opt/wine32 && WINEPREFIX=/opt/wine32 /usr/lib/wine/wineserver32 -p5 \
+ && WINEPREFIX=/opt/wine32 /usr/lib/wine/wine wineboot --init \
+ && WINEPREFIX=/opt/wine32 /usr/lib/wine/wineserver32 -w

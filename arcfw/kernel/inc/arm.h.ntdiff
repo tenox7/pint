@@ -1,0 +1,301 @@
+#ntdiff PRIVATE/NTOS/INC/MIPS.H PRIVATE/NTOS/INC/PPC.H PRIVATE/NTOS/INC/ALPHA.H PRIVATE/NTOS/INC/I386.H
++/*++ BUILD Version: 0001    // Increment this if a change has global effects
+=1 2 5
++    arm.h
+=1 8 3
++    This module contains the ARM (ARMv7-A) hardware specific header file: the
++    analog of mips.h, with the same sections and the same extraction tags.
++
++    PCR access: the privileged per-CPU pointer register TPIDRPRW (cp15 c13 op2 4)
++    holds the address of this processor's KPCR - the ARM analog of the MIPS fixed
++    PCR virtual address and the x86 fs segment base.
+=1 18 3
++#ifndef _ARMH_
++#define _ARMH_
+=3 2007 2
++
++#if defined(_ARM_)
+=1 27 4
++// Indicate that the compiler supports the pragma textout construct.
+=1 32 5
++// The intrinsic functions of Microsoft C for ARM that the ARM definitions use:
++// coprocessor register moves, the program status change and the barriers.
++//
++
++#if defined(_MSC_VER)
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++void _MoveToCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++void __cps(unsigned int, unsigned int, unsigned int);
++void __dmb(unsigned int);
++void __dsb(unsigned int);
++void __isb(unsigned int);
++void __wfi(void);
++unsigned int _CountLeadingZeros(unsigned long);
++
++#ifdef __cplusplus
++}
++#endif
++
++#pragma intrinsic(_MoveFromCoprocessor)
++#pragma intrinsic(_MoveToCoprocessor)
++#pragma intrinsic(__cps)
++#pragma intrinsic(__dmb)
++#pragma intrinsic(__dsb)
++#pragma intrinsic(__isb)
++#pragma intrinsic(__wfi)
++#pragma intrinsic(_CountLeadingZeros)
++
++#define _ARM_BARRIER_SY 0xF
++#define _ARM_CPS_ENABLE_INTERRUPTS 1
++#define _ARM_CPS_DISABLE_INTERRUPTS 2
++#define _ARM_CPS_INTERRUPT_FLAG_F 1
++#define _ARM_CPS_INTERRUPT_FLAG_I 2
+=1 48 4
+=1 37 45
++// ARM specific interlocked operation result values.
+=3 1150 22
++    ExArmInterlockedIncrementLong(Addend)
+=1 106 2
++    ExArmInterlockedDecrementLong(Addend)
+=1 109 2
++    ExArmInterlockedExchangeUlong(Target, Value)
+=1 112 3
++ExArmInterlockedIncrementLong (
+=1 116 5
++ExArmInterlockedDecrementLong (
+=1 122 5
++ExArmInterlockedExchangeUlong (
+=1 128 5
++// ARM Interrupt Definitions.
+=1 134 18
+=1 161 2
+=1 165 4
+=1 171 4
+=2 172 4
+=1 222 16
++
++//
++// Sanitize the processor status and the floating status and control register
++// based on processor mode.
+=1 241 2
++//      force supervisor mode and Thumb state, and
++//      let caller specify the condition flags, IT, GE, E, A, I and F.
++//
++// If user mode, then
++//      force user mode with A, I and F clear, and
++//      let caller specify the condition flags, IT, GE, E and T.
++//
++
++#define PSR_THUMB 0x20
+=1 269 3
++        (((psr) & 0xfe0fffc0) | PSR_THUMB | 0x13) : \
++        (((psr) & 0xfe0ffe20) | 0x10)))
++
++#define SANITIZE_FPSCR(fpscr, mode) ( \
++    ((mode) == KernelMode ? (fpscr) : ((fpscr) & 0xfff79f9f)))
+=1 299 3
++// Define address of the second processor control region page, the shared
++// user data page, which the fixed part of the TB maps.
++//
++
+=1 306 3
++// Define pointer to processor control registers.
++//
++
++#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
+=1 313 27
+=1 341 4
++#define KeGetCurrentProcessorNumber() ((ULONG)PCR->Number)
+=1 346 8
++//
++// Set the address of the processor control region.
++//
++
++#define KiSetProcessorControlRegion(Pcr) _MoveToCoprocessor((ULONG)(Pcr), 15, 0, 13, 0, 4)
+=1 354 26
+=1 400 54
+=1 455 21
++KeUpdateRunTime (
+=1 477 6
+=1 609 1
++    IN ULONG TimeIncrement
+=1 484 34
+=1 536 8
+=1 547 23
++//
++// Disable and enable interrupts: the CPSR IRQ mask, which serves as the MIPS
++// PSR interrupt enable (the MIPS _disable and _enable intrinsics).
++//
++
++#define _disable() __cps(_ARM_CPS_DISABLE_INTERRUPTS, _ARM_CPS_INTERRUPT_FLAG_I, 0)
++#define _enable() __cps(_ARM_CPS_ENABLE_INTERRUPTS, _ARM_CPS_INTERRUPT_FLAG_I, 0)
+=1 586 102
+=1 723 9
++// The ARM peripherals are memory mapped (there is no separate I/O space), so
++// the port and register forms are the same. KeFlushWriteBuffer drains the
++// write buffer (a data synchronization barrier).
+=1 731 160
+=1 892 3
++//  This frame holds the AAPCS callee-saved registers (r4-r11, lr) and the
++//  callee-saved VFP registers (d8-d15) preserved across a context switch.
++//
++//  N.B. This frame must be a multiple of 8 bytes in length.
+=1 896 3
++    ULONGLONG D8;
++    ULONGLONG D9;
++    ULONGLONG D10;
++    ULONGLONG D11;
++    ULONGLONG D12;
++    ULONGLONG D13;
++    ULONGLONG D14;
++    ULONGLONG D15;
++    ULONG R4;
++    ULONG R5;
++    ULONG R6;
++    ULONG R7;
++    ULONG R8;
++    ULONG R9;
++    ULONG R10;
++    ULONG R11;
++    ULONG Fpscr;
+=1 921 2
++    ULONG Lr;
+=1 924 5
++//  This frame holds the volatile state captured on entry to an exception or
++//  interrupt: r0-r3, r12, the banked sp/lr, the return address and saved
++//  psr, and - saved only by the exception and system service paths - the
++//  volatile floating registers d0-d7 and d16-d31.
++//
++//  N.B. This frame must be a multiple of 8 bytes in length.
+=1 930 3
++    ULONG R0;
++    ULONG R1;
++    ULONG R2;
++    ULONG R3;
++    ULONG R12;
++    ULONG Sp;
++    ULONG Lr;
++    ULONG Pc;
++    ULONG Cpsr;
++    ULONG Fpscr;
++    ULONG ExceptionActive;
++    ULONG PreviousMode;
++    ULONG OldIrql;
++    ULONG FaultAddress;
++    ULONG FaultStatus;
+=1 983 1
++    ULONGLONG VolatileD[24];
+=1 985 2
+=2 1139 3
++#define KTRAP_FRAME_ARGUMENTS (4 * 12)
+=1 991 5
+=1 1003 2
++    ULONG Sctlr;
++    ULONG Ttbr0;
++    ULONG Ttbr1;
++    ULONG Ttbcr;
++    ULONG Dacr;
++    ULONG Contextidr;
+=2 1207 62
+=1 1073 6
+=1 1090 3
+=1 1097 7
+=1 1108 10
++    ULONG ReservedCounter[23];
++
++//
++// N.B. The request packet array and the request packet are each on a
++// (64 byte) cache line boundary, and the request summary and signal done
++// longwords, updated together, on a quadword boundary.
+=1 1130 4
+=1 1140 2
++    ULONG CachePad1[12];
+=1 1147 3
++    ULONG CachePad2[14];
+=1 1155 4
+=1 1163 7
+=1 727 3
++// Define the page size for the ARMv7-A small page as 4096 (0x1000).
+=1 1174 15
++// field of a PTE (the memory manager's page tables are the MIPS R4000 ones).
+=1 1190 44
++// end_ntddk
++//
++// Define cache policies: UNCACHED_POLICY maps device memory, the processor's
++// PCR->CachePolicy maps normal write-back cacheable memory.
+=1 1241 3
++#define CACHED_POLICY 3                 // cached write-back
++
++//
++// Physical addresses below 1 GB, including the BCM2835 peripherals and the
++// VideoCore memory, are reached through the kernel direct map (KSEG0). The
++// BCM2836 local peripherals, above 1 GB, are the HAL's fixed device window.
++//
++
++#define PERIPHERAL_VIRTUAL (KSEG0_BASE + 0x3F000000)
++#define LOCAL_PERIPHERAL_VIRTUAL 0xFFD00000
+=1 1233 3
++#endif // defined(_ARM_)
+=4 2138 2
++#if defined(_ARM_)
++
++//
++// ARM function definitions
+=1 1249 10
++//  state has been saved in it's context information. On ARM the numeric
++//  (VFP) state is always saved.
+=1 1261 13
++
++//
++// ARM specific probe function definitions.
+=2 1482 4
+=1 1288 4
+=1 1293 3
+=1 1305 4
+=1 1310 3
+=1 1322 4
+=1 1327 3
+=1 1339 4
+=1 1344 3
+=1 1356 4
+=1 1361 3
+=1 1373 4
+=1 1378 3
+=1 1390 4
+=1 1395 3
+=1 1407 4
+=1 1412 3
+=1 1424 4
+=1 1429 3
+=1 1441 4
+=1 1446 3
+=1 1458 4
+=1 1463 3
+=1 1479 4
+=1 1484 3
+=1 1497 4
+=1 1484 3
+=1 1515 4
+=1 1484 3
+=1 1533 4
+=1 1484 3
+=1 1551 4
+=1 1484 3
+=1 1569 4
+=1 1484 3
+=1 1587 4
+=1 1484 3
+=1 1605 4
+=1 1484 3
+=1 1623 4
+=1 1484 3
+=1 1641 4
+=1 1484 3
++#endif // defined(_ARM_)
++
++#endif // _ARMH_

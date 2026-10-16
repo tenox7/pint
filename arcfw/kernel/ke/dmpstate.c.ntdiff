@@ -1,0 +1,60 @@
+#ntdiff PRIVATE/NTOS/KE/MIPS/DMPSTATE.C
+=1 1 14
++    ARM port of KE/MIPS/DMPSTATE.C. ARM images carry no function tables, so
++    there is no stack back trace.
+=1 14 9
+=1 25 4
+=1 33 8
+=1 46 6
+=1 56 2
++
+=1 59 39
+=1 99 1
+=1 101 5
+=1 109 2
+=1 113 2
+=1 116 1
+=1 118 35
+=1 174 3
+=1 156 1
++    sprintf(Buffer,
++            "\nMachine State at Call to Bug Check PC : %08lX CPSR : %08lX\n\n",
++            ContextRecord->Lr,
++            ContextRecord->Cpsr);
+=1 181 8
++            "R0 :%8lX  R1 :%8lX  R2 :%8lX  R3 :%8lX\n",
++            ContextRecord->R0,
++            ContextRecord->R1,
++            ContextRecord->R2,
++            ContextRecord->R3);
+=1 181 2
++    sprintf(Buffer,
++            "R4 :%8lX  R5 :%8lX  R6 :%8lX  R7 :%8lX\n",
++            ContextRecord->R4,
++            ContextRecord->R5,
++            ContextRecord->R6,
++            ContextRecord->R7);
+=1 181 2
++    sprintf(Buffer,
++            "R8 :%8lX  R9 :%8lX  R10:%8lX  R11:%8lX\n",
++            ContextRecord->R8,
++            ContextRecord->R9,
++            ContextRecord->R10,
++            ContextRecord->R11);
+=1 181 2
++    sprintf(Buffer,
++            "R12:%8lX  SP :%8lX  LR :%8lX  FPSCR:%8lX\n",
++            ContextRecord->R12,
++            ContextRecord->Sp,
++            ContextRecord->Lr,
++            ContextRecord->Fpscr);
+=1 181 4
+=1 381 16
++            "Processor Id %08lX, Icache : %d, Dcache : %d\n",
++            PCR->ProcessorId,
+=1 400 67
+=1 33 6
+=1 473 33
+=1 45 6
+=1 634 32
+=1 667 42

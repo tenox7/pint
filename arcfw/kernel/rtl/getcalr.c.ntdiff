@@ -1,0 +1,39 @@
+#ntdiff PRIVATE/NTOS/RTL/MIPS/GETCALR.C
+=1 1 12
++    specified procedure (the ARM port of RTL\MIPS\GETCALR.C).
+=1 14 60
++    PVOID HandlerData;
++    ULONG ImageBase;
+=1 75 16
++    NextPc = ContextRecord.Pc - 2;
+=1 92 11
++    FunctionEntry = RtlLookupFunctionEntry(NextPc, &ImageBase);
+=1 104 7
++        RtlVirtualUnwind(ImageBase,
++                         NextPc,
+=1 112 2 -9
++                         &HandlerData,
+=1 115 3 -9
++        NextPc = ContextRecord.Pc - 2;
+=1 117 5
++        FunctionEntry = RtlLookupFunctionEntry(NextPc, &ImageBase);
++        if ((FunctionEntry != NULL) && (ContextRecord.Sp < HighLimit)) {
+=1 124 7
++            RtlVirtualUnwind(ImageBase,
++                             NextPc,
+=1 112 2 -5
++                             &HandlerData,
+=1 115 3 -5
++            NextPc = ContextRecord.Pc - 2;
++            *CallersPc = (PVOID)ContextRecord.Pc;
+=1 139 6
++            FunctionEntry = RtlLookupFunctionEntry(NextPc, &ImageBase);
++            if ((FunctionEntry != NULL) && (ContextRecord.Sp < HighLimit)) {
+=1 147 8
++                RtlVirtualUnwind(ImageBase,
++                                 NextPc,
+=1 112 2 -1
++                                 &HandlerData,
+=1 115 3 -1
++                *CallersCallersPc = (PVOID)ContextRecord.Pc;
+=1 163 17

@@ -1,0 +1,27 @@
+#ntdiff PRIVATE/NTOS/NTHALS/HALFXS/MIPS/JXRETURN.C
+=1 1 10
++    This module implements the HAL return to firmware function for the
++    Raspberry Pi 2 (the Jazz HAL's jxreturn.c). The ARC firmware is not
++    resident once the system runs, so a reboot or restart resets the system
++    through the power manager's watchdog, and a halt or power down stops the
++    processor.
++
++Environment:
++
++    Kernel mode
+=1 69 3
++#include "halp.h"
++
+=1 47 10
+=1 61 12
++    _disable();
++
++    if (Routine == HalRestartRoutine || Routine == HalRebootRoutine) {
++        HAL_REG(HAL_PM_WDOG) = HAL_PM_PASSWORD | 10;
++        HAL_REG(HAL_PM_RSTC) = HAL_PM_PASSWORD | HAL_PM_RSTC_FULL_RESET;
++    }
++
++    for (;;) {
++        __wfi();
++    }
++}

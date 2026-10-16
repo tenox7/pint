@@ -1,0 +1,210 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/FWLOAD.C PRIVATE/NTOS/FW/ALPHA/FWLOAD.C
+=1 1 10
++    This module implements the ARC software loadable functions: load, invoke
++    and execute (the ARM FW\MIPS\FWLOAD.C).
++
++    An ARC program is a ROM image, linked fixed (-rom -fixed) as the RISC
++    loaders are, and is loaded at its addresses.
+=1 16 5
+=1 23 4
++
++//
++// Section types of a ROM image.
++//
++
+=1 74 4
+=1 80 3
++
++//
++// The arguments of a program being executed, copied to the firmware as the
++// running program, which may have supplied them, is overwritten.
++//
++
++#define MAX_ARGUMENT (512 - sizeof(ULONG) - 16 * sizeof(PUCHAR))
+=2 47 4
++    UCHAR Arguments[MAX_ARGUMENT];
+=1 48 2
++static SAVED_ARGUMENTS FwSavedArguments;
++static __declspec(align(8)) ULONG FwStack[0x3000 / sizeof(ULONG)];
++
+=1 55 3
++
++VOID
++FwpTransfer (
++    IN ULONG ExecAddr,
++    IN ULONG StackAddr,
+=1 210 6
+=1 231 36
+=1 268 2
+=1 272 4
++    UCHAR LocalBuffer[SECTOR_SIZE + 64];
+=1 277 6
+=1 289 5
++    LocalPointer = ALIGN_BUFFER(LocalBuffer);
+=1 296 39
++    // type status. An ARM image must be linked fixed, as no relocations
++    // are defined for its ROM image.
++    //
++
++    if ((FileHeader->Machine != IMAGE_FILE_MACHINE_ARMNT) ||
++        ((FileHeader->Characteristics & IMAGE_FILE_EXECUTABLE_IMAGE) == 0) ||
++        ((FileHeader->Characteristics & IMAGE_FILE_RELOCS_STRIPPED) == 0)) {
+=1 341 5
++    // Set the ActualBase to the code base, and compute the image size by
++    // subtracting the code base from the data base plus the size of the data.
+=1 352 3
+=1 357 3 -4
+=1 367 6
++    FwActualBasePage = (ActualBase & ~KSEG0_BASE) >> PAGE_SHIFT;
+=1 374 17
+=1 392 5
+=1 398 1
+=1 404 1 -4
+=1 433 28
+=1 466 7
+=1 480 6
+=1 498 2
++
+=1 500 4
++        // Flush the caches, making the loaded code visible to instruction
++        // fetch.
++        //
++
++        ArcFlushAllCaches();
++    }
++
+=1 309 3 -4
++ARC_STATUS
++FwInvoke (
++    IN ULONG ExecAddr,
++    IN ULONG StackAddr,
+=1 856 9
++    This routine invokes a loaded program on the specified stack.
+=1 257 3
++    ESUCCESS is returned when the program returns; EFAULT if its address is
++    not a valid instruction address: an ARM state address is word aligned and
++    a Thumb state address has its low bit set.
+=1 263 4
++    if ((ExecAddr & 0x3) == 0x2) {
++        return EFAULT;
++    }
++
++    FwpTransfer(ExecAddr, StackAddr, Argc, Argv, Envp);
++    return ESUCCESS;
++}
++
++static VOID
++FwCopyArguments (
+=1 815 8
++    This routine copies the supplied arguments into the firmware space.
+=1 263 4
++    PUCHAR Destination = &FwSavedArguments.Arguments[0];
++    PUCHAR Limit = &FwSavedArguments.Arguments[MAX_ARGUMENT];
++    PUCHAR Source;
++    ULONG Arg;
++
++    if (Argc > 16) {
++        Argc = 16;
++    }
++
++    FwSavedArguments.Argc = 0;
++    for (Arg = 0; Arg < Argc; Arg += 1) {
++        FwSavedArguments.Argv[Arg] = Destination;
++        for (Source = (PUCHAR)Argv[Arg]; Destination < Limit; ) {
++            if ((*Destination++ = *Source++) == 0) {
++                break;
+=1 683 3 -4
++        if (Destination == Limit) {
+=1 449 3 -4
++        FwSavedArguments.Argc += 1;
+=1 849 3
++ARC_STATUS
++FwPrivateExecute (
+=1 855 10
++    This routine loads and invokes a program. FwExecute sets the firmware
++    stack and calls this routine which does all the work. When this routine
++    returns (after the loaded program has been executed) the stack is restored
++    to the caller's and control is returned to it.
+=1 257 3
++    ESUCCESS is returned if the program was loaded and invoked; otherwise the
++    status of the failure.
+=1 263 4
+=1 893 1
++    ULONG TransferRoutine;
++    ULONG BottomAddress;
++    CHAR TempPath[256];
++    ARC_STATUS Status;
++
++    //
++    // Copy the arguments and the path to a safe place, as they can be in the
++    // running program space which can be overwritten by the program about to
++    // be loaded, and reinitialize the memory descriptors.
++    //
++
++    FwCopyArguments(Argc, Argv);
++    strncpy(TempPath, Path, sizeof(TempPath) - 1);
++    TempPath[sizeof(TempPath) - 1] = 0;
+=1 908 3
++    // Look for a piece of free memory of at least 4 megabytes to load the
++    // program into.
++    //
++
++    for (MemoryDescriptor = ArcGetMemoryDescriptor(NULL);
++         MemoryDescriptor != NULL;
++         MemoryDescriptor = ArcGetMemoryDescriptor(MemoryDescriptor)) {
++
++        if ((MemoryDescriptor->MemoryType != MemoryFree) ||
++            (MemoryDescriptor->PageCount < 1024)) {
++            continue;
++        }
++
+=1 928 1 -4
++                        ((MemoryDescriptor->BasePage + MemoryDescriptor->PageCount) << PAGE_SHIFT) |
++                            KSEG0_BASE,
++                        &TransferRoutine,
++                        &BottomAddress);
++
++        if (Status == ENOMEM) {
++            continue;
++        }
++
+=1 308 5 4
++        // Find the area of free memory the program occupies, and generate a
+=1 938 3 -8
++        for (MemoryDescriptor = ArcGetMemoryDescriptor(NULL);
++             MemoryDescriptor != NULL;
++             MemoryDescriptor = ArcGetMemoryDescriptor(MemoryDescriptor)) {
++
+=1 943 3 -8
+=1 946 1 -12
++
++                FwGenerateDescriptor(CONTAINING_RECORD(MemoryDescriptor,
+=1 955 1 -2
++                                                       MemoryEntry),
+=1 959 3 -4
++                break;
+=1 683 3 -4
++        //
++        // The program runs on the stack below its image.
++        //
++
++        return FwInvoke(TransferRoutine,
++                        BottomAddress,
++                        FwSavedArguments.Argc,
++                        (PCHAR *)FwSavedArguments.Argv,
++                        Envp);
++    }
++
++    return ENOMEM;
++}
++
++VOID
++FwLoadInitialize (
++    VOID
+=1 1019 8
+=1 264 3
++    SYSTEM_BLOCK->FirmwareVector[LoadRoutine] = (PVOID)FwLoad;
++    SYSTEM_BLOCK->FirmwareVector[InvokeRoutine] = (PVOID)FwInvoke;
++    SYSTEM_BLOCK->FirmwareVector[ExecuteRoutine] = (PVOID)FwExecute;
++    FwTemporaryStack = (ULONG)&FwStack[sizeof(FwStack) / sizeof(ULONG)];
++}

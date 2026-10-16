@@ -1,0 +1,327 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/JXDISP.C PRIVATE/NTOS/FW/ALPHA/JXDISP.C
+=1 3 10
++    This module implements the video boot driver for the Raspberry Pi 2 (the
++    ARM FW\MIPS\JXDISP.C). The display is a 32 bit per pixel frame buffer the
++    VideoCore allocates through the mailbox property interface; colors are
++    drawn from the G364 palette in the pixel order the VideoCore grants.
+=1 14 9
+=1 24 5
++#include "bcmvdeo.h"
++#include "string.h"
++
++//
++// Define the requested display resolution; the VideoCore may grant another.
++//
++
++#define FW_DISPLAY_WIDTH        1920
++#define FW_DISPLAY_HEIGHT       1080
++
++//
++// Define the mailbox property tags that allocate the frame buffer.
++//
++
++#define TAG_SET_PHYSICAL_SIZE   0x00048003
++#define TAG_SET_VIRTUAL_SIZE    0x00048004
++#define TAG_SET_DEPTH           0x00048005
++#define TAG_SET_PIXEL_ORDER     0x00048006
++#define TAG_ALLOCATE_BUFFER     0x00040001
++#define TAG_GET_PITCH           0x00040008
+=1 51 53
+=1 2097 4
++    );
+=2 3280 4
+=1 43 3
+=1 271 9
++//
++// Define the G364 palette: the eight colors, then their high intensity.
++//
++
++static ULONG Palette[16] = {
++    0x000000, 0xB00000, 0x00B000, 0xB0B000, 0x0000B0, 0xB000B0, 0x00B0B0, 0xB0B0B0,
++    0x000000, 0xFF0000, 0x00FF00, 0xFFFF00, 0x0000FF, 0xFF00FF, 0x00FFFF, 0xFFFFFF
++};
++
++#define FW_COLOR_BLACK      0
++#define FW_COLOR_HI_WHITE   15
++
+=1 152 35
+=1 189 8
++PUCHAR FwFont;
++PUCHAR VideoMemory;
++ULONG ForegroundPixel;
++ULONG BackgroundPixel;
+=1 215 3
++
++//
++// The frame buffer and the monitor, which the configuration tree describes.
++//
++
++BCM_VIDEO_CONFIGURATION_DATA VideoData;
+=1 218 1
+=1 237 2
+=1 240 17
++//
++// Declare externally defined data: the VGA and 8514 OEM fonts.
++//
++
++extern UCHAR FwFont10x20[];
++extern UCHAR FwFont8x12[];
++
++static ULONG
++FwPixel (
++    IN ULONG Color
+=1 285 6
++    This routine returns the frame buffer pixel of a palette color.
+=1 301 4
++    ULONG Rgb = Palette[Color & 15];
++
++    if (VideoData.PixelOrder == BCM_PIXEL_ORDER_RGB) {
++        return ((Rgb & 0xFF) << 16) | (Rgb & 0xFF00) | (Rgb >> 16);
++    }
++
++    return Rgb;
++}
++
++static VOID
+=1 46 3
++    IN ULONG Color
+=1 285 6
++    This routine fills a part of the frame buffer with a palette color.
+=1 301 4
++    PULONG Pixel = (PULONG)StartAddress;
++    ULONG Value = FwPixel(Color);
++
++    for (; SizeInBytes >= sizeof(ULONG); SizeInBytes -= sizeof(ULONG)) {
++        *Pixel++ = Value;
+=1 2129 3
+=2 1109 27
+=1 308 22
+=1 331 3
+=1 56 5
+=1 285 6
++    A display has no media.
+=2 1129 7
+=1 358 6
+=1 286 5
+=1 368 18
+=1 477 3
++
++    if (!DisplayOutput) {
+=1 1425 3
+=1 389 9
+=1 69 7
+=1 285 6
++    A display has nothing to read.
+=1 301 4
++    *Count = 0;
+=1 416 3
+=1 420 4
+=1 286 5
++    A display has nothing to read.
+=2 1954 7
+=1 438 15
++    Character Console.
+=1 455 28
++    ULONG Index;
+=1 484 100
+=1 594 14
++                if (PCount >= CONTROL_SEQUENCE_MAX_PARAMETER) {
++                    PCount = CONTROL_SEQUENCE_MAX_PARAMETER - 1;
+=1 610 17
++
+=1 627 3
++
+=1 630 7
++
+=1 637 3
++
++                        FillVideoMemory(VideoMemory + ((FwRow+1) * ScrollLine),
+=1 641 12
++                        FillVideoMemory(VideoMemory,
+=1 654 15
++                    FillVideoMemory(VideoMemory,
+=1 670 233
+=1 919 35
++                // Recompute the colors.
+=1 955 10
++                ForegroundPixel = FwPixel(FGColor);
++                BackgroundPixel = FwPixel(BGColor);
+=1 972 21
+=2 1803 31
+=1 1023 80
++
+=1 1103 5
+=1 1109 7
+=1 82 6
+=1 285 6
++    A display has no position.
+=2 1950 11
++static ARC_STATUS
++InitializeVideoCore (
+=1 1142 7
++    This routine asks the VideoCore for a 32 bit per pixel frame buffer of the
++    requested resolution in one property message, and records the frame
++    buffer and the resolution it granted.
+=1 297 3
++    ESUCCESS if a frame buffer was allocated, otherwise EINVAL.
+=1 301 4
++    static __declspec(align(16)) volatile ULONG Message[36];
++    ULONG Index = 2;
++    ULONG SizeIndex;
++    ULONG OrderIndex;
++    ULONG BufferIndex;
++    ULONG PitchIndex;
++
++    SizeIndex = Index;
++    Message[Index++] = TAG_SET_PHYSICAL_SIZE;
++    Message[Index++] = 8;
++    Message[Index++] = 8;
++    Message[Index++] = FW_DISPLAY_WIDTH;
++    Message[Index++] = FW_DISPLAY_HEIGHT;
++    Message[Index++] = TAG_SET_VIRTUAL_SIZE;
++    Message[Index++] = 8;
++    Message[Index++] = 8;
++    Message[Index++] = FW_DISPLAY_WIDTH;
++    Message[Index++] = FW_DISPLAY_HEIGHT;
++    Message[Index++] = TAG_SET_DEPTH;
++    Message[Index++] = 4;
++    Message[Index++] = 4;
++    Message[Index++] = 32;
++    OrderIndex = Index;
++    Message[Index++] = TAG_SET_PIXEL_ORDER;
++    Message[Index++] = 4;
++    Message[Index++] = 4;
++    Message[Index++] = BCM_PIXEL_ORDER_RGB;
++    BufferIndex = Index;
++    Message[Index++] = TAG_ALLOCATE_BUFFER;
++    Message[Index++] = 8;
++    Message[Index++] = 4;
++    Message[Index++] = 16;
++    Message[Index++] = 0;
++    PitchIndex = Index;
++    Message[Index++] = TAG_GET_PITCH;
++    Message[Index++] = 4;
++    Message[Index++] = 0;
++    Message[Index++] = 0;
++    Message[Index++] = 0;
++    Message[0] = Index * sizeof(ULONG);
++    Message[1] = 0;
++
++    if (MailboxPropertyCall(Message) != 0) {
+=2 1133 3 4
++    VideoData.Version = 1;
++    VideoData.Revision = 0;
++    VideoData.FrameBase = MailboxBusToPhysical(Message[BufferIndex + 3]);
++    VideoData.FrameSize = Message[BufferIndex + 4];
++    VideoData.BytesPerScanLine = Message[PitchIndex + 3];
++    VideoData.BitsPerPixel = 32;
++    VideoData.PixelOrder = (USHORT)Message[OrderIndex + 3];
++    MonitorData.Version = 1;
++    MonitorData.Revision = 0;
++    MonitorData.HorizontalResolution = (USHORT)Message[SizeIndex + 3];
++    MonitorData.VerticalResolution = (USHORT)Message[SizeIndex + 4];
++
++    if ((VideoData.FrameBase == 0) || (VideoData.BytesPerScanLine == 0) ||
++        (MonitorData.HorizontalResolution == 0)) {
+=2 1133 3 4
+=1 1582 4
+=1 1141 8
++    This routine initializes the video, and clears the video screen.
+=1 1151 14
+=1 1166 5
++    SYSTEM_BLOCK->FirmwareVector[TestUnicodeCharacterRoutine] = (PVOID)FwTestUnicodeCharacter;
++    SYSTEM_BLOCK->FirmwareVector[GetDisplayStatusRoutine] = (PVOID)FwGetDisplayStatus;
++
++    //
++    // Initialize the vendor routines.
++    //
++
++    SYSTEM_BLOCK->VendorVector[SetDisplayAttributesRoutine] = (PVOID)FwSetDisplayAttributes;
++    SYSTEM_BLOCK->VendorVector[OutputCharacterRoutine] = (PVOID)FwOutputCharacter;
++    SYSTEM_BLOCK->VendorVector[ScrollVideoRoutine] = (PVOID)FwScrollVideo;
++
++    Status = InitializeVideoCore();
++    if (Status != ESUCCESS) {
+=1 1306 3 4
+=1 1251 12
+=1 1268 2
++    ForegroundPixel = FwPixel(FwForegroundColor);
++    BackgroundPixel = FwPixel(FwBackgroundColor);
++
++    VideoMemory = (PUCHAR)(KSEG0_BASE | VideoData.FrameBase);
++    FrameSize = VideoData.BytesPerScanLine * MonitorData.VerticalResolution;
++
++    if (MonitorData.HorizontalResolution >= 800) {
+=1 1274 3
+=1 1278 4
++    }
++
+=1 1284 1
++    ScrollLine = (VideoData.BytesPerScanLine * CharacterHeight);
+=1 1287 2
++    MaxColumn = ((MonitorData.HorizontalResolution / CharacterWidth) - 1);
+=1 1290 8
++    FillVideoMemory(VideoMemory,FrameSize,FwBackgroundColor);
+=1 1299 6
+=1 434 3
+=1 1855 33
+=2 2353 3
+=1 1892 17
+=1 1874 7
++    if (Character == 0) {
++        Character = ' ';
++    }
++
+=1 1918 1
++                       FwRow,
++                       FwColumn);
+=2 2353 3
+=1 1924 12
++    cursor location with the current color and video attributes. Each row of
++    the glyph holds its leftmost pixel in bit 0.
+=1 1938 12
++    PUCHAR Glyph = (PUCHAR)Character;
++    PULONG Destination;
++    ULONG BytesPerRow = (CharacterWidth + 7) / 8;
++    ULONG I;
++    ULONG J;
++
++    for (I = 0; I < CharacterHeight; I += 1, Glyph += BytesPerRow) {
++        Destination = (PULONG)(VideoMemory + (Row * ScrollLine) +
++                               (I * VideoData.BytesPerScanLine)) +
++                      (Column * CharacterWidth);
++
++        for (J = 0; J < CharacterWidth; J += 1) {
++            *Destination++ = ((Glyph[J / 8] >> (J % 8)) & 1) ?
++                             ForegroundPixel : BackgroundPixel;
++        }
++
++        if (FwUnderscored && (I == CharacterHeight - 1)) {
++            for (J = 0; J < CharacterWidth; J += 1) {
++                *--Destination = ForegroundPixel;
+=1 1247 4
+=2 2353 3
+=1 1984 24
++    RtlMoveMemory(VideoMemory, VideoMemory + ScrollLine, ScrollLength);
+=1 2015 16
++
+=1 2032 15
++    This is the vendor routine a video board could replace to set the
++    attributes in hardware. The frame buffer has none.
+=1 2056 6
++
+=1 2063 23
+=1 2086 7 1
+=2 2353 3
+=1 2097 5
+=1 286 5
+=1 2106 17
++
+=1 2123 9
+=1 2133 4
+=1 286 5
++    This routine returns the cursor position, the extent of the screen and
++    the attributes.
+=1 301 4
+=1 2147 9
+=1 2157 2

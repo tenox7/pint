@@ -1,0 +1,8 @@
+#!/bin/sh
+# midlcpp OUTPUT OPTION... FILE: the C preprocessor MIDL runs on an interface
+# (MIDL_CPP, the cl -E of the target for NT), to OUTPUT, on the arm64 Wine of cl;
+# obj/host/MIDLCPP.EXE runs it for MIDL on the 32-bit one.
+o=$1; shift
+export WINEPREFIX=/opt/wine WINEDEBUG=-all MSVC_ENV=0
+unset WINEDLLOVERRIDES WINELOADER WINESERVER
+exec wine-msvc cl -nologo -E "$@" > "$o"

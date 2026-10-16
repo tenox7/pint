@@ -1,0 +1,12 @@
+# RTL\USER ARM_SOURCES (its MIPS_SOURCES: chkstk.s context.c debug.c debugstb.s exdsptch.c getcalr.c largeint.s trampoln.s xcptmisc.s xxcaptur.s xxmvmem.s)
+rtl/context.c
+/work/PRIVATE/NTOS/RTL/MIPS/DEBUG.C
+rtl/debugstb.asm
+rtl/exdsptch.c
+rtl/vunwind.c
+rtl/getcalr.c
+rtl/xcptmisc.asm
+rtl/largeint.c
+rtl/trampoln.asm
+rtl/xxcaptur.asm
+rtl/movemem.c

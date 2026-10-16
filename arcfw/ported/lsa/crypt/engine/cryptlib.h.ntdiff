@@ -1,0 +1,11 @@
+#ntdiff PRIVATE/NET/RAS/SRC/AUTH/COMMON/CRYPT/CRYPTLIB.H
++/*
++** The private header of the LSA crypt engine, whose source is not in the tree:
++** that of its RAS copy (NET\RAS\SRC\AUTH\COMMON\CRYPT\CRYPTLIB.H) with the
++** key setup routines of the engine objects.
++*/
++
+=1 1 9
++void _cdecl InitLanManKey(const char *Key);
++void _cdecl InitNormalKey(const char *Key);
+=1 11 8

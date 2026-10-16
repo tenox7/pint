@@ -1,0 +1,29 @@
+#ntdiff PRIVATE/NTOS/EX/MIPS/RAISESTS.C PRIVATE/NTOS/EX/ALPHA/RAISESTS.C
+=1 1 11
++    mode or a noncontinuable exception from kernel mode (the ARM port of
++    EX\MIPS\RAISESTS.C).
+=1 13 91
++    PVOID HandlerData;
++    ULONG ImageBase;
+=1 106 9
++    ControlPc = ContextRecord.Pc - 2;
++    FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
++    RtlVirtualUnwind(ImageBase,
++                     ControlPc,
+=1 118 2 -9
++                     &HandlerData,
+=1 121 3 -9
++    ExceptionRecord->ExceptionAddress = (PVOID)ContextRecord.Pc;
+=1 126 90
++    PVOID HandlerData;
++    ULONG ImageBase;
+=1 218 18
++    ControlPc = ContextRecord.Pc - 2;
++    FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
++    RtlVirtualUnwind(ImageBase,
++                     ControlPc,
+=1 118 2 -9
++                     &HandlerData,
+=1 121 3 -9
++    ExceptionRecord.ExceptionAddress = (PVOID)ContextRecord.Pc;
+=1 247 16

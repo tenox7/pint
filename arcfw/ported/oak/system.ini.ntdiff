@@ -1,0 +1,86 @@
+#ntdiff PUBLIC/OAK/BIN/SYSTEM.INI PRIVATE/WINDOWS/SETUP/TEXTMODE/KERNEL/SETUPREG.INI
+=1 1 14
++#if defined(_RASPI_)
++#define _HIVE_RASPI_
+=1 14 2
++#endif // defined(_RASPI_)
+=1 16 159
++// The Raspberry Pi 2 (BCM2836): an ARM machine whose disk is the SD card on the
++// Arasan SDHCI controller (the Bcmemmc SCSI miniport), whose display is the
++// VideoCore frame buffer (the Bcmvideo miniport) and whose keyboard and mouse are
++// USB devices on the USB host (the Bcmusb keyboard and pointer port driver),
++// without the PC peripherals.
++//
++
++#ifdef _HIVE_RASPI_
++#define RASPI 1
++#define BCMEMMC 1
++#define BCMVIDEO 1
++#define BCMUSB 1
+=1 116 3
++#define CDFS 1
++#endif // _HIVE_RASPI_
+=1 173 17
++    defined(MITSUMI) || defined(BCMEMMC)
+=1 191 1058
++#if defined(RASPI)
++            //
++            // The Raspberry Pi 2 has no network yet: the workstation service is
++            // disabled, and its parameters hold the account domain of a developer
++            // install (registry.ini) for the LSA.
+=1 1252 3
+=1 1346 2
+=1 1257 3
++#endif // defined(RASPI)
+=1 1248 769
++#if defined(BCMEMMC)
++            Bcmemmc
+=1 2527 2
+=1 2025 3
++#endif // defined(BCMEMMC)
+=1 2016 458
++#if !defined(RASPI)
+=1 2474 10
++#endif // !defined(RASPI)
+=1 2484 15
++#if !defined(RASPI)
+=1 2499 21
++#endif // !defined(RASPI)
+=1 2520 17
++#if !defined(RASPI)
+=1 2537 37
++#endif // !defined(RASPI)
+=1 2574 33
++#if !defined(RASPI)
+=1 2607 6
++#endif // !defined(RASPI)
+=1 2613 72
++#if !defined(RASPI)
+=1 2685 80
++#endif // !defined(RASPI)
++
++#if defined(BCMUSB)
+=1 2685 4
++            Bcmusb
+=1 2475 2
+=1 2696 3
++#endif // defined(BCMUSB)
+=1 2765 33
++#if !defined(RASPI)
+=1 2798 9
++#endif // !defined(RASPI)
++
++#if defined(BCMVIDEO)
+=1 2808 4
++            Bcmvideo
+=1 2842 7
++#endif // defined(BCMVIDEO)
++
++#if !defined(RASPI)
+=1 2808 176
++#endif // !defined(RASPI)
+=1 2984 209
++#if !defined(RASPI)
+=1 3193 40
++#endif // !defined(RASPI)
+=1 3233 368

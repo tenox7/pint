@@ -1,0 +1,27 @@
+#ntdiff PRIVATE/CRT32/H/STDARG.H PRIVATE/CRT32/H/VARARGS.H
+=1 1 127
++
++#ifdef _M_ARM
++
++/* Use these types and definitions if generating code for ARM */
++
++/*
++ * A variadic function homes r0-r3 next to the arguments its caller passed on
++ * the stack, so the arguments form one array of words; 8-byte types are 8-byte
++ * aligned in it.
++ */
++
++#define _ARM_VASLOT(t)		((sizeof(t) + 3) & ~3)
++#define _ARM_VAALIGN(t, ap)	(((va_list)0 - (ap)) & (__alignof(t) - 1))
++
++#ifdef __cplusplus
++void __cdecl __va_start(va_list *, ...);
++#define va_start(ap,v)	((void)(__va_start(&ap, &(v), _ARM_VASLOT(v), &(v))))
++#else
++#define va_start(ap,v)	((void)(ap = (va_list)&(v) + _ARM_VASLOT(v)))
++#endif
++#define va_arg(ap,t)	(*(t *)((ap += _ARM_VASLOT(t) + _ARM_VAALIGN(t, ap)) - _ARM_VASLOT(t)))
++#define va_end(ap)	((void)(ap = (va_list)0))
++
++#endif /* _M_ARM */
+=1 128 6

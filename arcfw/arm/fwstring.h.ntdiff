@@ -1,0 +1,25 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/FWSTRING.H
++/*++
++
++Module Name:
++
++    fwstring.h
++
++Abstract:
++
++    This module defines the firmware strings of fwusa.c (the ARM
++    FW\MIPS\FWSTRING.H).
++
++--*/
++
+=1 7 1
+=1 9 1
+=1 16 1
+=1 15 1
+=1 36 4
+=1 19 2
++extern PCHAR FW_RUN_ARCDOS_MSG;
+=1 22 4
+=1 30 5
+=1 41 1
+=1 49 1

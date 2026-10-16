@@ -1,0 +1,69 @@
+#ntdiff PRIVATE/NTOS/FW/MIPS/JXREBOOT.C
+=1 1 10
++    This module contains the firmware termination functions for the Raspberry
++    Pi 2 (the ARM FW\MIPS\JXREBOOT.C). The system is reset through the power
++    manager's watchdog.
+=1 306 3
++#include "fwp.h"
+=1 26 1
++
++#define PM_BASE     0x3F100000u
++#define PM_RSTC     (*(volatile unsigned int *)(PM_BASE + 0x1c))
++#define PM_WDOG     (*(volatile unsigned int *)(PM_BASE + 0x24))
++#define PM_PASSWORD 0x5a000000u
++#define PM_RSTC_WRCFG_CLR        0xffffffcfu
++#define PM_RSTC_WRCFG_FULL_RESET 0x00000020u
++
++VOID
++FwpEnterInteractiveMode (
++    VOID
+=1 46 3
++FwHalt (
++    VOID
+=1 289 6
++    This routine is the firmware halt termination function: it displays a
++    message and halts. It is also the power down function.
+=1 306 4
+=1 95 2
++    __cps(_ARM_CPS_DISABLE_INTERRUPTS, _ARM_CPS_INTERRUPT_FLAG_I | _ARM_CPS_INTERRUPT_FLAG_F, 0);
++    for (;;) {
++        __wfi();
+=1 230 3
++VOID
++FwReboot (
++    VOID
+=1 289 6
++    This routine is the firmware reboot termination function: it resets the
++    system.
+=1 306 4
++    PM_WDOG = PM_PASSWORD | 10;
++    PM_RSTC = PM_PASSWORD | (PM_RSTC & PM_RSTC_WRCFG_CLR) | PM_RSTC_WRCFG_FULL_RESET;
+=1 98 3
++
++VOID
++FwRestart (
++    VOID
+=1 289 6
++    This routine is the firmware restart termination function. If a valid
++    restart block is present for the processor, execution continues at its
++    restart address; otherwise the system is reset and boots normally. A
++    uniprocessor Pi has no restart block.
+=1 306 4
++    if (SYSTEM_BLOCK->RestartBlock == NULL) {
++        FwReboot();
++    }
++
++    FwHalt();
++}
++
++VOID
++FwTerminationInitialize (
++    VOID
++    )
++{
++    SYSTEM_BLOCK->FirmwareVector[HaltRoutine] = (PVOID)FwHalt;
++    SYSTEM_BLOCK->FirmwareVector[PowerDownRoutine] = (PVOID)FwHalt;
++    SYSTEM_BLOCK->FirmwareVector[RestartRoutine] = (PVOID)FwRestart;
++    SYSTEM_BLOCK->FirmwareVector[RebootRoutine] = (PVOID)FwReboot;
++    SYSTEM_BLOCK->FirmwareVector[InteractiveModeRoutine] = (PVOID)FwpEnterInteractiveMode;
++}

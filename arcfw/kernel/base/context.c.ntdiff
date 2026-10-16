@@ -1,0 +1,29 @@
+#ntdiff PRIVATE/WINDOWS/BASE/CLIENT/MIPS/CONTEXT.C PRIVATE/WINDOWS/BASE/CLIENT/ALPHA/CONTEXT.C
+=1 1 10
++    This module contains the context management routines for Win32 (the ARM
++    port of BASE\CLIENT\MIPS\CONTEXT.C).
+=1 19 41
+=1 64 7
++    Context->Sp = (ULONG)InitialSp;
++    Context->Lr = 1;
++    Context->Cpsr = 0x10;
+=1 81 2
++        Context->Pc = (ULONG)BaseThreadStart;
++        Context->R0 = (ULONG)InitialPc;
++        Context->R1 = (ULONG)Parameter;
++        }
++    else {
++        Context->Pc = (ULONG)InitialPc;
++        Context->R0 = (ULONG)Parameter;
++        }
++
++    //
++    // A Thumb start address has the Thumb state bit set: the thread begins
++    // in Thumb state at the address.
++    //
++
++    if ( Context->Pc & 1 ) {
++        Context->Pc &= ~1;
++        Context->Cpsr |= 0x20;
++        }
++}

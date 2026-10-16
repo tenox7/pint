@@ -1,0 +1,37 @@
+#ntdiff PRIVATE/NTOS/MAKEFIL0
+=1 1 58
++                $(NTOSINC)\arm.h            \
+=1 59 4
++                $(SDKINC)\ntarm.h           \
+=1 63 23
++                   $(SDKINC)\ntarm.h    \
++                   $(NTOSINC)\ppc.h     \
++                   $(NTOSINC)\arm.h     \
+=1 87 7
++                $(SDKINC)\ntarm.h           \
+=1 94 14
++                $(NTOSINC)\arm.h            \
+=1 108 44
++                $(NTOSINC)\arm.h            \
+=1 152 4
++                $(SDKINC)\ntarm.h           \
+=1 156 29
++                $(NTOSINC)\ppc.h \
++                $(NTOSINC)\arm.h
+=1 186 16
++                $(NTOSINC)\arm.h            \
+=1 202 109
++#if defined(_ARM_)
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#pragma intrinsic(_MoveFromCoprocessor)
++#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
+=1 307 2
++#endif // defined(_ARM_)
+=1 310 599
++#if defined(_ARM_)
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#pragma intrinsic(_MoveFromCoprocessor)
++#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
+=1 307 2
++#endif // defined(_ARM_)
+=1 908 482

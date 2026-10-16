@@ -1,0 +1,5 @@
+# DLL\DAYTONA ARM_SOURCES (its MIPS_SOURCES: critsect.s evpair.s usrstubs.s ldrthunk.s)
+dll/critsect.asm
+dll/evpair.asm
+dll/ldrthunk.asm
+/tmp/gen/usrstubs.asm

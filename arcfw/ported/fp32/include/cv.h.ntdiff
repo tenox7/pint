@@ -1,0 +1,16 @@
+#ntdiff PRIVATE/FP32NT/INCLUDE/CV.H
+=1 1 69
++#if defined(MIPS) || defined(_ALPHA_) || defined(_ARM_)
+=1 71 13
++#if defined(MIPS) || defined(_ALPHA_) || defined(_ARM_)
+=1 85 182
++#elif defined(_ARM_)
++/* ARM: the quiet NaN of i386; the default NaN of the VFP is positive */
+=1 225 1
++	(!(signbit) && (manhi)==0xc0000000 && (manlo)==0)
+=1 227 8
+=1 267 16
++#if defined (L_END) && !( defined(MIPS) || defined(_ALPHA_) || defined(_ARM_) )
+=1 284 106
++#if defined(MIPS) || defined(_ALPHA_) || defined(_ARM_)
+=1 391 139

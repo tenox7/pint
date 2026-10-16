@@ -1,0 +1,287 @@
+#ntdiff PUBLIC/SDK/INC/NTMIPS.H PUBLIC/SDK/INC/NTPPC.H PUBLIC/SDK/INC/NTALPHA.H
++/*++ BUILD Version: 0001    // Increment this if a change has global effects
+=1 2 5
++    ntarm.h
+=1 8 3
++    User-mode visible ARM (ARMv7-A) specific structures and constants: the
++    analog of ntmips.h, with the same sections and extraction tags. The
++    register set is r0-r12, sp, lr, pc, cpsr and the VFPv4/NEON d0-d31.
+=1 18 3
++#ifndef _NTARM_
++#define _NTARM_
+=3 44 3
++#if defined(_ARM_)
+=1 28 19
++#if defined(_ARM_)
+=3 160 4
++// Define ARM specific kernel debugger information.
+=1 53 38
++#define STACK_OVERFLOW_BREAKPOINT 9         // stack overflow breakpoint
+=1 92 8
++//
++// Define the undefined instructions of the Thumb instruction set that serve
++// as traps, as Microsoft C for ARM and Windows on ARM use them: a breakpoint,
++// a debug service (with one of the codes above in r12), an assertion, a fast
++// fail, a cycle counter read and an integer divide by zero.
++//
++
++#define THUMB_BREAKPOINT 0xdefe
++#define THUMB_DEBUG_SERVICE 0xdefd
++#define THUMB_ASSERT 0xdefc
++#define THUMB_FASTFAIL 0xdefb
++#define THUMB_READ_CYCLES 0xdefa
++#define THUMB_DIVIDE_BY_0 0xdef9
+=1 99 6
+=2 137 3
++// Define length of exception code dispatch vector: the ARMv7-A exception
++// vector has eight entries (reset, undefined, svc, prefetch abort, data
++// abort, reserved, irq and fiq).
++//
++
++#define XCODE_VECTOR_LENGTH 8
+=1 112 8
++// Define the interrupt vector the processor's IRQ input is dispatched through:
++// the kernel calls the PCR interrupt routine of this vector, which the HAL sets
++// to its interrupt controller dispatcher.
++//
++
++#define IRQ_VECTOR 15
+=1 118 90
++// Processor identification from the main ID register.
+=1 209 40
++// Cache policy, right justified.
+=1 251 36
++// Cache policy, PTE field aligned.
+=1 289 5
++// Interrupt request: bit n set requests an interrupt at IRQL n, held until
++// IRQL drops below n - a software interrupt (APC_LEVEL or DISPATCH_LEVEL),
++// for which ARM has no cause bit, or a hardware interrupt the HAL masked
++// because it arrived at or below the current IRQL.
++//
++
++    ULONG InterruptRequest;
+=1 298 32
++// Physical address of the current page directory and the current process
++// id's hardware first-level table.
++//
++
++    ULONG CurrentPdr;
++    ULONG CurrentTb;
++
++//
++// Address limits for the interlock code in NTDLL.
+=1 339 25
++// Exception handler values: the fault address and status of an abort, and
++// the state saved while the trap entry builds its trap frame.
++//
++
++    ULONG FaultAddress;
++    ULONG FaultStatus;
++    ULONG SavedR0;
++    ULONG SavedR1;
++    ULONG SavedPc;
++    ULONG SavedCpsr;
+=1 368 2
++    PVOID SystemTib;
+=1 375 10
++// Define user address of the second processor control region page, the
++// shared user data page.
++//
++
+=1 389 2
+=1 396 2
++//
++// The current thread environment block: in the kernel runtime from the PCR;
++// elsewhere, in user and kernel mode, from the user read-only thread id
++// register, which the context switch sets as it sets the PCR (the MIPS
++// USER_PCR->Teb).
+=2 180 3
+=1 399 5
++#ifdef __cplusplus
++extern "C" unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#else
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#endif
++#pragma intrinsic(_MoveFromCoprocessor)
++#define NtCurrentTeb() ((PTEB)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 405 5
++#if defined(_ARM_)
+=1 411 6
++#define CONTEXT_ARM     0x00200000L
++
++#define CONTEXT_CONTROL         (CONTEXT_ARM | 0x00000001L)
++#define CONTEXT_INTEGER         (CONTEXT_ARM | 0x00000002L)
++#define CONTEXT_FLOATING_POINT  (CONTEXT_ARM | 0x00000004L)
++#define CONTEXT_DEBUG_REGISTERS (CONTEXT_ARM | 0x00000008L)
++
++#define CONTEXT_FULL (CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT)
++
++#define ARM_MAX_BREAKPOINTS 8
++#define ARM_MAX_WATCHPOINTS 1
+=1 424 4
++//  N.B. This frame must be a multiple of 16 bytes in length.
+=1 429 7
+=1 438 4
+=1 552 3
+=1 568 3
+=2 258 5
++    ULONG R0;
++    ULONG R1;
++    ULONG R2;
++    ULONG R3;
++    ULONG R4;
++    ULONG R5;
++    ULONG R6;
++    ULONG R7;
++    ULONG R8;
++    ULONG R9;
++    ULONG R10;
++    ULONG R11;
++    ULONG R12;
+=1 447 3
++    // the flag CONTEXT_CONTROL. Sp, Lr and Pc are r13, r14 and r15.
++    //
++
++    ULONG Sp;
++    ULONG Lr;
++    ULONG Pc;
++    ULONG Cpsr;
+=1 447 6
++    ULONG Fpscr;
++    ULONG Padding;
++    union {
++        ULONGLONG D[32];
++        ULONG S[32];
++    } u;
+=1 447 3
++    // the flag CONTEXT_DEBUG_REGISTERS.
++    //
++
++    ULONG Bvr[ARM_MAX_BREAKPOINTS];
++    ULONG Bcr[ARM_MAX_BREAKPOINTS];
++    ULONG Wvr[ARM_MAX_WATCHPOINTS];
++    ULONG Wcr[ARM_MAX_WATCHPOINTS];
++
++    ULONG Padding2[2];
+=1 572 4
++#endif // _ARM_
+=1 577 3
++#define CONTEXT_TO_PROGRAM_COUNTER(Context) ((Context)->Pc)
+=1 582 6
++// Nonvolatile context pointer record: the AAPCS callee-saved registers r4-r11
++// and lr, and the VFP d8-d15.
+=1 589 3
++    PULONG R4;
++    PULONG R5;
++    PULONG R6;
++    PULONG R7;
++    PULONG R8;
++    PULONG R9;
++    PULONG R10;
++    PULONG R11;
++    PULONG Lr;
++    PULONGLONG D8;
++    PULONGLONG D9;
++    PULONGLONG D10;
++    PULONGLONG D11;
++    PULONGLONG D12;
++    PULONGLONG D13;
++    PULONGLONG D14;
++    PULONGLONG D15;
+=1 622 1
+=3 703 3
++// Define the page table entry format for memory management: the R4000
++// EntryLo layout, so the memory manager's page tables are exactly the MIPS
++// ones. Dirty is the hardware write enable; Write and CopyOnWrite are
++// software bits. The ARMv7-A MMU does not walk these tables: the TB miss
++// handler copies a valid entry into a small page descriptor.
++//
++//   ARMv7-A small page descriptor       <-  HARDWARE_PTE
++//   [1:0]   = 0b10 (small page)             Valid
++//   [3:2] C,B  [8:6] TEX                    CachePolicy (UNCACHED_POLICY = device)
++//   [5:4] AP[1:0], [9] AP[2]                Dirty (writable), user below 2 GB
++//   [11]    nG                              !Global, or a per-process region
++//   [31:12] page base                       PageFrameNumber
+=1 663 13
++// Define macro to initialize page directory table base.
+=1 677 9
++// end_nthal
+=3 703 3
++// Define address space layout: user space below 2 GB, KSEG0 the cached
++// direct map of physical memory, KSEG2 the mapped system space.
+=1 859 8
++//
++// Define the processor type reported by SystemProcessorInformation: the
++// core's part number, MIDR[15:4].
++//
++
++#define PROCESSOR_ARM_CORTEX_A7 0xC07
++
++//
++// Define ARM exception handling structures and function prototypes.
++//
++// Function table entry structure definition: the .pdata entry the compiler
++// makes for each function, the image relative address of the function, with
++// the Thumb state bit set, and either the image relative address of its
++// unwind data in .xdata (the low two bits clear) or, for a function of
++// canonical form, the packed unwind data (the low two bits not clear).
+=1 872 4
++    ULONG UnwindData;
+=1 880 3
++// Scope table structure definition: the data of the C specific handler,
++// which follows the address of the handler in the unwind data. The addresses
++// are image relative, with the Thumb state bit set. A handler address of one
++// is a filter that returns EXCEPTION_EXECUTE_HANDLER, and a jump target of
++// zero describes a termination handler.
+=1 884 14
++// Nonvolatile register record: the nonvolatile registers of a frame, which
++// its exception filters and termination handlers address its locals with.
++//
++
++typedef struct _NONVOLATILE_REGISTERS {
++    ULONG R[8];
++    ULONGLONG D[8];
++} NONVOLATILE_REGISTERS, *PNONVOLATILE_REGISTERS;
++
++//
++// Define the context flag a virtual unwind sets when the program counter of
++// the context is the return address of a call.
++//
++
++#define CONTEXT_UNWOUND_TO_CALL 0x20000000
++
++//
++// Define the if-then execution state bits of the status register, which
++// continuing elsewhere than at the interrupted instruction clears.
++//
++
++#define CPSR_IT_MASK 0x0600fc00
+=1 896 12
++    IN ULONG ControlPc,
++    OUT PULONG ImageBase
++    );
++
++PEXCEPTION_ROUTINE
++RtlVirtualUnwind (
++    IN ULONG ImageBase,
+=1 913 3
++    OUT PVOID *HandlerData,
+=1 917 10
++    ULONG ImageBase;
+=1 927 2
++    ULONG TargetPc;
+=1 929 1
++    PEXCEPTION_ROUTINE LanguageHandler;
++    PVOID HandlerData;
++    PNONVOLATILE_REGISTERS NonVolatileRegisters;
+=3 817 7
++    struct _EXCEPTION_POINTERS *ExceptionPointers,
++    ULONG EstablisherFrame
+=1 939 5
++    BOOLEAN is_abnormal,
++    ULONG EstablisherFrame
++    );
+=1 99 2
++#endif // defined(_ARM_)
+=1 316 2
++#endif // _NTARM_

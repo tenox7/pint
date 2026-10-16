@@ -1,0 +1,87 @@
+#ntdiff PRIVATE/NTOS/RTL/MIPS/CHANDLER.C PRIVATE/NTOS/RTL/MIPS/EXDSPTCH.C
+=1 1 11
++    structured condition handling for the C language (the ARM port of
++    RTL\MIPS\CHANDLER.C).
++
++    The scope table holds image relative addresses with the Thumb state bit
++    set. The exception filters and termination handlers run on the frame of
++    their function, with its nonvolatile registers (the C run-time jmpuwind.asm).
+=1 13 15
+=1 29 2
++// execution routines defined in the C run-time (jmpuwind.asm).
+=1 32 5
++    ULONG EstablisherFrame,
+=1 37 1
++    PNONVOLATILE_REGISTERS NonVolatileRegisters
+=1 39 5
++    ULONG EstablisherFrame,
+=1 44 1
++    PNONVOLATILE_REGISTERS NonVolatileRegisters
+=1 39 3
+=2 713 6
++    );
++
+=1 48 37
++    ULONG BeginAddress;
++    ULONG ControlPc;
++    ULONG EndAddress;
+=1 86 2
++    ULONG ImageBase;
++    ULONG Index;
++    ULONG JumpTarget;
+=1 90 6
++    // Get the image relative address of where control left the establisher
++    // and the address of the scope table.
++    //
++
++    ImageBase = DispatcherContext->ImageBase;
++    ControlPc = DispatcherContext->ControlPc - ImageBase;
++    ScopeTable = (PSCOPE_TABLE)(DispatcherContext->HandlerData);
+=1 104 5
++    // PC obtained from the dispatcher context.
+=1 110 13
++            BeginAddress = ScopeTable->ScopeRecord[Index].BeginAddress & ~1;
++            EndAddress = ScopeTable->ScopeRecord[Index].EndAddress & ~1;
++            JumpTarget = ScopeTable->ScopeRecord[Index].JumpTarget;
++            if ((ControlPc >= BeginAddress) &&
++                (ControlPc < EndAddress) &&
++                (JumpTarget != 0)) {
+=1 126 5
++                if (ScopeTable->ScopeRecord[Index].HandlerAddress == EXCEPTION_EXECUTE_HANDLER) {
++                    Value = EXCEPTION_EXECUTE_HANDLER;
++
++                } else {
++                    ExceptionFilter =
++                        (EXCEPTION_FILTER)(ImageBase + ScopeTable->ScopeRecord[Index].HandlerAddress);
++
+=1 133 1 4
++                                                       (ULONG)EstablisherFrame,
++                                                       ExceptionFilter,
++                                                       DispatcherContext->NonVolatileRegisters);
+=2 232 3
+=1 138 11
++                               (PVOID)(ImageBase + JumpTarget),
+=1 150 14
++        TargetPc = (DispatcherContext->TargetPc & ~1) - ImageBase;
+=1 122 1
++            BeginAddress = ScopeTable->ScopeRecord[Index].BeginAddress & ~1;
++            EndAddress = ScopeTable->ScopeRecord[Index].EndAddress & ~1;
++            JumpTarget = ScopeTable->ScopeRecord[Index].JumpTarget & ~1;
++            if ((ControlPc >= BeginAddress) &&
++                (ControlPc < EndAddress)) {
+=1 168 11
++                if ((TargetPc >= BeginAddress) &&
++                   (TargetPc <= EndAddress)) {
+=1 182 14
++                    if (JumpTarget != 0) {
++                        if (TargetPc == JumpTarget) {
+=1 198 4
++                        DispatcherContext->ControlPc = ImageBase + EndAddress;
++                        TerminationHandler =
++                            (TERMINATION_HANDLER)(ImageBase + ScopeTable->ScopeRecord[Index].HandlerAddress);
++
+=1 206 1
++                                                      (ULONG)EstablisherFrame,
++                                                      TerminationHandler,
++                                                      DispatcherContext->NonVolatileRegisters);
+=1 209 12

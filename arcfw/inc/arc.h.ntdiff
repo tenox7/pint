@@ -1,0 +1,22 @@
+#ntdiff PRIVATE/NTOS/INC/ARC.H
+=1 1 1218
++#elif defined(_ARM_)
++
++//
++// ARM port: the ARC firmware (arcfw) builds the system parameter block at
++// physical 0x1000, as the Jazz firmware does.
++//
+=1 1202 3
+=1 1219 375
++//
++// ARM port (not in the original NT 3.5 arc.h): the processor state the kernel
++// needs at entry, as the MIPS block, filled by BlSetupForNt. The union is the
++// last member of LOADER_PARAMETER_BLOCK, so its size moves no other field.
++//
++typedef struct _ARM_LOADER_BLOCK {
+=1 1504 5
+=1 1510 8
++} ARM_LOADER_BLOCK, *PARM_LOADER_BLOCK;
+=1 1593 30
++        ARM_LOADER_BLOCK Arm;
+=1 1623 6

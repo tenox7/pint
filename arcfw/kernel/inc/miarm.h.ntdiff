@@ -1,0 +1,75 @@
+#ntdiff PRIVATE/NTOS/MM/MIPS/MIR4000.H PRIVATE/NTOS/MM/I386/MI386.H PRIVATE/NTOS/MM/ALPHA/MIALPHA.H PRIVATE/NTOS/MM/MIPS/MIR3000.H
+=1 1 6
++    miarm.h
+=1 8 3
++    Hardware-dependent Memory Manager definitions for ARMv7-A - the per-arch MM
++    header (the mi386.h / mir4000.h analog) that mi.h pulls under the _ARM_ gate.
++
++    The ARM memory manager keeps the R4000 page table layout and PTE format
++    unchanged (HARDWARE_PTE in ntarm.h is the R4000 EntryLo). As on MIPS, where
++    the TLB is a software-refilled cache of these PTEs, the ARMv7 hardware
++    translation tables are a cache of them filled on translation faults and
++    purged by the TB flush routines (ke/tbarm.c).
++
++Original Author (MIR4000.H):
+=1 18 8
++// The ARMv7 data cache is physically indexed, so pages have a single primary
++// color and only secondary (L2) colors are tracked, as on Alpha.
+=1 27 4
++//
++// Physical pages below 1 GB are reached through KSEG0 (hyperspace maps the
++// rest), as on Alpha.
+=3 212 4
+=1 327 3
+=1 39 182
++// The number of bits in a physical address. ARMv7-A short-descriptor (non-LPAE)
++// addresses 32-bit physical space; the R4000 used 36.
+=4 206 4
+=2 219 2
+=1 228 111
++//
++// ARMv7-A second-level table = 256 entries (1 KB), maps one 1 MB section. The MIPS
++// value was 1024 (4 KB page table). The system-cache build / MiBuildPagedPool walk
++// `PointerPte += PTE_PER_PAGE` per 1 MB PDE (MiGetPdeAddress is >>20 = 1 MB here), so
++// PTE_PER_PAGE MUST be 256 or PointerPte runs 4x ahead of StartPde out of the PTE
++// window. (Four 1 KB L2s pack into one 4 KB page in the self-map window - that is a
++// storage detail, not the per-PDE PTE count.)
++//
+=1 338 10
++// A physically indexed data cache has one color.
+=4 220 22
+=1 371 4
+=3 286 8
+=1 383 322
++#define MI_SET_PFN_DELETED(PPFN) \
++    ((PPFN)->PteAddress = (PMMPTE)((ULONG)(PPFN)->PteAddress & 0x7FFFFFFF))
+=1 706 52
+=3 775 6
+=1 772 18
+=3 800 2
+=1 807 23
+=2 804 2
+=1 834 23
+=3 856 2
+=1 861 24
+=2 874 2
+=1 889 23
+=2 906 3
+=1 917 46
+=2 966 2
+=1 965 6
+=2 963 3
+=1 977 927
++// HARDWARE_PTE (the MMPTE.u.Hard valid form) is defined in inc/ntarm.h - the NT
++// software PTE with the portable field set, plus the ARMv7-A hardware-descriptor
++// translation the MMU-fill code applies. The MM_PTE_*_MASK values and MI_* macros
++// below match that bit layout (MIPS R4000 lineage).
+=1 1905 55
++// HARDWARE_PTE (the .u.Hard valid form) lives in inc/ntarm.h - same field set
++// and bit layout as the block formerly inlined here, plus the ARMv7-A hardware
++// short-descriptor translation notes.
++
++//
++// A Page Table Entry has the following definition (the .u.Hard valid form is
++// the ARMv7-A NT software PTE from ntarm.h; the other forms are invalid PTEs).
+=1 1973 15
