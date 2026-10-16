@@ -1,0 +1,13 @@
+#ntdiff PRIVATE/WINDOWS/USER/WINLOGON/REGINI.C
+=1 1 2095
++    TimeoutMessageBoxlpstr( NULL,
++                            TEXT("Windows NT has configured the registry from REGISTRY.INI. ")
++                            TEXT("This is done once, on the first start of a new installation.\n\n")
++                            TEXT("The system will restart in 5 seconds to use the new configuration. ")
++                            TEXT("After the restart Windows NT logs on as Administrator and finishes ")
++                            TEXT("the setup in a command window."),
++                            TEXT("Windows NT Setup"),
++                            MB_ICONINFORMATION | MB_OK,
++                            5
++                          );
+=1 2096 374

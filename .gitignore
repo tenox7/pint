@@ -121,5 +121,6 @@ arcfw/ported/windows/user/server/createw.c
 arcfw/ported/windows/user/server/dmmnem.c
 arcfw/ported/windows/user/server/ntinput.c
 arcfw/ported/windows/user/winlogon/envvar.c
+arcfw/ported/windows/user/winlogon/regini.c
 arcfw/ported/windows/wincon/server/fontdlg.c
 arcfw/ported/windows/wincon/server/stream.c
