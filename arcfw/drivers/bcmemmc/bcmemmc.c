@@ -672,7 +672,9 @@ Routine Description:
 
     This is the interrupt service routine: move a block through the data port
     on a buffer ready interrupt, and complete the request when the transfer is
-    done or has failed.
+    done or has failed. Every status bit taken is acknowledged first: the
+    interrupt is level sensitive, and the controller can signal buffer ready
+    when no block is left to move; with no request, the data line is reset.
 
 Arguments:
 
@@ -698,8 +700,12 @@ Return Value:
         return FALSE;
     }
 
+    EmmcWrite(DeviceExtension, INTERRUPT, Status);
     if (Srb == NULL) {
-        EmmcWrite(DeviceExtension, INTERRUPT, Status);
+        if ((Status & (INT_READ_RDY | INT_WRITE_RDY)) != 0) {
+            EmmcResetLines(DeviceExtension, C1_SRST_DATA);
+        }
+
         return TRUE;
     }
 
@@ -712,7 +718,6 @@ Return Value:
     }
 
     if ((Status & (INT_READ_RDY | INT_WRITE_RDY)) != 0 && DeviceExtension->BlocksLeft != 0) {
-        EmmcWrite(DeviceExtension, INTERRUPT, Status & (INT_READ_RDY | INT_WRITE_RDY));
         Buffer = ((ULONG)DeviceExtension->DataBuffer & 3) == 0 ?
                  (PULONG)DeviceExtension->DataBuffer : DeviceExtension->Bounce;
         if (DeviceExtension->Read) {
@@ -739,7 +744,6 @@ Return Value:
     }
 
     if ((Status & INT_DATA_DONE) != 0) {
-        EmmcWrite(DeviceExtension, INTERRUPT, INT_DATA_DONE);
         DeviceExtension->CurrentSrb = NULL;
         EmmcComplete(DeviceExtension, Srb,
                      DeviceExtension->BlocksLeft == 0 ? SRB_STATUS_SUCCESS : SRB_STATUS_ERROR);

@@ -53,6 +53,7 @@
         lsrs    r1, r1, #1
         it      eq
         bxeq    lr                              ; no request above the new IRQL
+        mrs     r1, cpsr
         b       KiDispatchInterruptRequest
         LEAF_END KeLowerIrql
 
@@ -112,6 +113,7 @@
         it      ne
         bxne    lr                              ; interrupts disabled
         mov     r0, r1
+        mov     r1, r2
         b       KiDispatchInterruptRequest
         LEAF_END KiRequestSoftwareInterrupt
 
@@ -119,7 +121,8 @@
 ;
 ; VOID
 ; KiDispatchInterruptRequest (
-;    IN KIRQL Irql
+;    IN KIRQL Irql,
+;    IN ULONG Psr
 ;    )
 ;
 ; Routine Description:
@@ -127,21 +130,24 @@
 ;    This function dispatches the requests above Irql, highest level first. A
 ;    hardware request is cleared and PCR->InterruptRoutine[level] called with
 ;    interrupts disabled. A software request is dispatched only if interrupts
-;    were enabled at the call: it is cleared, IRQL raised to its level with
-;    interrupts enabled and PCR->InterruptRoutine[level] called, which may
-;    switch context. Returns at Irql with interrupts as at the call.
+;    are enabled in Psr: it is cleared, IRQL raised to its level, then
+;    interrupts are enabled and PCR->InterruptRoutine[level] called, which may
+;    switch context. Interrupts stay disabled until IRQL is raised, so an
+;    interrupt taken during the dispatch nests above the level of the request.
+;    Returns at Irql with interrupts as at the call.
 ;
 ;--
 
         NESTED_ENTRY KiDispatchInterruptRequest
         PROLOG_PUSH {r4-r8, lr}
+        mrs     r7, cpsr
+        cpsid   i
         mov     r4, r0
         CP_READ r5, 15, 0, 13, 0, 4             ; PCR
-        mrs     r7, cpsr
         movs    r6, #2
         lsls    r6, r6, r4
         subs    r6, r6, #1                      ; the levels at or below Irql
-        tst     r7, #CPSR_IRQ_DISABLE
+        tst     r1, #CPSR_IRQ_DISABLE
         it      ne
         orrne   r6, r6, #(1 << APC_LEVEL) | (1 << DISPATCH_LEVEL) ; disabled: no software interrupts
 10      cpsid   i

@@ -342,7 +342,10 @@ KiExceptionDispatch
 ; of the trapped code in its registers, or, for user mode, in the exception
 ; frame below the trap frame. If the trapped code resumes with interrupts
 ; enabled, the interrupt requests above the current IRQL are dispatched first
-; (on MIPS the pending cause bits interrupt as the PSR is restored). A kernel
+; (on MIPS the pending cause bits interrupt as the PSR is restored), with
+; interrupts disabled until IRQL is raised to the level of a request: an
+; interrupt that is still asserted then nests at that level, and does not
+; dispatch the request again on a deeper stack each time it is taken. A kernel
 ; mode trap resumes through the rfe slots below the trapped stack pointer. A
 ; user mode trap first clears kernel mode alerted and delivers any pending
 ; user mode APC (the MIPS exits request an APC interrupt; here the exit loop
@@ -364,7 +367,7 @@ KiExceptionDispatch
         lsrs    r1, r1, r0
         lsrs    r1, r1, #1
         beq     %F20                            ; no request above the current IRQL
-        cpsie   i
+        mov     r1, r2                          ; resumed with interrupts enabled
         bl      KiDispatchInterruptRequest
         b       %B10
 
@@ -671,8 +674,13 @@ KiSystemServiceExit
 10      sub     r1, r1, #KERNEL_STACK_SIZE      ; kernel mode: check for stack overflow
         add     r1, r1, #TRAP_STACK_NEEDED
         cmp     sp, r1
-        blo     KiKernelStackOverflow
-        sub     r1, sp, #TrapFrameLength        ; below the rfe slots and the scratch
+        bhs     %F15
+        ldr     r1, [sp, #8]                    ; the interrupted pc, as a trap saves it
+        str     r1, [r0, #PcSavedPc]
+        movs    r1, #0
+        str     r1, [r0, #PcFaultAddress]
+        b       KiKernelStackOverflow
+15      sub     r1, sp, #TrapFrameLength        ; below the rfe slots and the scratch
         bic     r1, r1, #7
 20      str     r2, [r1, #TrR2]
         str     r3, [r1, #TrR3]
