@@ -4,21 +4,38 @@
 # system does). NT's common include directories map to the header farm
 # (mkfarm.sh), as do the components it farmed; any other directory is farmed
 # under /tmp/f/dirs (its text files: headers and the other files sources include),
-# with the files the build generated for it (/tmp/f/gen) and the message headers of
-# its makefile.inc (mcinc.sh).
+# with the files the build generated for it (/tmp/f/gen), the port's versions of its
+# files (arcfw/ported/<directory>) and the message headers of its makefile.inc (mcinc.sh).
 # Usage: incdirs.sh componentdir "INCLUDES value"
 K=$(cd "$(dirname "$0")" && pwd)
-# Microsoft C takes the sources as they are but for the ARM gates.
-filt() { tr -d '\032\r' < "$1" | sed -E -f $K/riscgate.sed -f $K/msvcgate.sed -f $K/incfix.sed | sed -f $K/armport.sed; }
+# Microsoft C takes the sources as they are but for the ARM gates. RC (on Wine, which
+# finds names as NT does) takes the include names of resource scripts as they are
+# (NET UI's <string\lmobj.str>).
+filt() {
+    local f=-f$K/incfix.sed
+    case $1 in *.[Rr][Cc]|*.[Rr][Cc]2|*.[Dd][Ll][Gg]|*.[Ss][Tt][Rr]) f= ;; esac
+    tr -d '\032\r' < "$1" | sed -E -f $K/riscgate.sed -f $K/msvcgate.sed $f | sed -f $K/armport.sed
+}
 farm() {
     local s
     [ -e "$2/.farmed" ] && return
     mkdir -p "$2" && : > "$2/.farmed"
     # the message headers its makefile.inc makes, as the NT build made them first
     bash $K/mcinc.sh "$1" >&2
-    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/*; do
-        [ -f "$f" ] && grep -Iq . "$f" || continue
-        filt "$f" > "$2/$(basename "$f" | tr A-Z a-z)"
+    # and the port's versions of its files (arcfw/ported/<directory>), which a quoted
+    # include of a header beside them finds there too; its other files (the bitmaps and
+    # icons of resource scripts) and directories (NET UI's xlate\string) are links, so
+    # that RC needs the farmed directory alone (RC keeps its include path in 520 bytes)
+    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/* /work/RASPI/arcfw/ported/$(echo ${1#/work/PRIVATE/} | tr A-Z a-z)/*; do
+        n="$2/$(basename "$f" | tr A-Z a-z)"
+        case $f in *.ntdiff|*/[Ss][Yy][Ss]) continue ;; esac
+        if [ -d "$f" ]; then
+            [ -e "$n" ] || ln -s "$f" "$n"
+        elif grep -Iq . "$f" 2>/dev/null; then
+            rm -f "$n"; filt "$f" > "$n"
+        elif [ -f "$f" ]; then
+            rm -f "$n"; ln -s "$f" "$n"
+        fi
     done
     # the sys\ headers, in their directory (incfix.sed)
     s=$(ls -d "$1"/[Ss][Yy][Ss] 2>/dev/null) && farm "$s" "$2/sys"
@@ -55,6 +72,3 @@ for p in "$1" $(for i in $(echo "$2" | tr ';' ' '); do include "$1" "$i"; done);
     *) farm "$p" "/tmp/f/dirs$p"; echo -n " -I/tmp/f/dirs$p" ;;
     esac
 done
-# the headers of the ported sources of the component (arcfw/ported/<component>)
-P=/work/RASPI/arcfw/ported/$(echo ${1#/work/PRIVATE/} | tr A-Z a-z)
-[ ! -d $P ] || echo -n " -I$P"

@@ -82,6 +82,19 @@ VOID KiArmInitialize(PLOADER_PARAMETER_BLOCK LoaderBlock)
     Pcr->SecondLevelIcacheFillSize = LoaderBlock->u.Arm.SecondLevelIcacheFillSize;
 
     //
+    // The data and instruction cache fill sizes and alignments: those of the
+    // second level caches if there are, else of the first (the DMA alignment
+    // of the HAL and the default alignment requirement of a device).
+    //
+
+    Pcr->DcacheFillSize = Pcr->SecondLevelDcacheSize != 0 ?
+        Pcr->SecondLevelDcacheFillSize : Pcr->FirstLevelDcacheFillSize;
+    Pcr->DcacheAlignment = Pcr->DcacheFillSize - 1;
+    Pcr->IcacheFillSize = Pcr->SecondLevelIcacheSize != 0 ?
+        Pcr->SecondLevelIcacheFillSize : Pcr->FirstLevelIcacheFillSize;
+    Pcr->IcacheAlignment = Pcr->IcacheFillSize - 1;
+
+    //
     // Build and load the kernel's translation tables and the page directory.
     //
 

@@ -9,8 +9,9 @@
 K=$(cd "$(dirname "$0")" && pwd)
 D=$1 PHASE=$2 OUT=${3:-/work/RASPI/obj/um}
 resolve() {
-    local p=$D c n
-    for c in $(echo "$1" | tr '\\/' '  '); do
+    local p=${2:-$D} c n f=$1
+    case $f in BASEDIR/*) p=/work; f=${f#BASEDIR/} ;; esac
+    for c in $(echo "$f" | tr '\\/' '  '); do
         case $c in
         ..) p=$(dirname "$p") ;;
         .) ;;
@@ -20,43 +21,121 @@ resolve() {
     echo "$p"
 }
 gen() { echo /tmp/f/gen/${1#/work/PRIVATE/}; }
-# A file of a recipe: in the tree, or made by the build (generated files and the
+# A file of a recipe: the port's version, in the tree, or made by the build (generated files and the
 # outputs of the mc pass).
 locate() {
     local f r n g
     f=$(echo "$1" | tr '\\' /)
     r=$(resolve "$(dirname "$f")") || return 1
-    for g in $r $(gen $r) /tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z); do
+    for g in /work/RASPI/arcfw/ported/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z) $r $(gen $r) /tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z); do
         n=$(ls "$g" 2>/dev/null | grep -ix "$(basename "$f")" | head -1)
         [ -z "$n" ] || { echo "$g/$n"; return; }
     done
     return 1
 }
-# copy a dest: dest a directory (as . or ..) or a file
+# copy a dest: dest a directory (as . or ..) or a file; one under obj\ is a file of the component
 nmk_copy() {
     local s d f
     s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }
     if d=$(resolve "${2:-.}") && [ -d "$d" ]; then f=$(basename "$s")
-    else d=$(resolve "$(dirname "$2")") || return 1; f=$(basename "$2"); fi
+    else case $2 in [Oo][Bb][Jj]/*) d=$D ;; *) d=$(resolve "$(dirname "$2")") || return 1 ;; esac; f=$(basename "$2"); fi
     mkdir -p "$(gen $d)" && cp "$s" "$(gen $d)/$(echo $f | tr A-Z a-z)"
 }
 outlib() { echo $OUT/$(basename "$1" .lib | tr A-Z a-z).lib; }
-# a library of libraries, given to lib in reverse order as ntlib (msvc.sh) does
+# a library a recipe names (..\buffer\obj\arm\buffer.lib): the one made for that directory
+# (libpath.sh), else that of its name
+inlib() { local l; l=$(bash $K/libpath.sh $D "$(echo "$1" | sed -E 's#(^|/)obj/arm/#\1obj/*/#')"); echo ${l:-$(outlib "$1")}; }
+# a library of libraries, given to lib in reverse order as ntlib (msvc.sh) does; one of a
+# directory (obj\arm\uimisc.lib) is also the library of that directory (libpath.sh)
 nmk_lib() {
-    local a o l=
+    local a o p= d l=
     for a in "$@"; do
         case $a in
-        -out:*) o=$(outlib "${a#-out:}") ;;
-        *.lib) l="$(outlib "$a") $l" ;;
+        -out:*) p=${a#-out:}; o=$(outlib "$p") ;;
+        *.lib) l="$(inlib "$a") $l" ;;
         esac
     done
     rm -f $o
     MSVC_ENV=0 WINEDEBUG=-all lib -nologo -out:$o $l > /tmp/nttarget.err 2>&1 || { cat /tmp/nttarget.err >&2; return 1; }
+    case $p in
+    [Oo][Bb][Jj]/*) d=$D ;;
+    */[Oo][Bb][Jj]/*) d=$(resolve "${p%/[Oo][Bb][Jj]/*}") || return 0 ;;
+    *) return 0 ;;
+    esac
+    mkdir -p $OUT/dir/${d#/work/} && cp $o $OUT/dir/${d#/work/}/
 }
-nmk_mc() { :; }    # mcinc.sh runs the mc recipes
+# link32 -dump -symbols: the symbol tables of libraries, by the linker of Microsoft C
+nmk_link32() {
+    local a l=
+    for a; do case $a in *.lib) l="$l $(inlib "$a")" ;; esac; done
+    MSVC_ENV=0 WINEDEBUG=-all link -dump -symbols $l
+}
+# mapmsg, the message file of the message definitions of a header (netmsg.mc of
+# NET\MESSAGES): mapmsg [-p] [-a file] system base header [> file]
+nmk_mapmsg() {
+    local o= args=() n
+    while [ $# -gt 0 ]; do
+        case $1 in
+        -a) args+=(-a "$(out "$2")"); shift 2 ;;
+        ">") o=$(out "$2"); shift 2 ;;
+        *) args+=("$1"); shift ;;
+        esac
+    done
+    n=${#args[@]}
+    args[$((n-1))]=$(locate "${args[$((n-1))]}") || { echo "nttarget: no ${args[$((n-1))]}" >&2; return 1; }
+    if [ -n "$o" ]; then bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" > "$o" 2> /tmp/mapmsg.log
+    else bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" 2> /tmp/mapmsg.log; fi || { cat /tmp/mapmsg.log >&2; return 1; }
+}
+# uixport, the export list of a NET UI DLL from the symbols of its libraries
+nmk_uixport() {
+    local a h o x= args=()
+    for a; do
+        case $a in
+        -h:*) h=$(locate "${a#-h:}") || { echo "nttarget: no ${a#-h:}" >&2; return 1; }; args+=("-h:$h") ;;
+        -o:*) args+=("-o:$(out "${a#-o:}")") ;;
+        -x:*) x=$(locate "${a#-x:}") || { echo "nttarget: no ${a#-x:}" >&2; return 1; }; args+=("-x:$x") ;;
+        *) args+=("$a") ;;
+        esac
+    done
+    bash /work/RASPI/tools/host.sh uixport "${args[@]}" > /tmp/uixport.log 2>&1 || { cat /tmp/uixport.log >&2; return 1; }
+}
+# the files NT placed in its release (binplace), the disk image places (make-sd-image.sh)
+nmk_binplace() { :; }
+nmk_del() { local f; for f; do rm -f "$(out $f)"; done; }
+# copy a + b c: a and b, one after the other, in c (which may be a)
+nmk_copycat() {
+    local d=$1 s f t=/tmp/nttarget.cat; shift
+    : > $t
+    for f; do s=$(locate "$f") || { echo "nttarget: no $f" >&2; return 1; }; cat "$s" >> $t; done
+    mv $t "$(out $d)"
+}
+nmk_midl() { :; }    # gen-midl.sh runs the midl recipes
+# mcinc.sh runs the mc recipes of an input of the tree; this one, of an input a recipe
+# made (a message file copied from another component), puts the header, resource script
+# and message tables among the generated files, where NT's build left them in its tree
+nmk_mc() {
+    local o= h=. r=. f= s hd rd x
+    while [ $# -gt 0 ]; do
+        case $1 in
+        -h) h=$2; shift 2 ;;
+        -r) r=$2; shift 2 ;;
+        -*) o="$o $1"; shift ;;
+        *) f=$1; shift ;;
+        esac
+    done
+    s=$(locate "$f") || { echo "nttarget: no $f" >&2; return 1; }
+    hd=$(gen $(resolve "$h")) && rd=$(gen $(resolve "$r")) || return 1
+    mkdir -p $hd $rd
+    bash /work/RASPI/tools/host.sh mc $o -h $hd -r $rd $s > /tmp/mc.log 2>&1 || { cat /tmp/mc.log >&2; return 1; }
+    for x in $(find $hd $rd -maxdepth 1 -type f -name "*[A-Z]*" | sort -u); do mv $x $(dirname $x)/$(basename $x | tr A-Z a-z); done
+}
 # a file a recipe makes, among the generated files of the component
 out() { echo "$(gen $D)/$(basename "$1" | tr A-Z a-z)"; }
+# IF EXIST f: a file of the tree or one the build made (an image of the component is
+# not made yet: winchat copies its winchat.exe to bin\arm, as binplace)
+nmk_exists() { locate "$1" > /dev/null || [ -e "$(out "$1")" ]; }
 nmk_cat() { local s; s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; cat "$s" >> "$(out $2)"; }
+nmk_wcshdr() { local s; s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; bash /work/RASPI/tools/host.sh wcshdr < "$s" > "$(out $2)"; }
 # the build tools of the recipes (tools/host.sh), on files of the tree or generated ones
 nmk_solidpp() {
     local i f a=()
@@ -75,11 +154,32 @@ nmk_rcpp() {
     done
     bash /work/RASPI/tools/host.sh rcpp "${a[@]}" > /dev/null
 }
-mk=$(resolve makefile.inc) || exit 0
+m=$(resolve makefile.inc) || exit 0
+# the makefile.inc with the files it includes (the port's versions of them first)
+ported() { local p=/work/RASPI/arcfw/ported/$(echo ${1#/work/PRIVATE/} | tr A-Z a-z); [ -f $p ] && echo $p || echo $1; }
+flatten() {
+    local line f
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ $line =~ ^[[:space:]]*![[:space:]]*[Ii][Nn][Cc][Ll][Uu][Dd][Ee][[:space:]]+([^[:space:]]+) ]]; then
+            f=$(resolve "$(echo "${BASH_REMATCH[1]}" | tr -d '"<>')" "$(dirname $1)") && flatten $f
+        else
+            printf '%s\n' "$line"
+        fi
+    done < <(tr -d '\032\r' < "$(ported $1)")
+}
+mk=/tmp/nttarget.mk
+flatten $m > $mk
 mkdir -p $(gen $D)
 set -f
 targets() { bash $K/srcmacro.sh $D/SOURCES $1 | tr " " "\n" | sed 's/\*/$(TARGET_DIRECTORY)/g'; }
-macros="TARGET_DIRECTORY=arm"
+# the macros of the component (its makefile and SOURCES) and of the build of ARM
+macros="$(bash $K/srcmacro.sh $D/SOURCES '*')
+TARGET_DIRECTORY=arm
+386=0
+MIPS=0
+ALPHA=0
+PPC=0
+ARM=1"
 for m in NTTARGETFILE0 NTTARGETFILE1 NTTARGETFILES; do
     macros="$macros
 $m=$(targets $m | tr "\n" " " | sed "s/ *$//")"
@@ -89,7 +189,12 @@ target() {
     local t=$1 d
     case "$made" in *" $t "*) return 0 ;; esac
     made="$made$t "
-    locate "$t" >/dev/null && return 0    # up to date: made by the build already
+    # up to date: in the tree, or made by the build already unless its recipe does more
+    # than the mc and midl passes do (ulib: rtmsg.rc, mc's and ulib.rc in one)
+    if locate "$t" >/dev/null; then
+        NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $K/nmk.awk $mk > /tmp/nttarget.sh
+        grep -qv "^nmk_mc \|^nmk_midl \|^ *$" /tmp/nttarget.sh || return 0
+    fi
     for d in $(NMK_DEPS=1 NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $K/nmk.awk $mk); do
         target "$d" || return 1
     done
@@ -103,3 +208,4 @@ esac
 for t in $T; do
     target "$t" || exit 1
 done
+bash $K/gensave.sh

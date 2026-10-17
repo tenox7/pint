@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/WINDOWS/EP/OLDTP/TAIPEI.C
+=1 1 349
++    return TRUE;
+=1 350 47
++    return TRUE;
+=1 397 36
++    return TRUE;
+=1 433 1281

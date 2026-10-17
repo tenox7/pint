@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/SDKTOOLS/WINTOOLS/WINMSD/HARDWARE.C
+=1 1 328
++    for( i = 0; i <= GetDlgIndex( IDC_EDIT_VIDEO_VERSION, HardwareData ); i++ ) {
+=1 330 565

@@ -27,3 +27,7 @@ s/pTEInfo->Flags = HasImplicitHandle() ? TYPE_ENCODE_WITH_IMPL_HANDLE : 0;/pTEIn
 # A string literal followed by a macro of a string (midl20\codegen): C++ of today reads
 # the name as the suffix of a user-defined literal.
 s/"\(FC_FIELD_PAD_MACRO\|LENGTH_VAR_NAME\|NOTIFY_SUFFIX\|PSTUB_MESSAGE_PAR_NAME\|STUB_MESSAGE_VAR_NAME\|VLIST_VAR_NAME\|XMIT_AS_ROUTINE_TABLE_TYPE\)/" \1/g
+
+# A member function named without a call as a condition (regedit/regdata.cxx, the
+# share disposition of a resource): the 1994 compiler took its address, never zero.
+s/if( \([A-Za-z]*\)->\(IsResourceShare[A-Za-z]*\) )/if( \&IO_DESCRIPTOR::\2 )/

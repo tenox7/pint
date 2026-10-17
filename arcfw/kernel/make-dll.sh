@@ -30,6 +30,18 @@ DIR=/tmp/dll; rm -rf $DIR; mkdir -p $DIR/obj $DIR/src $U
 
 macro() { bash srcmacro.sh $D/SOURCES $1; }
 NAME=$(macro TARGETNAME | tr -d " " | tr A-Z a-z)
+# the DLLDEF, by default the <name>.def
+DEFPATH=$(macro DLLDEF | tr -d " " | tr "\\\\" / | sed "s/\$(TARGET_DIRECTORY)/arm/g"); DEF=$(basename "${DEFPATH:-$NAME.def}")
+# The .def file: one under obj\ that the component made (NTTARGETFILE0, nttarget.sh),
+# else the version of the port, else that of the tree, else one the component made
+# beside its sources (netui0.def).
+deffile() {
+  local l=$(echo $DEF | tr A-Z a-z) p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z) g=/tmp/f/gen/${D#/work/PRIVATE/} f
+  case $DEFPATH in [Oo][Bb][Jj]/*) [ -f $g/$l ] && { echo $g/$l; return; } ;; esac
+  [ -f $p/$l ] && { echo $p/$l; return; }
+  f=$(ls $D | grep -ix "$DEF") && { echo $D/$f; return; }
+  [ -f $g/$l ] && echo $g/$l
+}
 bash mcinc.sh $D
 # (the NTTARGETFILE0 of ntdll is the .def made below)
 [ $NAME = ntdll ] || bash nttarget.sh $D pre $U || exit 1
@@ -47,12 +59,12 @@ if [ $NAME = ntdll ]; then
   cat /work/PRIVATE/NTOS/DLL/NTDLLDEF.SRC dll/armdef.src /tmp/gen/ntdll.xtr > $DIR/ntdll.in
   ntsrc $DIR/ntdll.in $DIR/$NAME.src
   cl -nologo -EP -D_ARM_ -DDBG=0 -DDEVL=1 $DIR/$NAME.src 2>/dev/null | sed -f deffix.sed > $DIR/$NAME.def
-elif f=$(ls $D | grep -ix "$NAME.def"); then
-  tr -d "\032\r" < $D/$f | sed -f deffix.sed > $DIR/$NAME.def
+elif f=$(deffile); then
+  tr -d "\032\r" < $f | sed -f deffix.sed > $DIR/$NAME.def
 else
   # obj\*\<name>.def, which makefile.def makes from <name>.src (or a .def in the
   # parent directory) with the C preprocessor
-  f=$(ls $D | grep -ix "$NAME.src") && f=$D/$f || f=$D/../$(ls $D/.. | grep -ix "$NAME.src\|$NAME.def" | head -1)
+  f=$(ls $D | grep -ix "${DEF%.*}.src") && f=$D/$f || f=$D/../$(ls $D/.. | grep -ix "${DEF%.*}.src\|$DEF" | head -1)
   ntsrc $f $DIR/$NAME.src
   cl -nologo -EP -D_ARM_ -DDBG=0 -DDEVL=1 -DNT_UP=1 $DEFS $DIR/$NAME.src 2>/dev/null | sed -f deffix.sed > $DIR/$NAME.def
 fi
@@ -77,15 +89,15 @@ n=0; fail=0
 # the farmed directory of a source of the tree outside the component (..\x.c), where
 # its quoted includes are found first
 srcinc() { local s=$(realpath $(dirname $1)); [ "$s" = "$(realpath $D)" ] && return; case $s in /work/PRIVATE/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
-srcs=$(bash srclist.sh $COMP $ROOT "(c|cxx)")
+srcs=$(bash srclist.sh $COMP $ROOT "(c|cxx|cpp)")
 # the directories of the relative includes of the sources, last
-INCS="$INCS $(bash relinc.sh $srcs)"
+INCS="$INCS $(bash relinc.sh $INCS $srcs)"
 arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm
 for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
   b=$(basename "${f%.*}" | tr A-Z a-z)
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I$O/gen $INCS ;;
-  *.[Cc][Xx][Xx]) ntsrc $f $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $DEFS $(srcinc $f) $INCS ;;
+  *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) ntsrc $f $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $DEFS $(srcinc $f) $INCS ;;
   *) ntsrc $f $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $DEFS $(srcinc $f) $INCS ;;
   esac && n=$((n+1)) || fail=$((fail+1))
 done
@@ -124,7 +136,13 @@ link -nologo -machine:arm -release -force:multiple -dll $E -base:$BASE -subsyste
      $DIR/obj/*.obj $LIBS $DIR/newarray.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
 bash /work/RASPI/tools/host.sh pe2img -version 3.50 $DIR/$F || exit 1
-ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
+# The import library: that of a .dll in obj/um, that of another (a .drv or .cpl is loaded,
+# not linked, and may have the name of a DLL: msacm32.drv) only as the library of its
+# TARGETPATH (libpath.sh), as also the import library of a DLL of a TARGETPATH other than
+# the public one (obj).
+T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
+case $T in /work/PUBLIC/*) ;; *) mkdir -p $U/dir/${T#/work/} && cp $DIR/$NAME.lib $U/dir/${T#/work/}/ ;; esac
+[ "$EXT" != dll ] || ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
 privlib
 OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/WINNT/System32
 cp $DIR/$F $OUT/$F

@@ -2,8 +2,9 @@
 # Build the system disk: MBR + one FAT16 partition holding the Pi GPU firmware,
 # config.txt, the ARC firmware (arcfw.bin, the kernel= image) and the NT tree in
 # sdcard/root (\WINNT\...) with the registry hives of obj/gen/hives, the NLS tables and OEM font
-# of the NT tree and the setup aid of a developer install (arcfw/ported/oak/registry.ini, the
-# program groups in \WINNT\IDW). FAT16 because both the GPU firmware and NT 3.5 read it.
+# of the NT tree, the help files of the programs and the setup aid of a developer install
+# (arcfw/ported/oak/registry.ini, the program groups in \WINNT\IDW). FAT16 because both
+# the GPU firmware and NT 3.5 read it.
 # Flash it for a real Pi 2, or attach it in QEMU with -drive if=sd. With -u the disk of
 # the last build is updated in place, keeping what NT wrote on it: the files built since
 # go in (a new disk when the hives changed).
@@ -18,7 +19,7 @@ LOADER="../obj/arcfw.bin"
 IMG="../obj/nt-arcfw-sd.img"
 STAMP="../obj/stamp/sd-image"
 FWCACHE="firmware"
-SIZE_MB=64
+SIZE_MB=256
 ROOT="$(cd .. && pwd)"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing required tool: $1"; exit 1; }; }
@@ -57,7 +58,7 @@ rm -rf /tmp/sd && mkdir -p /tmp/sd
 cp firmware/bootcode.bin firmware/start.elf firmware/fixup.dat firmware/bcm2709-rpi-2-b.dtb /tmp/sd/
 cp config.txt ../obj/arcfw.bin /tmp/sd/
 cp -r root/* /tmp/sd/
-mkdir -p /tmp/sd/WINNT/System /tmp/sd/WINNT/System32
+mkdir -p /tmp/sd/WINNT/System /tmp/sd/WINNT/System32 /tmp/sd/TMP
 cp /nt/PRIVATE/WINDOWS/WINNLS/DATA/{C_1252,C_437,CTYPE,L_INTL,LOCALE,SORTKEY,SORTTBLS,UNICODE}.NLS /tmp/sd/WINNT/System32/
 cp /nt/PRIVATE/WINDOWS/GDI/FONTS/VGAOEM.FON /tmp/sd/WINNT/System/
 mkdir -p /tmp/sd/WINNT/System32/config
@@ -65,6 +66,18 @@ cp ../obj/gen/hives/SYSTEM ../obj/gen/hives/SOFTWARE ../obj/gen/hives/DEFAULT /t
 perl ../tools/ntdiff.pl apply /nt ../arcfw/ported/oak/registry.ini.ntdiff
 cp ../arcfw/ported/oak/registry.ini /tmp/sd/WINNT/REGISTRY.INI
 mkdir -p /tmp/sd/WINNT/IDW && cp /nt/PRIVATE/WINDOWS/SHELL/PROGMAN/*.GRP /tmp/sd/WINNT/IDW/
+# the help files of the programs, where setup puts them
+for h in WINHELP/HLP/WINHELP SHELL/PROGMAN/PROGMAN SHELL/WINFILE/WINFILE SHELL/CONTROL/CONTROL SHELL/ACCESORY/NOTEPAD/NOTEPAD \
+         SHELL/ACCESORY/CALC/CALC SHELL/ACCESORY/SPECHARS/CHARMAP SHELL/GAMES/SOL/SOL EP/WINMINE/HELP/WINMINE EP/FREECELL/FREECELL \
+         SHELL/ACCESORY/CARDFILE/CARDFILE SHELL/ACCESORY/PAINTBRS/PBRUSH SHELL/ACCESORY/TERMINAL/TERMINAL \
+         SHELL/ACCESORY/CALENDAR/CALENDAR SHELL/ACCESORY/CLIPBRD/CLIPBRD SHELL/ACCESORY/ACCESS/ACCESS/ACCESS35 \
+         EP/CRUEL/CRUEL EP/GOLF/GOLF EP/PEGGED/PEGGED MEDIA/MPLAYER2/HELP/MPLAYER SHELL/ACCESORY/WINCHAT/WINCHAT; do
+  cp /nt/PRIVATE/WINDOWS/$h.HLP /tmp/sd/WINNT/System32/
+done
+cp /nt/PRIVATE/UTILS/FDISK/DISKMAN.HLP /tmp/sd/WINNT/System32/WINDISK.HLP
+cp /nt/PRIVATE/UTILS/REGEDIT/SRC/REGEDIT.HLP /tmp/sd/WINNT/System32/REGEDT32.HLP
+# the names and explanations of the performance counters (Perflib, Performance Monitor)
+cp /nt/PRIVATE/SDKTOOLS/CNTRTEXT/PERFINI/PERFC009.DAT /nt/PRIVATE/SDKTOOLS/CNTRTEXT/PERFINI/PERFH009.DAT /tmp/sd/WINNT/System32/
 
 dd if=/dev/zero of="$IMG" bs=1M count="$SIZE_MB" status=none
 printf "label: dos\nstart=2048, type=06, bootable\n" | sfdisk "$IMG" >/dev/null

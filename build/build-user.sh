@@ -54,12 +54,13 @@ for c in LSA/CLIENT/USER WINDOWS/SCREG/WINREG/SERVER WINDOWS/USER/WINLOGON/DAYTO
 exe $W USER/WINLOGON/DAYTONA winlogon
 
 # the local security authority (lsass: lsasrv, samsrv, msv1_0, msprivs), the service controller, the event log
+# and the message files of its events (netevent, iologmsg and the network messages, netmsg)
 implib $P LSA/SERVER lsasrv; implib $P NEWSAM/SERVER samsrv
 for c in NLSECUTL WINDOWS/SCREG/SC/SVCSLIB WINDOWS/SCREG/SC/SERVER/DAYTONA; do lib $P $c; done
 dll $P LSA/SERVER; exe $P LSA/SERVER lsass
 dll $P NEWSAM/SERVER; dll $P LSA/MSV1_0; dll $P LSA/MSPRIVS
 exe $W SCREG/SC/SERVER/DAYTONA services
-dll $P EVENTLOG/SERVER
+dll $P EVENTLOG/SERVER; dll $P EVENTLOG/NETEVENT; dll $N DD/NLSMSG; dll $P NET/MESSAGES
 
 # the keyboard layout, the shell (userinit, progman, control panel) and the tools of
 # the first boot of a developer install (cmd, ini, ech, adduser, shutdown)
@@ -73,14 +74,101 @@ lib $W DIAMOND/MSZIP/MDI.NT; lib $W DIAMOND/CHUCK/FDI.NT; lib $W SHELL/LZ/LIBS; 
 dll $W SHELL/VERSION; dll $W SHELL/COMDLG; dll $W SHELL/CONTROL/T1INSTAL; dll $W SHELL/CONTROL/MAIN
 exe $W SHELL/CONTROL/CPANEL control
 lib $W SHELL/PROGMAN; exe $W SHELL/PROGMAN progman
-# the network DDE agent winlogon starts with userinit
+# the network DDE agent winlogon starts with userinit, the network DDE service and DDE Share
 lib $W NETDDE/SRC/TOOLKIT; dll $W NETDDE/SRC/NDEAPI/CLIENT; lib $W NETDDE/SRC/NDDEAGNT; exe $W NETDDE/SRC/NDDEAGNT nddeagnt
+lib $W NETDDE/SRC/NTDDECMN; dll $W NETDDE/SRC/NDDENB32; lib $W NETDDE/SRC/NDEAPI/SERVER
+for a in NETDDE:netdde DDESHARE:ddeshare; do lib $W NETDDE/SRC/${a%%:*}; exe $W NETDDE/SRC/${a%%:*} ${a#*:}; done
 
-# the common controls and the cards, then the accessories, the games, File Manager and the task list
-dll $W SHELL/MSCTLS; dll $W EP/CARDDLL
-for a in SHELL/ACCESORY/NOTEPAD:notepad SHELL/ACCESORY/CALC:calc SHELL/ACCESORY/CLOCK:clock SHELL/ACCESORY/UCHARMAP:charmap \
-         SHELL/GAMES/SOL:sol EP/WINMINE:winmine EP/FREECELL:freecell SHELL/TASKMAN:taskman SHELL/WINFILE:winfile; do
+# the common controls and the cards, then the accessories, the games, File Manager, the task list and winver
+dll $W SHELL/MSCTLS; dll $W EP/CARDDLL; dll $W EP/ABOUTWEP
+for a in SHELL/ACCESORY/NOTEPAD:notepad SHELL/ACCESORY/CALC:calc SHELL/ACCESORY/CLOCK:clock SHELL/ACCESORY/SPECHARS:charmap \
+         SHELL/GAMES/SOL:sol EP/WINMINE:winmine EP/FREECELL:freecell SHELL/TASKMAN:taskman SHELL/WINFILE:winfile \
+         SHELL/WINVER:winver SHELL/GAMES/REVERSI:reversi EP/CRUEL:cruel EP/GOLF:golf EP/PEGGED:pegged EP/SNAKE:snake \
+         EP/TICTAC:tictac EP/OLDTP:taipei; do
     lib $W ${a%%:*}; exe $W ${a%%:*} ${a#*:}
 done
+
+# WinHelp and its full-text search (fteng32 and ftui32 import each other)
+implib $W WINHELP/FTUI ftui32; implib $W WINHELP/FTENGINE fteng32
+for c in MVAPI FTENGINE FTUI; do dll $W WINHELP/$c; done
+exe $W WINHELP/WINHELP winhlp32
+
+# OLE 1 and the accessories that use it, ClipBook, Terminal, Recorder, Calendar and the accessibility tools
+dll $W OLE/CLIENT; dll $W OLE/SERVER
+exe $W SHELL/ACCESORY/CARDFILE cardfile; exe $W SHELL/ACCESORY/ACCESS/SKEYS skeys
+lib $W SHELL/ACCESORY/COMMON; lib $W SHELL/ACCESORY/CLIPBOOK/COMMON
+dll $W SHELL/ACCESORY/ACCESS/SKDLL; dll $W SHELL/ACCESORY/RECORDER/REC_DLL
+for a in PAINTBRS:pbrush PACKAGER:packgr32 TERMINAL:terminal CALENDAR:calendar CLIPBOOK/DATASRV:clipsrv \
+         CLIPBOOK/CLIPVIEW:clipbrd ACCESS/ACCESS:access RECORDER/REC_EXE:recorder; do
+    lib $W SHELL/ACCESORY/${a%%:*}; exe $W SHELL/ACCESORY/${a%%:*} ${a#*:}
+done
+
+# multimedia: winmm and its drivers (MCI, the MME driver of the kernel sound drivers, the
+# synthesizer), the audio compression manager and its codecs, video for Windows and the players
+lib $W MEDIA/MMCNTRLS; dll $W MEDIA/WINMM
+for c in MMDRV MCIWAVE MCISEQ MCICDA SYNTH MSACM/MSACM MSACM/MSACMMAP MSACM/IMAADPCM MSACM/MSADPCM MSACM/GSM610 MCIOLE; do
+    dll $W MEDIA/$c
+done
+for c in DRAWDIB COMPMAN MCIWND; do lib $W MEDIA/AVI/$c; done
+for c in VIDEO MSVIDC MSRLE MCIAVI32; do dll $W MEDIA/AVI/$c; done
+for a in SNDVOL:sndvol32 CDPLAYER:cdplayer MPLAYER2:mplay32; do exe $W MEDIA/${a%%:*} ${a#*:}; done
+
+# Windows NT Diagnostics: winmsd, its 3D controls (winmsd.dll) and column list box (clb.dll)
+lib $P SDKTOOLS/WINTOOLS/LIB; dll $P SDKTOOLS/WINTOOLS/CTL3D/DLL; dll $P SDKTOOLS/WINTOOLS/CLB
+lib $P SDKTOOLS/WINTOOLS/WINMSD; exe $P SDKTOOLS/WINTOOLS/WINMSD winmsd
+
+# the utilities: their libraries (ulib, the registry and file system libraries and fmifs; ntlib,
+# their sources for the native programs), the command line programs, autochk and autoconv,
+# Repair Disk and Disk Administrator, and Performance Monitor
+for c in ULIB/SRC UREG/SRC IFSUTIL/SRC UFAT/SRC UHPFS/SRC UNTFS/SRC CUFAT/SRC CUHPFS FMIFS/SRC; do dll $P UTILS/$c; done
+lib $P UTILS/NTLIB/SRC; lib $N DISKREG; lib $W DIAMOND/MSZIP/MCI.NT; lib $W DIAMOND/CHUCK/FCI.NT
+for a in ACLCONV:aclconv CHCP:chcp FINDSTR:findstr KEYB:keyb FORMAT:format MEP/SRC:mep MODE:mode MORE:more \
+         RDISK:rdisk REPLACE:replace RESTORE/SRC:restore XCOPY:xcopy AUTOCONV:autoconv FDISK:windisk; do
+    lib $P UTILS/${a%%:*}; exe $P UTILS/${a%%:*} ${a#*:}
+done
+for a in ATTRIB:attrib CHKDSK:chkdsk COMP:comp CONVERT:convert DISKCOMP:diskcomp DISKCOPY:diskcopy DOSKEY:doskey \
+         FC:fc FIND:find HELP:help LABEL:label PRINT:print RECOVER:recover SORT:sort SUBST:subst TREE:tree \
+         AUTOCHK/DAYTONA:autochk; do
+    exe $P UTILS/${a%%:*} ${a#*:}
+done
+lib $P SDKTOOLS/PERFMON; exe $P SDKTOOLS/PERFMON perfmon
+
+# the network user interface: the class libraries of NET UI (strings, collections, BLT, the LAN
+# Manager objects) in the NETUI DLLs, which export what their libraries define (uixport); the
+# security editor (acledit), the LAN Manager network provider (ntlanman) with its sharing dialogs
+# (ntlanui) and the network dialogs of MPR (mprui); Event Viewer and User Manager. Then Registry
+# Editor and Chat, which take the network provider.
+C=NET/UI/COMMON/SRC A=NET/UI/ADMIN
+for c in STRING/PCH STRING/STRING COLLECT/PCH COLLECT/COLLECT MISC/FMX MISC/BUFFER MISC/MISC MISC/TRACE MISC/WINTIME \
+         MISC/SYSTEM MISC/FSENUM MISC/HEAP MISC/BASE MISC/ERRMAP MISC/BIN BLT/PCH BLT/BLT BLT/BLTCC APPLIB/PCH APPLIB/APPLIB \
+         APPLIB/BIN MNET32/PCH MNET32/MNET32 MNET32/NETSLOW LMOBJ/PCH LMOBJ/LMOENUM LMOBJ/LMOBJ LMOBJ/LOG LMOBJ/BIN \
+         PROFILE/PROFILE REG/REG; do lib $P $C/$c; done
+for c in DLL0 DLL1 DLL2; do dll $P $C/DLL3/$c; done
+for c in ACLEDIT/ACLEDIT ACLEDIT/XLATE SHELL/SHELL SHELL/UTIL SHELL/ENUM SHELLUI/SHARE SHELLUI/FILE SHELLUI/MISC SHELLUI/XLATE \
+         MPR/XLATE; do lib $P NET/UI/$c; done
+for c in ACLEDIT/BIN SHELL/BIN SHELLUI/BIN MPR/MPR; do dll $P NET/UI/$c; done
+for c in COMMON/SRC/ADMINAPP/SETFOCUS COMMON/SRC/ADMINAPP/ADMINAPP COMMON/SRC/ADMINAPP/COLWIDTH COMMON/SRC/ADMINAPP/BIN \
+         EVENTVWR/XLATE USER/XLATE USER/USER USER/MINIUSER; do lib $P $A/$c; done
+exe $P $A/EVENTVWR/EVENTVWR eventvwr; exe $P $A/USER/USER usrmgr; exe $P $A/USER/MINIUSER musrmgr
+lib $P UTILS/REGEDIT/SRC; exe $P UTILS/REGEDIT/SRC regedt32
+lib $W SHELL/ACCESORY/WINCHAT; exe $W SHELL/ACCESORY/WINCHAT winchat
+
+# Server Manager and its Control Panel applets (Server, Services, Devices), User Profile Editor,
+# the other Control Panel applets (cursors; display, with the INF parser prsinf; the multimedia
+# applet with sound, drivers and the MIDI mapper; hardware profiles; the Type 1 font installer),
+# the screen savers (logon.scr is the one of the logon desktop), PIF Editor, Backup and the icons
+# of Program Manager (moricons)
+for c in XLATE SERVER; do lib $P $A/SERVER/$c; done
+exe $P $A/SERVER/BIN srvmgr; dll $P $A/SERVER/CPL
+lib $W SHELL/UPEDIT; exe $W SHELL/UPEDIT upedit
+lib $W SHELL/USERPRI; lib $W PRSINF
+for c in CURSORS VIDEO MULTIMED SOUND DRIVERS MIDI PROFILE T1INSTAL; do dll $W SHELL/CONTROL/$c; done
+lib $W SHELL/CONTROL/SCRNSAVE/COMMON
+for a in BEZIER:ssbezier DEFAULT:scrnsave MARQUEE:ssmarque MYSTIFY:ssmyst STARS:ssstars LOGON:logon; do
+    exe $W SHELL/CONTROL/SCRNSAVE/${a%%:*} ${a#*:}
+done
+lib $P MVDM/VDMUTILS/PIFEDIT; exe $P MVDM/VDMUTILS/PIFEDIT pifedit
+lib $P UTILS/NTBACKUP/SRC; exe $P UTILS/NTBACKUP/SRC ntbackup
+dll $W SETUP/MORICONS
 
 exe /work/RASPI/arcfw/apps hello hello

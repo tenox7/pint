@@ -2,8 +2,7 @@
 # rc.sh COMPONENTDIR FILE.RC FLAGS... - compile the resource script of a
 # component with RC (obj/host/RC.EXE, tools/make-tools.sh) as makefile.def does: rc -l 409 -r
 # in the component's directory with the defines (-D) of its C compiles and its
-# include path (-I), each farmed directory followed by its source directory
-# (where the files resources name are), after the directories of the script, of
+# include path (-I, below), after the directories of the script, of
 # the files the build made (/tmp/f/gen) and of the message table scripts of the
 # mc pass (/tmp/f/mc). The tree is read-only, so RC runs in the generated files'
 # directory of the component and compiles a copy of the script in that of the
@@ -31,13 +30,23 @@ w=/tmp/f/gen/$(rel $d); mkdir -p $w /tmp/f/gen/$(rel $s) /tmp/rc
 copy=/tmp/f/gen/$(rel $s)/$(basename $rc | tr A-Z a-z)
 cp $rc $copy
 res=/tmp/rc/$(basename "${rc%.*}" | tr A-Z a-z).res
-inc=$({ for p in $s /tmp/f/gen/$(rel $s) /tmp/f/mc/$(rel $s | tr A-Z a-z) /tmp/f/mc/$(rel $d | tr A-Z a-z); do echo "$p"; done
+# each farmed directory followed by its source directory, and the component directory,
+# where NT ran RC (msvideo.rc of the generated files names ..\mciwnd\strings.rc); when
+# that is longer than RC keeps, the farmed directories alone (they link the other files
+# of their source directories, incdirs.sh)
+incs() {
+    for p in $s /tmp/f/gen/$(rel $s) /tmp/f/mc/$(rel $s | tr A-Z a-z) /tmp/f/mc/$(rel $d | tr A-Z a-z); do echo "$p"; done
     for a in "$@"; do
         case $a in
-        -I/tmp/f/dirs/*) echo "${a#-I}"; echo "${a#-I/tmp/f/dirs}" ;;
+        -I/tmp/f/dirs/*) echo "${a#-I}"; [ -z "$TWINS" ] || echo "${a#-I/tmp/f/dirs}" ;;
         -I*) realpath -m "${a#-I}" ;;
         esac
-    done; } | awk '!seen[$0]++' | while read -r p; do echo "-I$(dos $p)"; done)
+    done
+    echo $d
+}
+inc=$(TWINS=1 incs "$@" | awk '!seen[$0]++' | while read -r p; do echo "-I$(dos $p)"; done)
+n=$(echo "$inc" | sed 's/^-I//' | tr '\n' ';' | wc -c)
+[ $n -lt 520 ] || inc=$(TWINS= incs "$@" | awk '!seen[$0]++' | while read -r p; do echo "-I$(dos $p)"; done)
 n=$(echo "$inc" | sed 's/^-I//' | tr '\n' ';' | wc -c)
 [ $n -lt 520 ] || { echo "rc.sh: the include path of $(basename $rc) is $n bytes, RC keeps 520" >&2; exit 1; }
 flags=$(for a in "$@"; do case $a in -D*) echo "$a" ;; esac; done)

@@ -1,0 +1,18 @@
+#ntdiff PRIVATE/WINDOWS/WINHELP/WINHELP/BINDING.C
+=1 1 495
++#if defined(_ARM_)
++
++/* The ARM calling standard passes the first four arguments in r0-r3 and the
++ * rest on the stack, which the caller pops, so the macro gets all MAX_ARGS
++ * of them and uses its own. */
++void ArmMacroCall( PMI pmi, XR xr, QV qvArgsBuffer )
++{
++  DWORD *qdw = qvArgsBuffer;
++
++  pmi->lMacroReturn = (*xr)( qdw[0], qdw[1], qdw[2], qdw[3], qdw[4], qdw[5], qdw[6],
++                             qdw[7], qdw[8], qdw[9], qdw[10], qdw[11], qdw[12], qdw[13],
++                             qdw[14], qdw[15], qdw[16], qdw[17], qdw[18], qdw[19] );
+=1 492 345
++#elif defined(_ARM_)
++        ArmMacroCall( pmi, xr, rgdwArgLocal );
+=1 837 610

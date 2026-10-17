@@ -1,0 +1,10 @@
+#ntdiff PRIVATE/NET/RAS/SRC/AUTH/COMMON/CRYPT/DES.C
++/*
++** The DES routines of NetDDE (WINDOWS\NETDDE\SRC\NETDDE), whose source is not in
++** the tree: those of its RAS copy (NET\RAS\SRC\AUTH\COMMON\CRYPT\DES.C), which
++** exports the routines of its cryptlib.h (which takes the FAR of windows.h).
++*/
++
+=1 1 21
++#include <windows.h>
+=1 22 425

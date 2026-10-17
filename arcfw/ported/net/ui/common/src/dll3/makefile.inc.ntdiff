@@ -1,0 +1,12 @@
+#ntdiff PRIVATE/NET/UI/COMMON/SRC/DLL3/MAKEFILE.INC
+=1 1 74
++!IF $(ARM)
++
++DLL_ARM_SRCLIBS=$(DLL_SOURCELIBS:*=arm)
++$(TARGET_DEF): $(DLL_SOURCELIBS:*=arm)
+=1 54 3
++
++!ELSE
++!ERROR Must have one of (MIPS, 386, Alpha, PPC, ARM)
+=1 76 5
++!ENDIF

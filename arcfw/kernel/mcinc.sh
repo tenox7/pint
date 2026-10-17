@@ -36,7 +36,10 @@ tr -d '\r' < $d/$m | sed -n 's/^[[:space:]]*mc \(.*\)/\1/p' | sed 's/\$(LANGUAGE
     esac
     rd=/tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z)
     mkdir -p $hd $rd
-    f=$(resolve "$f") && bash /work/RASPI/tools/host.sh mc $o -h $hd -r $rd $f > /tmp/mc.log 2>&1 || { cat /tmp/mc.log >&2; echo "mcinc: mc $a failed" >&2; exit 1; }
+    # an input a recipe of the component makes first: nttarget.sh runs that mc
+    f=$(resolve "$f") || continue
+    bash /work/RASPI/tools/host.sh mc $o -h $hd -r $rd $f > /tmp/mc.log 2>&1 || { cat /tmp/mc.log >&2; echo "mcinc: mc $a failed" >&2; exit 1; }
     # mc names its outputs as its input (BUGCODES.h): the farm has them lower case
     for f in $(find $hd $rd -maxdepth 1 -type f -name "*[A-Z]*" \( -name "*.h" -o -name "*.rc" \) | sort -u); do mv $f $(dirname $f)/$(basename $f | tr A-Z a-z); done
 done
+bash "$(dirname "$0")/gensave.sh"

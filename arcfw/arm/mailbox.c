@@ -8,10 +8,10 @@ Abstract:
 
     This module implements the VideoCore mailbox property interface of the
     BCM2835 (channel 8), through which the ARM asks the VideoCore for the
-    frame buffer, peripheral power, clock rates, its memory and the board
-    serial number. A message is a 16 byte aligned tag buffer whose address
-    the ARM sends through the uncached VideoCore alias of memory; the
-    VideoCore answers in place.
+    frame buffer, peripheral power, clock rates, its memory, the board
+    revision and serial number and its firmware revision. A message is a 16
+    byte aligned tag buffer whose address the ARM sends through the uncached
+    VideoCore alias of memory; the VideoCore answers in place.
 
 --*/
 
@@ -30,6 +30,8 @@ Abstract:
 
 #define BUS_UNCACHED_ALIAS      0xC0000000
 
+#define TAG_GET_FIRMWARE_REVISION 0x00000001
+#define TAG_GET_BOARD_REVISION  0x00010002
 #define TAG_GET_BOARD_SERIAL    0x00010004
 #define TAG_GET_ARM_MEMORY      0x00010005
 #define TAG_SET_POWER_STATE     0x00028001
@@ -208,4 +210,44 @@ Routine Description:
 
     *High = Answer[1];
     return Answer[0];
+}
+
+ULONG
+MailboxGetBoardRevision (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the board revision code (the model, its revision,
+    memory size, processor and maker); 0 if unknown.
+
+--*/
+
+{
+    ULONG Answer[2];
+
+    return MailboxTag(TAG_GET_BOARD_REVISION, 0, 0, 0, Answer) ? 0 : Answer[0];
+}
+
+ULONG
+MailboxGetFirmwareRevision (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the revision of the VideoCore firmware (the time it
+    was built, in seconds since 1970); 0 if unknown.
+
+--*/
+
+{
+    ULONG Answer[2];
+
+    return MailboxTag(TAG_GET_FIRMWARE_REVISION, 0, 0, 0, Answer) ? 0 : Answer[0];
 }

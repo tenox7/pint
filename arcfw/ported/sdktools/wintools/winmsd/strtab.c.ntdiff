@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/SDKTOOLS/WINTOOLS/WINMSD/STRTAB.C
+=1 1 89
++    MAKE_TABLE_ENTRY( ProcessorType,        PROCESSOR_ARM_CORTEX_A7               ),
+=1 90 23

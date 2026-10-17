@@ -17,6 +17,21 @@
 =1 1504 5
 =1 1510 8
 +} ARM_LOADER_BLOCK, *PARM_LOADER_BLOCK;
++
++//
++// ARM port: the device specific configuration data of the system component.
++// The ARC firmware fills it with what the VideoCore reports about the board and
++// the firmware, as a PC keeps the date and version strings of its BIOS in ROM,
++// and the kernel enters it in the hardware description of the registry under
++// the same names (CONFIG\ARM). A version field holds strings, each zero
++// terminated, the last followed by an empty one.
++//
++typedef struct _ARM_SYSTEM_FIRMWARE_DATA {
++    CHAR SystemFirmwareDate[12];
++    CHAR SystemFirmwareVersion[128];
++    CHAR VideoFirmwareDate[12];
++    CHAR VideoFirmwareVersion[64];
++} ARM_SYSTEM_FIRMWARE_DATA, *PARM_SYSTEM_FIRMWARE_DATA;
 =1 1593 30
 +        ARM_LOADER_BLOCK Arm;
 =1 1623 6

@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/MEDIA/AVI/DRAWDIB/DCIDDI.H
+=1 1 178
++	void    (CALLBACK *EnumCallback)(struct _DCISURFACEINFO FAR *, LPVOID);        /* callback for supported formats */
+=1 180 93

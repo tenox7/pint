@@ -158,6 +158,12 @@
 +MailboxGetBoardSerial (
 +    OUT PULONG High
 =1 137 3
++MailboxGetBoardRevision (
+=1 116 3
++ULONG
++MailboxGetFirmwareRevision (
+=1 116 3
++ULONG
 +FwGetMicroseconds (
 =1 476 4
 +UsbInitialize (

@@ -52,7 +52,7 @@ done
 # the machine-neutral C NT keeps in its MIPS and Alpha directories.
 for e in EX:/work/PRIVATE/NTOS/EX/MIPS/SPLOCKS.C EX:/work/PRIVATE/NTOS/EX/MIPS/PROBE.C \
          PS:/work/PRIVATE/NTOS/PS/MIPS/KULOOKUP.C PS:/work/PRIVATE/NTOS/PS/MIPS/PSLDT.C \
-         PS:/work/PRIVATE/NTOS/PS/MIPS/PSVDM.C CONFIG:/work/PRIVATE/NTOS/CONFIG/MIPS/INIT.C \
+         PS:/work/PRIVATE/NTOS/PS/MIPS/PSVDM.C CONFIG:config/initarm.c \
          EX:ex/fmutex.c EX:ex/intrlock.c EX:ex/gettick.c EX:ex/evpair.c EX:ex/raisests.c \
          MM:mm/initarm.c MM:mm/dataarm.c MM:/work/PRIVATE/NTOS/MM/ALPHA/HYPERMAP.C \
          MM:/work/PRIVATE/NTOS/MM/MIPS/SETDIRTY.C MM:/work/PRIVATE/NTOS/MM/MIPS/DEBUGSUP.C LPC:lpc/lpcmove.c \

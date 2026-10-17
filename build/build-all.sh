@@ -6,5 +6,5 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 rm -rf obj/*
-rm -f sdcard/root/os/nt/*.{EXE,DLL} sdcard/root/WINNT/System32/*.{EXE,DLL,DRV,CPL} sdcard/root/WINNT/System32/Drivers/*.SYS
+rm -f sdcard/root/os/nt/*.{EXE,DLL} sdcard/root/WINNT/System32/*.{EXE,DLL,DRV,CPL,COM,SCR} sdcard/root/WINNT/System32/Drivers/*.SYS
 FORCE=1 exec build/build-update.sh

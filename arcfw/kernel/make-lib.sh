@@ -22,10 +22,11 @@ DIR=/tmp/lib; rm -rf $DIR; mkdir -p $DIR/obj $DIR/src
 
 macro() { bash srcmacro.sh $D/SOURCES $1; }
 NAME=$(macro TARGETNAME | tr -d " " | tr A-Z a-z)
-# The libraries of NTOS but its user mode run-time library are of the kernel and
-# the loader; the others, of user mode, go to obj/um.
+# The libraries of NTOS but its user mode run-time library and the disk registry library
+# (of Disk Administrator) are of the kernel and the loader; the others, of user mode, go
+# to obj/um.
 case $ROOT/$COMP in
-/work/PRIVATE/NTOS/RTL/USER) MODE=""; OUT=/work/RASPI/obj/um ;;
+/work/PRIVATE/NTOS/RTL/USER|/work/PRIVATE/NTOS/DISKREG) MODE=""; OUT=/work/RASPI/obj/um ;;
 /work/PRIVATE/NTOS/*) MODE="-kernel -D_NTSYSTEM_"; OUT=/work/RASPI/obj ;;
 *) MODE=""; OUT=/work/RASPI/obj/um ;;
 esac
@@ -39,7 +40,7 @@ DEFS="$NTDEFINES $LIBCDEFS $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g") $(m
 INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 
 echo ">> compiling $COMP ($NAME.lib)"
-srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx)$" | tr "\\\\" / | while read -r s; do
+srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx|cpp)$" | tr "\\\\" / | while read -r s; do
   d=$(cd $D && cd $(dirname $s) && pwd); b=$(basename $s | tr A-Z a-z); p=/work/RASPI/arcfw/ported/$(echo ${d#/work/PRIVATE/} | tr A-Z a-z)/$b
   { [ -f $p ] && echo $p; } || { n=$(ls $d | grep -ix $b) && echo $d/$n; } ||
   { n=$(ls $d/.. | grep -ix $b) && echo $d/../$n; } || echo /tmp/f/gen/${d#/work/PRIVATE/}/$b; done)
@@ -47,24 +48,37 @@ srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx)$" | tr "\\\\" / | while
 # where its quoted includes are found first
 srcinc() { local s=$(realpath $(dirname $1)); [ "$s" = "$(realpath $D)" ] && return; case $s in /work/PRIVATE/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
 # and the directories of the relative includes of the sources, last
-INCS="$INCS $(bash relinc.sh $srcs)"
+INCS="$INCS $(bash relinc.sh $INCS $srcs)"
 arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm
-n=0; fail=0
+n=0; nr=0; fail=0
 for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
   b=$(basename "${f%.*}" | tr A-Z a-z)
   [ -f $f ] || { fail=$((fail+1)); echo "   no source $f"; continue; }
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
-  *.[Cc][Xx][Xx]) ntsrc $f $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $MODE $DEFS $(srcinc $f) $INCS ;;
+  *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) ntsrc $f $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $MODE $DEFS $(srcinc $f) $INCS ;;
   *) ntsrc $f $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $MODE $DEFS $(srcinc $f) $INCS ;;
   esac && n=$((n+1)) || fail=$((fail+1))
 done
-echo "   $n compiled, $fail failed"
+# the resources of its resource scripts (obj\*\<name>.res), which the image of another
+# component links (..\xlate\obj\*\acledit.res of NET UI)
+for r in $(macro SOURCES | tr " " "\n" | grep -iE "\.rc$" | tr "\\\\" /); do
+  p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$(basename $r | tr A-Z a-z)
+  [ -f $p ] || p=$D/$(ls $D | grep -ix "$(basename $r)") || continue
+  res=$(bash rc.sh $D $p $DEFS $INCS) && mkdir -p $OUT/dir/${D#/work/} && cp $res $OUT/dir/${D#/work/}/ && nr=$((nr+1)) || fail=$((fail+1))
+done
+echo "   $((n+nr)) compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
-ntlib $OUT/$NAME.lib $DIR/obj/*.obj || exit 1
-# and as the library and objects of its directory (libpath.sh), where two
-# components share a name or a program links an object of another
-mkdir -p $OUT/dir/${D#/work/} && cp $OUT/$NAME.lib $DIR/obj/*.obj $OUT/dir/${D#/work/}/
+# (a library of no sources is made of libraries by its makefile.inc: uimisc.lib of NET UI)
+if [ $n -gt 0 ]; then
+  ntlib $OUT/$NAME.lib $DIR/obj/*.obj || exit 1
+  # and as the library and objects of its directory (libpath.sh), where two
+  # components share a name or a program links an object of another, and as the
+  # library of its TARGETPATH (..\bin)
+  mkdir -p $OUT/dir/${D#/work/} && cp $OUT/$NAME.lib $DIR/obj/*.obj $OUT/dir/${D#/work/}/
+  T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
+  case $T in /work/PUBLIC/*|$D) ;; *) mkdir -p $OUT/dir/${T#/work/} && cp $OUT/$NAME.lib $OUT/dir/${T#/work/}/ ;; esac
+fi
 bash nttarget.sh $D post $OUT || exit 1
-echo "   wrote ${OUT#/work/RASPI/}/$NAME.lib"
+[ $n -eq 0 ] || echo "   wrote ${OUT#/work/RASPI/}/$NAME.lib"
 '

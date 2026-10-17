@@ -5,9 +5,9 @@
 # headers of the SDK of Microsoft C, as NT took them from the SDK of the machine it
 # was built on. Then the header pass (arcfw/kernel/mkgen.sh), ksarm.h, NT's C run-time
 # and the import libraries of kernel32, user32 and advapi32; then GENSRV, GENERR (and
-# rtl\error.h), RC, RCPP, MIDL with its parser tools and SOLIDPP, NT console programs of NT's
-# headers and static C run-time (RC is its front end and RCDLL in one program), and the
-# import library of ntdll the registry tools take.
+# rtl\error.h), RC, RCPP, MIDL with its parser tools, SOLIDPP, UIXPORT and MAPMSG, NT
+# console programs of NT's headers and static C run-time (RC is its front end and RCDLL
+# in one program), and the import library of ntdll the registry tools take.
 #
 # Usage:  tools/make-tools.sh
 set -euo pipefail
@@ -126,6 +126,15 @@ prog rcpp libc $T/rcpp/*.obj $T/rcpp/rcpp.res
 D=/work/PRIVATE/WINDOWS/SHELL/GAMES/SOL
 ntc $T/solidpp $D -- $D/SOLIDPP.C
 prog solidpp libc $T/solidpp/solidpp.obj
+
+# UIXPORT, the export lists of the NET UI DLLs from the symbols of their libraries
+# (NET\UI\COMMON\SRC\DLL3\MAKEFILE.INC)
+ntc $T/uixport $S/UIXPORT -- $S/UIXPORT/UIXPORT.C
+prog uixport libc $T/uixport/uixport.obj
+
+# MAPMSG, the message files of the message definitions of headers (NET\MESSAGES\MAKEFILE.INC)
+ntc $T/mapmsg $S/MAPMSG -- $S/MAPMSG/MAPMSG.C
+prog mapmsg libc $T/mapmsg/mapmsg.obj
 
 # MIDL (RPC\MIDL20), the RPC interface compiler, and the parser tools of RPC\MIDLNEW
 # (midlyacc, midlpg, midleb) MIDL20\MAKEFIL0 makes its IDL and ACF grammars with.

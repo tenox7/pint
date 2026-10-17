@@ -2,24 +2,47 @@
 # the MIDL pass (tools/midl/gen-midl.sh):
 #   NMK_TARGET='inc\ntddk.h' awk -f nmk.awk makefil0
 # Supports what the recipes use: macros (also NAME=value lines in NMK_MACROS;
-# undefined ones are empty, as in nmake),
-# continued command lines, "type << > f" and "type << >> f" inline files,
-# "type a >> b", hextract, hsplit, "wcshdr < a > b", midl, mc, copy, del/erase, lib, rcpp, solidpp
-# ($@ and $** as the target and its dependents), inference rules ($< and $*), comment lines
+# undefined ones are empty, as in nmake; $(NAME:a=b) substitutes), conditionals (!IF
+# with || && ! and parentheses, !IFDEF, !IFNDEF, !ELSEIF, !ELSE, !ENDIF), continued command lines,
+# "type << > f" and "type << >> f" inline files,
+# "type a > b", "type a >> b", hextract, hsplit, "wcshdr < a > b", midl, mc, copy and cp (also "copy a + b c"),
+# del/erase, lib, rcpp, solidpp, binplace, link32 -dump and uixport, piped with "|", "mapmsg ... > f"
+# ($@ and $** or $(**) as the target and its dependents), echo ignored, inference rules ($< and $*), comment lines
 # in recipes and "IF EXIST f cmd" with commands joined by "&". Paths come out with "/" and the
 # macros NMK_KEEP names (default SDKINC NTOSINC OAKINC BASEDIR) left as prefixes
 # for the caller to resolve. With NMK_DEPS set it prints the target's dependents
 # instead.
 
-function expand(s,    name, val, out, st, ln) {
+# s with each f replaced by t ($(NAME:f=t)).
+function subst(s, f, t,    out, i) {
+    if (f == "")
+        return s
     out = ""
-    while (match(s, /\$\([A-Za-z0-9_]+\)/)) {
+    while ((i = index(s, f)) > 0) {
+        out = out substr(s, 1, i - 1) t
+        s = substr(s, i + length(f))
+    }
+    return out s
+}
+
+# The value of macro name (one that names itself, such as OS2FLAGS=$(OS2FLAGS) -DOS2,
+# has the earlier value: none).
+function expandm(name,    v) {
+    busy[name] = 1; v = expand(mac[name]); busy[name] = 0
+    return v
+}
+
+function expand(s,    name, val, out, st, ln, sb, i) {
+    out = ""
+    while (match(s, /\$\([A-Za-z0-9_]+(:[^)=]*=[^)]*)?\)/)) {
         st = RSTART; ln = RLENGTH
-        name = substr(s, st + 2, ln - 3)
+        name = substr(s, st + 2, ln - 3); sb = ""
+        if ((i = index(name, ":")) > 0) { sb = substr(name, i + 1); name = substr(name, 1, i - 1) }
         if (index(" " keep " ", " " name " "))
             val = name
         else
-            val = (name in mac) ? expand(mac[name]) : ""
+            val = (name in mac) && !busy[name] ? expandm(name) : ""
+        if (sb != "") { i = index(sb, "="); val = subst(val, substr(sb, 1, i - 1), substr(sb, i + 1)) }
         out = out substr(s, 1, st - 1) val
         s = substr(s, st + ln)
     }
@@ -41,18 +64,33 @@ function names(h, t,    w, n, i) {
     return 0
 }
 
-# One command of a recipe, of those that "&" joins.
-function command(cmd,    a, n, f) {
+# One command of a recipe, of those that "&" joins; a pipeline, each of its commands.
+function command(cmd,    a, n, f, i) {
     sub(/^[ \t@-]+/, "", cmd)
     sub(/[ \t]+$/, "", cmd)
     gsub(/[ \t]*[12]?>[ \t]*[Nn][Uu][Ll]( 2>&1)?/, "", cmd)
+    if (cmd ~ /[ \t]\|[ \t]/) {
+        n = split(cmd, a, /[ \t]+\|[ \t]+/)
+        f = command(a[1])
+        for (i = 2; i <= n; i++) f = f " | " command(a[i])
+        return f
+    }
+    if (cmd ~ /^wcshdr[ \t]*</) {
+        sub(/[ \t]*<[ \t]*/, " < ", cmd)
+        sub(/[ \t]*>[ \t]*/, " > ", cmd)
+    }
     n = split(cmd, a, /[ \t]+/)
     if (tolower(a[1]) == "if" && tolower(a[2]) == "exist") {
         f = a[3]
         sub(/^[ \t]*[^ \t]+[ \t]+[^ \t]+[ \t]+[^ \t]+[ \t]*/, "", cmd)
         return "if nmk_exists " f "; then " command(cmd) "; fi"
     }
-    if (tolower(a[1]) == "copy")
+    if (tolower(a[1]) == "copy" && a[3] == "+") {
+        f = ""
+        for (i = 2; i < n; i++) if (a[i] != "+") f = f " " a[i]
+        return "nmk_copycat " a[n] f
+    }
+    if (tolower(a[1]) == "copy" || a[1] == "cp")
         return "nmk_copy " a[2] " " (n > 2 ? a[3] : ".")
     if (tolower(a[1]) == "del" || tolower(a[1]) == "erase")
         return "nmk_del " substr(cmd, length(a[1]) + 2)
@@ -70,7 +108,13 @@ function command(cmd,    a, n, f) {
         return "nmk_wcshdr " a[3] " " a[5]
     if (a[1] == "type" && a[3] == ">>")
         return "nmk_cat " a[2] " " a[4]
-    if (a[1] == "rcpp" || a[1] == "solidpp")
+    if (a[1] == "type" && a[3] == ">")
+        return "nmk_type " a[2] " " a[4]
+    if (tolower(a[1]) == "mapmsg") {
+        sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
+        return "nmk_mapmsg " substr(cmd, 8)
+    }
+    if (a[1] == "rcpp" || a[1] == "solidpp" || a[1] == "binplace" || a[1] == "link32" || a[1] == "uixport")
         return "nmk_" cmd
     return "echo \x27nmk: unsupported command: " cmd "\x27 >&2; exit 1"
 }
@@ -95,7 +139,36 @@ function infer(    r, e, ext, base, src, i, l) {
     }
 }
 
+# The value of an !IF expression: terms joined by || and &&, each "a" == "b", "a" != "b",
+# defined(NAME) or a number, in parentheses or negated by !.
+function term(e,    l, r) {
+    gsub(/^[ \t(]+|[ \t)]+$/, "", e)
+    if (e ~ /^![^=]/)
+        return !term(substr(e, 2))
+    if (e ~ /"[^"]*"[ \t]*[!=]=[ \t]*"[^"]*"/) {
+        l = e; sub(/^[^"]*"/, "", l); sub(/".*/, "", l)
+        r = e; sub(/^.*[!=]=[ \t]*"/, "", r); sub(/".*/, "", r)
+        return e ~ /!=/ ? l != r : l == r
+    }
+    if (match(e, /[Dd][Ee][Ff][Ii][Nn][Ee][Dd][ \t]*\([ \t]*[A-Za-z0-9_]+/)) {
+        l = substr(e, RSTART, RLENGTH); sub(/^[^(]*\([ \t]*/, "", l)
+        return l in mac
+    }
+    return e + 0 != 0
+}
+function cond(e,    n, i, j, m, a, b, v) {
+    n = split(expand(e), a, /\|\|/)
+    for (i = 1; i <= n; i++) {
+        v = 1
+        m = split(a[i], b, /&&/)
+        for (j = 1; j <= m; j++) if (!term(b[j])) v = 0
+        if (v) return 1
+    }
+    return 0
+}
+
 BEGIN {
+    active = 1
     target = ENVIRON["NMK_TARGET"]
     tgt = target; gsub(/\\/, "/", tgt)
     keep = ENVIRON["NMK_KEEP"] ? ENVIRON["NMK_KEEP"] : "SDKINC NTOSINC OAKINC BASEDIR"
@@ -112,6 +185,26 @@ inline {
     print
     next
 }
+
+# Conditionals (!IF, !IFDEF, !IFNDEF, !ELSEIF, !ELSE, !ENDIF): the lines of the branch taken.
+/^![ \t]*([Ii][Ff]|[Ee][Ll][Ss][Ee]|[Ee][Nn][Dd][Ii][Ff])/ {
+    dv = $0; sub(/^![ \t]*/, "", dv)
+    kw = tolower(dv); sub(/[ \t].*/, "", kw)
+    arg = dv; sub(/^[^ \t]*[ \t]*/, "", arg); sub(/[ \t]+$/, "", arg)
+    if (kw == "if" || kw == "ifdef" || kw == "ifndef") {
+        up[++depth] = active
+        c = kw == "ifdef" ? (arg in mac) : kw == "ifndef" ? !(arg in mac) : cond(arg)
+        taken[depth] = c; active = up[depth] && c
+    } else if (kw == "elseif") {
+        c = !taken[depth] && cond(arg); taken[depth] = taken[depth] || c; active = up[depth] && c
+    } else if (kw == "else") {
+        active = up[depth] && !taken[depth]; taken[depth] = 1
+    } else if (kw == "endif") {
+        active = up[depth--]
+    }
+    next
+}
+!active { next }
 
 # Comment lines, in and out of recipes.
 /^#/ { next }
@@ -169,6 +262,7 @@ inrecipe && /^[ \t]+[^ \t]/ {
     if (sub(/\\[ \t]*$/, "", line)) { cmdcont = cmdcont line " "; next }
     l = cmdcont line; cmdcont = ""
     gsub(/\\/, "/", deps)
+    gsub(/\$\(\*\*\)/, deps, l)
     gsub(/\$\*\*/, deps, l)
     gsub(/\$@/, tgt, l)
     line = expand(l)
@@ -180,7 +274,7 @@ inrecipe && /^[ \t]+[^ \t]/ {
         inline = 1
         next
     }
-    if (a[1] ~ /^@?ech$/)
+    if (a[1] ~ /^@?ech(o)?$/)
         next
     n = split(line, part, /[ \t]*&[ \t]*/)
     out = command(part[1])

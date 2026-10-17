@@ -47,32 +47,41 @@ console) SUB=console; TYPELIBS="$CRT advapi32 kernel32" ;;
 esac
 
 echo ">> compiling $COMP $PROG.exe (${UMTYPE:-nt})"
-# A PROGRAM is its SOURCES; another program is its source: the version of the port,
+# A PROGRAM is its SOURCES; another program is its source (C or C++): the version of the port,
 # else the one in the component directory or its parent, and the objects of an
 # UMAPPL_NOLIB are the SOURCES its UMLIBS names (obj\*\name.obj).
 TTYPE=$(macro TARGETTYPE | tr -d " ")
 prog=; srcs=
-p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$PROG.c
-[ "$TTYPE" = PROGRAM ] || { [ -f $p ] && prog=$p; } || for p in $D $D/..; do n=$(ls $p | grep -ix "$PROG.c") && { prog=$p/$n; break; }; done
-[ "$TTYPE" = PROGRAM ] || [ -n "$prog" ] || { echo "   no $PROG.c"; exit 1; }
-case $TTYPE in PROGRAM|UMAPPL_NOLIB) srcs=$(bash srclist.sh $COMP $ROOT c) ;; esac
+if [ "$TTYPE" != PROGRAM ]; then
+  p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)
+  for x in c cxx cpp; do
+    [ -f $p/$PROG.$x ] && { prog=$p/$PROG.$x; break; }
+    for d in $D $D/..; do n=$(ls $d | grep -ix "$PROG.$x") && { prog=$d/$n; break 2; }; done
+  done
+  [ -n "$prog" ] || { echo "   no $PROG.c"; exit 1; }
+fi
+case $TTYPE in PROGRAM|UMAPPL_NOLIB) srcs=$(bash srclist.sh $COMP $ROOT "(c|cxx|cpp)") ;; esac
 # the directories of the relative includes of the sources, last
-INCS="$INCS $(bash relinc.sh $prog $srcs)"
-comp() { local b=$(basename "${2%.*}" | tr A-Z a-z); ntsrc $2 $DIR/src/$b.c && ntcc $1/$b.obj $DIR/src/$b.c $DEFS $INCS; }
+INCS="$INCS $(bash relinc.sh $INCS $prog $srcs)"
+comp() {
+  local b=$(basename "${2%.*}" | tr A-Z a-z) x=$(echo ${2##*.} | tr A-Z a-z)
+  ntsrc $2 $DIR/src/$b.$x && ntcc $1/$b.obj $DIR/src/$b.$x $DEFS $INCS
+}
 o=$DIR/lobj; [ "$TTYPE" = PROGRAM ] && o=$DIR/obj
 for f in $prog; do comp $DIR/obj $f || exit 1; done
 for f in $srcs; do comp $o $f || exit 1; done
 
-# The UMLIBS, the TARGETLIBS of a PROGRAM and the libraries of the UMTYPE. A
+# The UMLIBS, the libraries of the UMTYPE and the TARGETLIBS of a PROGRAM, in the
+# order of makefile.def (srvmgr links crtdll.lib after libc.lib). A
 # library or object is the one make-lib.sh made for the directory named, else
 # an object of the program, else that of its name: a library, an import
 # library or an object of the C run-time.
 LIBS=""; seen=""
 set -f
-for l in $(macro UMLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$") $([ "$TTYPE" != PROGRAM ] || macro TARGETLIBS) $TYPELIBS; do
+for l in $(macro UMLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$") $TYPELIBS $([ "$TTYPE" != PROGRAM ] || macro TARGETLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$"); do
   b=$(basename "$(echo "$l" | tr "\\\\" /)" | tr A-Z a-z); case $b in *.obj) ;; *) b=${b%.lib}.lib ;; esac
-  case " $seen " in *" $b "*) continue ;; esac; seen="$seen $b"
   a=$(bash libpath.sh $D "$l"); [ -n "$a" ] || { [ -f $DIR/lobj/$b ] && a=$DIR/lobj/$b; } || a=$U/$b
+  case " $seen " in *" $a "*) continue ;; esac; seen="$seen $a"
   [ -f $a ] || { echo "   missing $b (build it first)"; exit 1; }
   LIBS="$LIBS $a"
 done
@@ -81,10 +90,36 @@ set +f
 BASE=$(tr -d "\r" < /work/PUBLIC/SDK/LIB/COFFBASE.TXT | awk -v n=$PROG "tolower(\$1) == n {print \$2; exit}")
 [ -n "$BASE" ] || BASE=$(tr -d "\r" < /work/PUBLIC/SDK/LIB/COFFBASE.TXT | awk "tolower(\$1) == \"usermode\" {print \$2; exit}")
 STACK=$(echo "$(macro LINKER_FLAGS) $(amacro MIPS_LNKFLAGS)" | grep -oiE "stack:[0-9a-fx,]+" | tail -1 | cut -d: -f2)
-RC=$(bash srclist.sh $COMP $ROOT rc 2>/dev/null | head -1)
-RES=""; [ -z "$RC" ] || RES=$(bash rc.sh $D $RC $DEFS $INCS) || exit 1
-F=$(echo $PROG | tr a-z A-Z).EXE
-link -nologo -machine:arm -release -force:multiple -subsystem:$SUB -entry:$ENTRY -base:$BASE ${STACK:+-stack:$STACK} -nodefaultlib \
+# the MS-DOS stub, in the component directory
+STUB=$(macro LINKER_FLAGS | grep -oiE "stub:[^ ]+" | tail -1 | cut -d: -f2)
+[ -z "$STUB" ] || STUB=$D/$(ls $D | grep -ix "$STUB")
+# the resource scripts of the SOURCES and those of the resource files the libraries
+# name (obj\*\name.res), in the component directory; a resource file another component
+# made (..\xlate\obj\*\eventvwr.res, make-lib.sh) is linked as it is
+RCS=$(bash srclist.sh $COMP $ROOT rc 2>/dev/null | tr "\n" " ")
+RES=""
+set -f
+for l in $(echo "$(macro UMLIBS) $(macro TARGETLIBS)" | tr " " "\n" | grep -iE "\.res$"); do
+  r=$(basename "$(echo "$l" | tr "\\\\" /)")
+  a=$(bash libpath.sh $D "$l")
+  case $a in "") ;; */dir/${D#/work/}/*) ;; *) RES="$RES $a"; continue ;; esac
+  n=$(ls $D | grep -ix "${r%.*}.rc") || continue
+  case " $RCS " in *"/$n "*) ;; *) RCS="$RCS $D/$n" ;; esac
+done
+set +f
+# A script another one includes goes in with that one only (the linker of 1994 kept
+# the first of two identical resources).
+incl() {
+  local o
+  for o in $RCS; do
+    [ $o != $1 ] && tr -d "\r" < $o | grep -qiE "^[[:space:]]*(rcinclude|#[[:space:]]*include)[[:space:]]+\"?$(basename $1)" && return 0
+  done
+  return 1
+}
+for rc in $RCS; do incl $rc || RES="$RES $(bash rc.sh $D $rc $DEFS $INCS)" || exit 1; done
+# the program file, .exe or its UMAPPLEXT
+X=$(macro UMAPPLEXT | tr -d " "); F=$(echo $PROG${X:-.exe} | tr a-z A-Z)
+link -nologo -machine:arm -release -force:multiple -subsystem:$SUB -entry:$ENTRY -base:$BASE ${STACK:+-stack:$STACK} ${STUB:+-stub:$STUB} -nodefaultlib \
      -debug -pdb:$O/$PROG.pdb -map:$O/$PROG.map -out:$DIR/$F $DIR/obj/*.obj $LIBS $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
 bash /work/RASPI/tools/host.sh pe2img -version 3.50 $DIR/$F || exit 1

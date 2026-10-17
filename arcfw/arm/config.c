@@ -51,7 +51,7 @@ static CONFIGURATION_COMPONENT_DATA ArcIcacheNode[ARC_PROCESSORS];
 static CONFIGURATION_COMPONENT_DATA ArcDcacheNode[ARC_PROCESSORS];
 static CONFIGURATION_COMPONENT_DATA ArcL2cacheNode[ARC_PROCESSORS];
 
-static CHAR ArcSystemId[] = "Raspberry Pi 2";
+static CHAR ArcSystemId[64] = "Raspberry Pi 2";
 static CHAR ArcCpuId[] = "ARM-CortexA7";
 static CHAR ArcFpuId[] = "ARM-VFPv4";
 static CHAR ArcBusId[] = "BCM2836-Internal Bus";
@@ -61,6 +61,32 @@ static CHAR ArcMonitorId[24];
 static CHAR ArcUsbId[] = "BCM2835-USB";
 static CHAR ArcKeyboardId[] = "PCAT_ENHANCED";
 static CHAR ArcPointerId[] = "USB MOUSE";
+
+//
+// The system component describes the board as the VideoCore reports it: its model
+// is the identifier, and the configuration data holds the dates and versions of
+// this firmware and of the VideoCore's (ARM_SYSTEM_FIRMWARE_DATA). A board
+// revision code with bit 23 set holds the model (bits 11:4), its revision (3:0),
+// the processor (15:12), the maker (19:16) and the memory size (22:20).
+//
+
+static PCHAR BoardNames[] = {
+    "Raspberry Pi Model A", "Raspberry Pi Model B", "Raspberry Pi Model A+",
+    "Raspberry Pi Model B+", "Raspberry Pi 2 Model B", "Raspberry Pi Alpha",
+    "Raspberry Pi Compute Module", NULL, "Raspberry Pi 3 Model B", "Raspberry Pi Zero",
+    "Raspberry Pi Compute Module 3", NULL, "Raspberry Pi Zero W", "Raspberry Pi 3 Model B+",
+    "Raspberry Pi 3 Model A+", NULL, "Raspberry Pi Compute Module 3+", "Raspberry Pi 4 Model B"
+};
+static PCHAR Processors[] = {"BCM2835", "BCM2836", "BCM2837", "BCM2711"};
+static PCHAR Makers[] = {"Sony UK", "Egoman", "Embest", "Sony Japan", "Embest", "Stadium"};
+
+#define LEAP(y) ((y) % 4 == 0 && ((y) % 100 != 0 || (y) % 400 == 0))
+#define FIRMWARE_TIME_2012 1325376000
+
+static struct {
+    CM_PARTIAL_RESOURCE_LIST List;
+    ARM_SYSTEM_FIRMWARE_DATA Firmware;
+} ArcSystemData;
 
 //
 // The configuration data of the SD card controller (the EMMC): its registers,
@@ -172,6 +198,93 @@ SetDescriptor(
     Partial->Type = Type;
     Partial->ShareDisposition = CmResourceShareDeviceExclusive;
     Partial->Flags = Flags;
+}
+
+//
+// A date as a PC BIOS keeps it, mm/dd/yy: of a time in seconds since 1970 (the
+// VideoCore firmware revision), or of the __DATE__ this firmware was built on.
+//
+
+static VOID
+FormatTime(
+    PCHAR Buffer,
+    ULONG Time
+    )
+{
+    static UCHAR MonthDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    ULONG Days = Time / 86400, Year = 1970, Month = 1, Length;
+
+    while (Days >= (Length = 365 + LEAP(Year))) {
+        Days -= Length;
+        Year += 1;
+    }
+    while (Days >= (Length = MonthDays[Month - 1] + (Month == 2 ? LEAP(Year) : 0))) {
+        Days -= Length;
+        Month += 1;
+    }
+    sprintf(Buffer, "%02lu/%02lu/%02lu", Month, Days + 1, Year % 100);
+}
+
+static VOID
+FormatBuildDate(
+    PCHAR Buffer
+    )
+{
+    static CHAR Date[] = __DATE__, Months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    ULONG Month = 0, Day;
+
+    while (Month < 11 && strncmp(&Months[Month * 3], Date, 3) != 0) {
+        Month += 1;
+    }
+    Day = (Date[4] == ' ' ? 0 : Date[4] - '0') * 10 + Date[5] - '0';
+    sprintf(Buffer, "%02lu/%02lu/%c%c", Month + 1, Day, Date[9], Date[10]);
+}
+
+//
+// Build the system component's identifier and configuration data and return
+// the length of the data.
+//
+
+static ULONG
+MakeSystemData(
+    VOID
+    )
+{
+    PARM_SYSTEM_FIRMWARE_DATA Data = &ArcSystemData.Firmware;
+    PCHAR Version = Data->SystemFirmwareVersion;
+    ULONG Revision = MailboxGetBoardRevision();
+    ULONG Firmware = MailboxGetFirmwareRevision();
+    ULONG Type = (Revision >> 4) & 0xff, Processor = (Revision >> 12) & 0xf;
+    ULONG Maker = (Revision >> 16) & 0xf, Memory = 256 << ((Revision >> 20) & 7);
+
+    memset(&ArcSystemData, 0, sizeof(ArcSystemData));
+    ArcSystemData.List.Version = ARC_VERSION;
+    ArcSystemData.List.Revision = ARC_REVISION;
+    ArcSystemData.List.Count = 1;
+    SetDescriptor(&ArcSystemData.List.PartialDescriptors[0], CmResourceTypeDeviceSpecific, 0);
+    ArcSystemData.List.PartialDescriptors[0].u.DeviceSpecificData.DataSize = sizeof(*Data);
+
+    if ((Revision & (1 << 23)) != 0 && Type < sizeof(BoardNames) / sizeof(BoardNames[0]) &&
+        BoardNames[Type] != NULL) {
+        sprintf(ArcSystemId, "%s v1.%lu", BoardNames[Type], Revision & 0xf);
+        Version += sprintf(Version, "%s", ArcSystemId) + 1;
+        Version += sprintf(Version, "%s, %lu %s, %s",
+                           Processor < 4 ? Processors[Processor] : "BCM",
+                           Memory >= 1024 ? Memory / 1024 : Memory, Memory >= 1024 ? "GB" : "MB",
+                           Maker < 6 ? Makers[Maker] : "") + 1;
+    } else {
+        Version += sprintf(Version, "%s", ArcSystemId) + 1;
+    }
+    sprintf(Version, "ARC Firmware for the Raspberry Pi 2");
+    FormatBuildDate(Data->SystemFirmwareDate);
+
+    sprintf(Data->VideoFirmwareVersion, "%s firmware %08lX",
+            Processor == 3 ? "VideoCore VI" : "VideoCore IV", Firmware);
+    if (Firmware >= FIRMWARE_TIME_2012) {
+        FormatTime(Data->VideoFirmwareDate, Firmware);
+    }
+
+    return sizeof(ArcSystemData);
 }
 
 //
@@ -330,6 +443,8 @@ FwBuildConfigurationTree(
     SetComponent(&ArcScsiNode,       AdapterClass,    ScsiAdapter,          0);
     SetComponent(&ArcControllerNode, ControllerClass, DiskController,       0);
     SetComponent(&ArcDiskNode,       PeripheralClass, DiskPeripheral,       0);
+    ArcSystemNode.ConfigurationData = &ArcSystemData;
+    ArcSystemNode.ComponentEntry.ConfigurationDataLength = MakeSystemData();
     SetIdentifier(&ArcSystemNode, ArcSystemId);
     SetIdentifier(&ArcBusNode, ArcBusId);
     SetIdentifier(&ArcScsiNode, ArcScsiId);

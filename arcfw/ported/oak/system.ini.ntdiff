@@ -22,7 +22,14 @@
 +#endif // _HIVE_RASPI_
 =1 173 17
 +    defined(MITSUMI) || defined(BCMEMMC)
-=1 191 1058
+=1 191 1018
++#if defined(RASPI)
++                //
++                // The Raspberry Pi 2 has no printing system: the spooler is disabled.
++                //
+=1 1227 1
++#elif defined(_RETAIL_SETUP_)
+=1 1210 39
 +#if defined(RASPI)
 +            //
 +            // The Raspberry Pi 2 has no network yet: the workstation service is

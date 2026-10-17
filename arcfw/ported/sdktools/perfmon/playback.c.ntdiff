@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/SDKTOOLS/PERFMON/PLAYBACK.C
+=1 1 507
++   return (TRUE) ;
+=1 508 281

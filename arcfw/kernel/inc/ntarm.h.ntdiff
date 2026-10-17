@@ -215,7 +215,7 @@
 +// core's part number, MIDR[15:4].
 +//
 +
-+#define PROCESSOR_ARM_CORTEX_A7 0xC07
++#define PROCESSOR_ARM_CORTEX_A7 0xC07 // winnt
 +
 +//
 +// Define ARM exception handling structures and function prototypes.

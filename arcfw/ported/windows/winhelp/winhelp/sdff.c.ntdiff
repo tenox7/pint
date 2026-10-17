@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/WINHELP/WINHELP/SDFF.C
+=1 1 571
++ && !defined( _ALPHA_ ) && !defined(_PPC_) && !defined(_ARM_)
+=1 573 1180

@@ -75,4 +75,8 @@ if [ -f $W/RASPI/obj/gen/error.h ]; then
     [ -d $F/rtl ] && cp $W/RASPI/obj/gen/error.h $F/rtl/error.h
     mkdir -p $F/gen/NTOS/RTL && cp $W/RASPI/obj/gen/error.h $F/gen/NTOS/RTL/error.h
 fi
+
+# What the builds of other components generated for the ones that include it (gensave.sh).
+[ ! -d $W/RASPI/obj/gen/tree ] || { mkdir -p $F/gen && cp -r $W/RASPI/obj/gen/tree/. $F/gen/; }
+touch $F/.genbase
 exit 0

@@ -68,22 +68,27 @@ done
 # private parts) and wcshdr (the A/W name forms).
 mkdir -p $F/nmk
 nmk_out() {
+    [ -z "${NMK_MIRROR:-}" ] || { case $1 in nul) echo /dev/null ;; SDKINC) echo sdkinc ;; SDKINC/*) echo "sdkinc/${1#*/}" ;; *) echo "$1" ;; esac; return; }
     case $1 in
     nul) echo /dev/null ;;
     inc/*) echo "$NMK_INC/${1#*/}" ;;
     NTOSINC/*) echo "priv/${1#*/}" ;;
     SDKINC/*) echo "pub/${1#*/}" ;;
     OAKINC/*) echo "oak/${1#*/}" ;;
+    media/*) echo "gen/WINDOWS/$(dirname $1 | tr a-z A-Z)/${1##*/}" ;;
     *) echo "$1" ;;
     esac
 }
 nmk_path() {
     local b d
+    [ -z "${NMK_MIRROR:-}" ] || { nmk_out "$1"; return; }
     b=$(basename "$1" | tr A-Z a-z)
     [ -f $K/inc/$b ] && { tr -d '\032\r' < $K/inc/$b > nmk/$b; echo nmk/$b; return; }
     for d in ovr priv oak pub crt; do [ -f $d/$b ] && { echo $d/$b; return; }; done
     echo "$1"
 }
+nmk_copy() { local d; d=$(nmk_out "$2"); [ -d "$d" ] && d=$d/$(basename "$1"); cp "$(nmk_path "$1")" "$d"; }
+nmk_type() { cat "$(nmk_path $1)" > "$(nmk_out $2)"; }
 nmk_new() { cat > "$(nmk_out $1)"; }
 nmk_add() { cat >> "$(nmk_out $1)"; }
 nmk_cat() { cat "$(nmk_path $1)" >> "$(nmk_out $2)"; }
@@ -142,6 +147,31 @@ $(OAKINC)\winsecp.h
 inc\mmsystem.x
 $(SDKINC)\mmsystem.h
 EOF
+# the internal mmsystem.h of winmm (all of mmsystem.w), where its build finds generated files
+mkdir -p $F/gen/WINDOWS/MEDIA/WINMM
+nmk windows 'media\winmm\mmsystem.h' winc
+
+# MEDIA\AVI\MAKEFIL0, run as in NT's tree, on a lower case mirror of the AVI directory: the
+# headers, resource scripts and source it copies within the tree go to $F/gen, where the AVI
+# builds find them, and the SDK headers it makes of them (vfw.h, mciavi.h) to the farm.
+A=$W/PRIVATE/WINDOWS/MEDIA/AVI M=/tmp/nmkavi
+rm -rf $M && mkdir -p $M/sdkinc
+(cd $A && find . -type f) | while read -r f; do
+    grep -Iq . "$A/$f" || continue
+    l=$(echo "$f" | tr A-Z a-z); mkdir -p $M/$(dirname $l); tr -d '\032\r' < "$A/$f" > $M/$l
+done
+for t in 'inc\msvideo.h' 'inc\msviddrv.h' 'inc\mciavi.h' 'inc\drawdib.h' 'inc\compman.h' 'inc\compddk.h' \
+         'mciavi32\mciavi.rc' 'video\msvideo.rc' 'mciavi32\mciavi.rcv' 'video\msvideo.rcv' 'mciavi32\cnfgdlg.dlg' \
+         'drawdib\lockbm.c' 'inc\icm.rc' 'inc\dith775.h' 'inc\aviiface.h' 'inc\avifile.h' 'inc\avicap.h' \
+         'inc\profile.h' 'inc\mciwnd.h' 'inc\preview.h' 'inc\ivideo32.h' '$(SDKINC)\vfw.h' '$(SDKINC)\mciavi.h'; do
+    NMK_TARGET="$t" awk -f $K/nmk.awk $M/makefil0 > /tmp/nmk.sh
+    (cd $M && NMK_MIRROR=1 && . /tmp/nmk.sh) || { echo "mkgen: avi $t failed" >&2; continue; }
+    f=$(echo "$t" | tr '\\' /)
+    case $f in
+    '$(SDKINC)'/*) cp $M/sdkinc/${f##*/} $F/pub/ ;;
+    *) d=$F/gen/WINDOWS/MEDIA/AVI/$(dirname $f | tr a-z A-Z); mkdir -p $d && cp $M/$f $d/ ;;
+    esac
+done
 
 # zwapi.h (public\oak\inc), made as MKZW.CMD makes it: the ZWAPI tool turns the Nt
 # system service prototypes of nt*api.h into their Zw forms.
