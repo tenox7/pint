@@ -1,6 +1,6 @@
-# PINT - Raspberry **PI** Windows **NT**
+# PINT - Raspberry PI Windows **NT
 
-Windows NT 3.5 ported to 32-bit ARM (ARMv7-A, Thumb-2) on the Raspberry Pi 2 and 3, with own ARC firmware.
+Windows NT 3.5 ported to 32-bit ARM (ARMv7-A) on the Raspberry Pi 2 and 3, with own ARC firmware.
 
 ## Raspberry Pi models
 
@@ -55,4 +55,7 @@ with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot 
 
 ## Legal
 
-This repository contains no Microsoft or Windows code. It is just a build toolchain and own ARM ARC firmware code. Written from scratch by Dave Clunker with U-Boot as the Raspberry Pi hardware reference, and is in the public domain.
+- This repository contains no Microsoft or Windows copyrighted material. 
+- It is just a build toolchain plus own ARM ARC firmware code. 
+- Written from scratch by Dave Clunker based on U-Boot.
+- Public domain.
