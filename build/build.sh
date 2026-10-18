@@ -20,6 +20,8 @@ for s in main init mmu mailbox jxvendor jxmemory fwio fwprint jxserial jxdisp jx
          jxenvir jxboot fwtime jxsysid jxreboot fwusa arcdos_rt; do
   ntcc $DIR/$s.obj $A/arm/$s.c $DEFS $INCS || fail=1
 done
+# the USB host, shared with the keyboard and pointer port driver
+ntcc $DIR/usbhost.obj $A/drivers/bcmusb/usbhost.c $DEFS -DUSB_FIRMWARE $INCS || fail=1
 # the VGA and 8514 OEM fonts of the display (the Jazz vgaoem.obj and 8514oem.obj)
 perl ../tools/fon2fw.pl FwFont8x12 /work/PRIVATE/WINDOWS/GDI/FONTS/VGAOEM.FON \
      FwFont10x20 /work/PRIVATE/WINDOWS/GDI/FONTS/8514OEM.FON > $DIR/fwfonts.c

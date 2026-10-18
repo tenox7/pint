@@ -103,12 +103,25 @@
 +        if (DefaultChoice >= (LONG)NumberOfMenuChoices) {
 =1 271 13
 +        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
-=1 285 15
-=1 308 17
+=1 285 14
++        FwSetPosition(NumberOfMenuChoices + 13, 0);
++        UsbPrintDevices();
+=1 307 18
 =1 326 27
 +                        if (DefaultChoice == (LONG)NumberOfMenuChoices) {
 =1 354 15
-=1 399 36
+=1 399 17
++            // Each second, update the timeout value if active, and the USB
++            // devices.
++            //
++
+=1 420 3 -4
++                if (Timeout) {
+=1 423 4
++
++                FwSetPosition(NumberOfMenuChoices + 13, 0);
++                UsbPrintDevices();
+=1 427 8
 +        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
 =1 436 8
 +        if (DefaultChoice < (LONG)NumberOfBootChoices) {

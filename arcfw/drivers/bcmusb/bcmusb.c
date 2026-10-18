@@ -7,24 +7,24 @@ Module Name:
 Abstract:
 
     This is the keyboard and pointer port driver of the Raspberry Pi 2. Its
-    keyboard and mouse are USB devices of the HID boot protocol behind the hub
-    on the root port of the USB host of the BCM2835, a Synopsys DesignWare OTG
-    core (the hub is the board's LAN9514, or that of the emulator). The
-    firmware describes the host as the keyboard and the pointer controller of
-    the internal bus, with its registers, its interrupt and the VideoCore
-    mailbox through which it is powered.
+    keyboards and pointers are USB devices of the HID class behind the root
+    port of the USB host of the BCM2835 (usbhost.c), a Synopsys DesignWare
+    OTG core: the board's LAN9514 hub (or that of the emulator), and the
+    hubs, keyboards, mice and KVMs plugged into its ports. The firmware
+    describes the host as the keyboard and the pointer controller of the
+    internal bus, with its registers, its interrupt and the VideoCore mailbox
+    through which it is powered.
 
-    The driver resets the host, enumerates the hub and finds the keyboard and
-    the mouse behind it (one receiver may be both), then a system thread polls
-    their interrupt endpoints. The keys a keyboard report presses and releases
-    become the scan codes (set 1) of an enhanced keyboard, and a mouse report
-    its button transitions and relative motion, queued for the keyboard and
-    mouse class drivers as i8042prt queues them; as i8042prt, the driver has
-    one device, the keyboard port, also named the pointer port. A USB keyboard
-    reports only changes, so the thread repeats a held key at the typematic
-    rate, and it sets the keyboard's indicators. Transfers run on host channel
-    0 through a common buffer; a full or low speed device behind the high
-    speed hub is reached with split transactions.
+    The driver powers and brings up the host, which finds the devices, then a
+    system thread polls the interrupt endpoints of the keyboards and pointers,
+    and the hubs, so that devices can come and go. The keys a keyboard report
+    presses and releases become the scan codes (set 1) of an enhanced
+    keyboard, and a pointer report its button transitions and its motion (or
+    its position, if it is absolute), queued for the keyboard and mouse class
+    drivers as i8042prt queues them; as i8042prt, the driver has one device,
+    the keyboard port, also named the pointer port. A USB keyboard reports
+    only changes, so the thread repeats a held key at the typematic rate, and
+    it sets the keyboards' indicators.
 
 Environment:
 
@@ -36,144 +36,7 @@ Environment:
 #include "ntddkbd.h"
 #include "ntddmou.h"
 #include "kbdmou.h"
-
-//
-// DWC2 core registers and their fields.
-//
-
-#define GAHBCFG             0x008
-#define GUSBCFG             0x00C
-#define GRSTCTL             0x010
-#define GINTSTS             0x014
-#define GINTMSK             0x018
-#define GRXFSIZ             0x024
-#define GNPTXFSIZ           0x028
-#define GSNPSID             0x040
-#define HPTXFSIZ            0x100
-#define HCFG                0x400
-#define HFNUM               0x408
-#define HPRT0               0x440
-#define HCCHAR              0x500
-#define HCSPLT              0x504
-#define HCINT               0x508
-#define HCTSIZ              0x510
-#define HCDMA               0x514
-#define PCGCCTL             0xE00
-
-#define GAHBCFG_DMA_EN          0x00000020
-#define GAHBCFG_HBSTLEN_INCR4   0x00000006
-#define GUSBCFG_FORCEHOSTMODE   0x20000000
-#define GUSBCFG_ULPI_CLK_SUSP_M 0x00080000
-#define GUSBCFG_ULPI_FS_LS      0x00020000
-#define GUSBCFG_PHYSEL          0x00000040
-#define GUSBCFG_ULPI_UTMI_SEL   0x00000010
-#define GUSBCFG_PHYIF16         0x00000008
-#define GRSTCTL_AHBIDLE         0x80000000
-#define GRSTCTL_TXFNUM_ALL      0x00000400
-#define GRSTCTL_TXFFLSH         0x00000020
-#define GRSTCTL_RXFFLSH         0x00000010
-#define GRSTCTL_CSFTRST         0x00000001
-#define GINTSTS_CURMODE_HOST    0x00000001
-#define HCFG_FSLSPCLKSEL_30_60  0x00000000
-
-#define HPRT0_SPD_SHIFT         17
-#define HPRT0_SPD_MASK          0x00060000
-#define HPRT0_PWR               0x00001000
-#define HPRT0_RST               0x00000100
-#define HPRT0_ENACHG            0x00000008
-#define HPRT0_ENA               0x00000004
-#define HPRT0_CONNDET           0x00000002
-#define HPRT0_CONNSTS           0x00000001
-#define HPRT0_W1C_MASK          (HPRT0_CONNDET | HPRT0_ENA | HPRT0_ENACHG | 0x20)
-
-#define HCCHAR_CHENA            0x80000000
-#define HCCHAR_CHDIS            0x40000000
-#define HCCHAR_ODDFRM           0x20000000
-#define HCCHAR_DEVADDR_SHIFT    22
-#define HCCHAR_MULTICNT_SHIFT   20
-#define HCCHAR_MULTICNT_MASK    0x00300000
-#define HCCHAR_EPTYPE_SHIFT     18
-#define HCCHAR_LSPDDEV          0x00020000
-#define HCCHAR_EPDIR_IN         0x00008000
-#define HCCHAR_EPNUM_SHIFT      11
-
-#define HCSPLT_SPLTENA          0x80000000
-#define HCSPLT_COMPSPLT         0x00010000
-#define HCSPLT_HUBADDR_SHIFT    7
-
-#define HCINT_XFERCOMPL         0x00000001
-#define HCINT_CHHLTD            0x00000002
-#define HCINT_NAK               0x00000010
-#define HCINT_ACK               0x00000020
-#define HCINT_NYET              0x00000040
-#define HCINT_FRMOVRUN          0x00000200
-#define HCINT_ALL               0x00003FFF
-
-#define HCTSIZ_PID_SHIFT        29
-#define HCTSIZ_PKTCNT_SHIFT     19
-#define HCTSIZ_XFERSIZE_MASK    0x0007FFFF
-
-#define HFNUM_FRNUM_MASK        0x0000FFFF
-
-#define PID_DATA0               0
-#define PID_DATA1               2
-#define PID_SETUP               3
-
-#define EPTYPE_CONTROL          0
-#define EPTYPE_INTERRUPT        3
-
-#define SPEED_HIGH              0
-#define SPEED_FULL              1
-#define SPEED_LOW               2
-
-#define MAXIMUM_PACKET_COUNT    511
-#define MAXIMUM_TRANSFER        512
-
-//
-// Transfer results: done, the device not ready (NAK, a lost frame or an
-// incomplete split), or an error.
-//
-
-#define XFER_DONE               0
-#define XFER_AGAIN              (-2)
-#define XFER_ERROR              (-1)
-
-//
-// USB requests, descriptors and features of the standard, the hub class and
-// the HID class.
-//
-
-#define REQUEST_GET_STATUS      0x00
-#define REQUEST_CLEAR_FEATURE   0x01
-#define REQUEST_SET_FEATURE     0x03
-#define REQUEST_SET_ADDRESS     0x05
-#define REQUEST_GET_DESCRIPTOR  0x06
-#define REQUEST_SET_CONFIG      0x09
-#define REQUEST_SET_REPORT      0x09
-#define REQUEST_SET_IDLE        0x0A
-#define REQUEST_SET_PROTOCOL    0x0B
-
-#define DESCRIPTOR_DEVICE       0x01
-#define DESCRIPTOR_CONFIG       0x02
-#define DESCRIPTOR_INTERFACE    0x04
-#define DESCRIPTOR_ENDPOINT     0x05
-#define DESCRIPTOR_HUB          0x29
-
-#define PORT_RESET              4
-#define PORT_POWER              8
-#define C_PORT_CONNECTION       16
-#define C_PORT_RESET            20
-#define PORT_STATUS_CONNECTION  0x0001
-#define PORT_STATUS_LOW_SPEED   0x0200
-#define PORT_STATUS_HIGH_SPEED  0x0400
-
-#define CLASS_HID               3
-#define SUBCLASS_BOOT           1
-#define PROTOCOL_KEYBOARD       1
-#define PROTOCOL_MOUSE          2
-
-#define HUB_ADDRESS             1
-#define FIRST_DEVICE_ADDRESS    2
+#include "usbhost.h"
 
 //
 // VideoCore mailbox registers, the property channel and the power of the USB
@@ -192,26 +55,23 @@ Environment:
 #define PROPERTY_LENGTH         8
 
 //
-// The common buffer: the transfer bounce buffer, then the mailbox property
+// The common buffer: the buffer of the host, then the mailbox property
 // buffer.
 //
 
-#define BOUNCE_OFFSET           0
-#define PROPERTY_OFFSET         MAXIMUM_TRANSFER
+#define PROPERTY_OFFSET         USB_BUFFER_SIZE
 #define COMMON_BUFFER_SIZE      PAGE_SIZE
 
 #define TIMEOUT_US              1000000
-#define TIMEOUT_MS              1000
-#define SPIN_US                 250
-#define CONTROL_RETRIES         500
 #define POLL_INTERVAL_MS        8
+#define SCAN_INTERVAL_MS        256
 #define INPUT_QUEUE_LENGTH      100
 
 #define KEYBOARD_TYPE_ENHANCED  4
 
 //
 // The mouse: the identifier of a mouse of the HID class (the value later NT
-// gives it), and its buttons, bits 0 to 2 of a boot report (left, right and
+// gives it), and its buttons, the first three of a report (left, right and
 // middle, NT's buttons 1 to 3).
 //
 
@@ -219,32 +79,20 @@ Environment:
 #define MOUSE_BUTTONS           3
 
 //
-// The modifier bits of a boot report and their keys, and the usage of the
-// first key a report can carry.
+// The usages of the keyboard page: the first key, the modifiers (left
+// control, shift, alt and windows, right control, shift, alt and windows)
+// and the keys that do not repeat.
 //
 
-#define USAGE_ERROR_ROLLOVER    0x01
 #define USAGE_FIRST_KEY         0x04
-#define REPORT_LENGTH           8
+#define USAGE_FIRST_MODIFIER    0xE0
+#define USAGE_LAST_MODIFIER     0xE7
+#define USAGE_CAPS_LOCK         0x39
+#define USAGE_SCROLL_LOCK       0x47
+#define USAGE_PAUSE             0x48
+#define USAGE_NUM_LOCK          0x53
 
-//
-// A function of a device behind the hub: the device's address, its hub port,
-// its speed and the packet size of its control endpoint, and the interface
-// and interrupt endpoint of the function with the data toggle of the latter.
-// A receiver of both a keyboard and a mouse is one device with two functions.
-//
-
-typedef struct _USB_FUNCTION {
-    BOOLEAN Present;
-    ULONG Address;
-    ULONG HubPort;
-    ULONG Speed;
-    ULONG ControlMaximum;
-    ULONG Interface;
-    ULONG Endpoint;
-    ULONG EndpointMaximum;
-    ULONG Toggle;
-} USB_FUNCTION, *PUSB_FUNCTION;
+#define KEY_DOWN(Keys, Usage)   (((Keys)[(Usage) / 8] >> ((Usage) & 7)) & 1)
 
 //
 // The input data queue of a class driver connection, as i8042prt keeps one
@@ -268,26 +116,31 @@ typedef struct _INPUT_QUEUE {
 
 typedef struct _DEVICE_EXTENSION {
     PDEVICE_OBJECT DeviceObject;
-    PULONG Registers;
     PULONG Mailbox;
-    PUCHAR Buffer;
-    ULONG BufferAddress;
-
-    //
-    // The keyboard and the mouse, and their input data queues.
-    //
-
-    USB_FUNCTION Keyboard;
-    USB_FUNCTION Mouse;
+    USB_HOST Host;
     INPUT_QUEUE KeyboardQueue;
     INPUT_QUEUE MouseQueue;
 
     //
-    // The last keyboard report, the attributes, indicators and typematic
-    // parameters of the keyboard, and the key the thread repeats.
+    // Of each HID interface of the host: the generation of its device, the
+    // keys and buttons it holds down and its last absolute position; and the
+    // keys and buttons all of them hold down, the input the class drivers
+    // were given (a key held on two keyboards is down once).
     //
 
-    UCHAR Report[REPORT_LENGTH];
+    UCHAR Generation[USB_MAXIMUM_HIDS];
+    UCHAR Keys[USB_MAXIMUM_HIDS][USB_KEY_BYTES];
+    ULONG Buttons[USB_MAXIMUM_HIDS];
+    LONG X[USB_MAXIMUM_HIDS];
+    LONG Y[USB_MAXIMUM_HIDS];
+    UCHAR KeysDown[USB_KEY_BYTES];
+    ULONG ButtonsDown;
+
+    //
+    // The attributes, indicators (changed under the keyboard queue lock) and
+    // typematic parameters of the keyboard, and the key the thread repeats.
+    //
+
     KEYBOARD_ATTRIBUTES KeyboardAttributes;
     KEYBOARD_INDICATOR_PARAMETERS Indicators;
     KEYBOARD_TYPEMATIC_PARAMETERS Typematic;
@@ -295,13 +148,7 @@ typedef struct _DEVICE_EXTENSION {
     UCHAR RepeatUsage;
     LARGE_INTEGER RepeatTime;
 
-    //
-    // The attributes of the mouse and the buttons of its last report.
-    //
-
     MOUSE_ATTRIBUTES MouseAttributes;
-    UCHAR MouseButtons;
-
     HANDLE Thread;
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
@@ -313,12 +160,10 @@ static const INDICATOR_LIST IndicatorList[] = {
 //
 // The scan code (set 1) of each usage of the keyboard page, from usage 4:
 // KEY_E0 above the code marks the keys of the enhanced keyboard that send an
-// E0 prefix; zero is a usage the keyboard does not have.
+// E0 prefix.
 //
 
 #define E0(Code)                ((KEY_E0 << 8) | (Code))
-#define USAGE_PRINT_SCREEN      0x46
-#define USAGE_PAUSE             0x48
 
 static const USHORT UsageScanCode[] = {
     0x1E, 0x30, 0x2E, 0x20, 0x12, 0x21, 0x22, 0x23,             // 04 a - h
@@ -335,11 +180,6 @@ static const USHORT UsageScanCode[] = {
     0x4B, 0x4C, 0x4D, 0x47, 0x48, 0x49, 0x52, 0x53,             // 5C kp4 - kp9 kp0 kp.
     0x56, E0(0x5D)};                                            // 64 \ (non-US) application
 
-//
-// The keys of the modifier bits of a report, from bit 0: left control,
-// shift, alt and windows, right control, shift, alt and windows.
-//
-
 static const USHORT ModifierScanCode[8] = {
     0x1D, 0x2A, 0x38, E0(0x5B), E0(0x1D), 0x36, E0(0x38), E0(0x5C)};
 
@@ -350,17 +190,20 @@ DriverEntry(
     );
 
 //
-// Register access.
+// The routines the host is given: a stall, a sleep of the thread and a
+// microsecond clock from the performance counter.
 //
 
-#define READ_REG(Extension, Offset) \
-    READ_REGISTER_ULONG((Extension)->Registers + (Offset) / sizeof(ULONG))
+VOID
+UsbStall(
+    IN ULONG Microseconds
+    )
+{
+    KeStallExecutionProcessor(Microseconds);
+}
 
-#define WRITE_REG(Extension, Offset, Value) \
-    WRITE_REGISTER_ULONG((Extension)->Registers + (Offset) / sizeof(ULONG), (Value))
-
-static VOID
-UsbDelay(
+VOID
+UsbSleep(
     IN ULONG Milliseconds
     )
 {
@@ -370,47 +213,12 @@ UsbDelay(
     KeDelayExecutionThread(KernelMode, FALSE, &Interval);
 }
 
-//
-// Wait up to a limit for the bits of the mask in a register to be set or
-// clear: a short spin covers a bus transaction, then the thread sleeps between
-// looks, so a device that does not answer does not hold the processor.
-//
-
-static BOOLEAN
-UsbWaitBits(
-    IN PDEVICE_EXTENSION Extension,
-    IN ULONG Offset,
-    IN ULONG Mask,
-    IN BOOLEAN Set,
-    IN ULONG Milliseconds
+ULONG
+UsbClock(
+    VOID
     )
 {
-    LARGE_INTEGER Limit;
-    LARGE_INTEGER Now;
-    ULONG Time;
-
-    for (Time = 0; Time < SPIN_US; Time += 10) {
-        if ((READ_REG(Extension, Offset) & Mask) == (Set ? Mask : 0)) {
-            return TRUE;
-        }
-
-        KeStallExecutionProcessor(10);
-    }
-
-    KeQuerySystemTime(&Limit);
-    Limit.QuadPart += 10000 * (LONGLONG)Milliseconds;
-    for (;;) {
-        if ((READ_REG(Extension, Offset) & Mask) == (Set ? Mask : 0)) {
-            return TRUE;
-        }
-
-        KeQuerySystemTime(&Now);
-        if (Now.QuadPart >= Limit.QuadPart) {
-            return FALSE;
-        }
-
-        UsbDelay(1);
-    }
+    return KeQueryPerformanceCounter(NULL).LowPart;
 }
 
 //
@@ -423,7 +231,7 @@ UsbPowerOn(
     IN PDEVICE_EXTENSION Extension
     )
 {
-    PULONG Property = (PULONG)(Extension->Buffer + PROPERTY_OFFSET);
+    PULONG Property = (PULONG)(Extension->Host.Buffer + PROPERTY_OFFSET);
     PULONG Mailbox = Extension->Mailbox;
     ULONG Time;
     ULONG Message;
@@ -446,7 +254,7 @@ UsbPowerOn(
     }
 
     WRITE_REGISTER_ULONG(Mailbox + MBOX_WRITE / sizeof(ULONG),
-                         (Extension->BufferAddress + PROPERTY_OFFSET) | MBOX_PROPERTY);
+                         (Extension->Host.BufferAddress + PROPERTY_OFFSET) | MBOX_PROPERTY);
 
     do {
         for (Time = 0; READ_REGISTER_ULONG(Mailbox + MBOX_STATUS / sizeof(ULONG)) & MBOX_RD_EMPTY; Time += 1) {
@@ -461,563 +269,6 @@ UsbPowerOn(
     } while ((Message & 0xF) != MBOX_PROPERTY);
 
     return TRUE;
-}
-
-static BOOLEAN
-UsbResetCore(
-    IN PDEVICE_EXTENSION Extension
-    )
-{
-    if (!UsbWaitBits(Extension, GRSTCTL, GRSTCTL_AHBIDLE, TRUE, TIMEOUT_MS)) {
-        return FALSE;
-    }
-
-    WRITE_REG(Extension, GRSTCTL, READ_REG(Extension, GRSTCTL) | GRSTCTL_CSFTRST);
-    if (!UsbWaitBits(Extension, GRSTCTL, GRSTCTL_CSFTRST, FALSE, TIMEOUT_MS)) {
-        return FALSE;
-    }
-
-    UsbDelay(10);
-    return TRUE;
-}
-
-//
-// Run one packet group on channel 0 (the channel is set up for the device and
-// endpoint) and wait up to a limit for the channel to halt. A channel the
-// device leaves running past the limit (the core retries the transactions it
-// does not acknowledge) is halted, and the device not ready. The data goes
-// through the bounce buffer of the common buffer.
-//
-
-static LONG
-UsbTransferChunk(
-    IN PDEVICE_EXTENSION Extension,
-    IN OUT PULONG Pid,
-    IN BOOLEAN In,
-    IN PUCHAR Buffer,
-    IN ULONG Packets,
-    IN ULONG Length,
-    OUT PULONG Actual,
-    IN BOOLEAN OddFrame,
-    IN ULONG Milliseconds
-    )
-{
-    BOOLEAN Halted;
-    ULONG Character;
-    ULONG Interrupt;
-    ULONG Size;
-
-    if (!In && Length != 0) {
-        RtlMoveMemory(Extension->Buffer + BOUNCE_OFFSET, Buffer, Length);
-    }
-
-    WRITE_REG(Extension, HCTSIZ, (*Pid << HCTSIZ_PID_SHIFT) |
-                                 (Packets << HCTSIZ_PKTCNT_SHIFT) |
-                                 (Length & HCTSIZ_XFERSIZE_MASK));
-    WRITE_REG(Extension, HCDMA, Extension->BufferAddress + BOUNCE_OFFSET);
-    WRITE_REG(Extension, HCINT, HCINT_ALL);
-
-    Character = READ_REG(Extension, HCCHAR);
-    Character &= ~(HCCHAR_MULTICNT_MASK | HCCHAR_CHENA | HCCHAR_CHDIS | HCCHAR_ODDFRM);
-    Character |= (1 << HCCHAR_MULTICNT_SHIFT) | HCCHAR_CHENA;
-    if (OddFrame) {
-        Character |= HCCHAR_ODDFRM;
-    }
-
-    WRITE_REG(Extension, HCCHAR, Character);
-
-    Halted = UsbWaitBits(Extension, HCINT, HCINT_CHHLTD, TRUE, Milliseconds);
-    if (!Halted) {
-        WRITE_REG(Extension, HCCHAR, READ_REG(Extension, HCCHAR) | HCCHAR_CHENA | HCCHAR_CHDIS);
-        if (!UsbWaitBits(Extension, HCINT, HCINT_CHHLTD, TRUE, TIMEOUT_MS)) {
-            return XFER_ERROR;
-        }
-    }
-
-    Interrupt = READ_REG(Extension, HCINT);
-    Size = READ_REG(Extension, HCTSIZ);
-    *Pid = (Size >> HCTSIZ_PID_SHIFT) & 3;
-    if ((Interrupt & HCINT_XFERCOMPL) == 0) {
-        return !Halted || (Interrupt & (HCINT_NAK | HCINT_FRMOVRUN)) != 0 ? XFER_AGAIN : XFER_ERROR;
-    }
-
-    if (In) {
-        Length -= Size & HCTSIZ_XFERSIZE_MASK;
-        if (Length != 0) {
-            RtlMoveMemory(Buffer, Extension->Buffer + BOUNCE_OFFSET, Length);
-        }
-    }
-
-    *Actual = Length;
-    return XFER_DONE;
-}
-
-//
-// One transfer to or from an endpoint of a function: the channel is set up
-// for it, and the packet groups run until the length is moved or a short
-// packet ends it. A full or low speed device behind the high speed hub is
-// reached with a start split followed by complete splits, retried while the
-// hub answers NYET within the frames the transaction may take.
-//
-
-static LONG
-UsbTransfer(
-    IN PDEVICE_EXTENSION Extension,
-    IN PUSB_FUNCTION Function,
-    IN ULONG Endpoint,
-    IN BOOLEAN In,
-    IN ULONG Type,
-    IN ULONG Maximum,
-    IN OUT PULONG Pid,
-    IN PUCHAR Buffer,
-    IN ULONG Length,
-    OUT PULONG Actual
-    )
-{
-    ULONG Done = 0;
-    ULONG MaximumLength;
-    ULONG Packets;
-    ULONG RootSpeed;
-    ULONG Split;
-    ULONG StartFrame = 0;
-    BOOLEAN DoSplit = FALSE;
-    BOOLEAN CompleteSplit = FALSE;
-    BOOLEAN Stop = FALSE;
-    LONG Status = XFER_DONE;
-
-    WRITE_REG(Extension, HCCHAR, ((Function->Address & 0x7F) << HCCHAR_DEVADDR_SHIFT) |
-                                 ((Endpoint & 0xF) << HCCHAR_EPNUM_SHIFT) |
-                                 (In ? HCCHAR_EPDIR_IN : 0) |
-                                 ((Type & 3) << HCCHAR_EPTYPE_SHIFT) |
-                                 (Maximum & 0x7FF) |
-                                 (Function->Speed == SPEED_LOW ? HCCHAR_LSPDDEV : 0));
-    WRITE_REG(Extension, HCSPLT, 0);
-
-    MaximumLength = MAXIMUM_PACKET_COUNT * Maximum;
-    if (MaximumLength > MAXIMUM_TRANSFER) {
-        MaximumLength = MAXIMUM_TRANSFER;
-    }
-
-    Packets = MaximumLength / Maximum;
-    MaximumLength = Packets * Maximum;
-
-    RootSpeed = (READ_REG(Extension, HPRT0) & HPRT0_SPD_MASK) >> HPRT0_SPD_SHIFT;
-    if (Function->Speed != SPEED_HIGH && RootSpeed == SPEED_HIGH) {
-        WRITE_REG(Extension, HCSPLT, HCSPLT_SPLTENA |
-                                     (HUB_ADDRESS << HCSPLT_HUBADDR_SHIFT) |
-                                     (Function->HubPort & 0x7F));
-        DoSplit = TRUE;
-        Packets = 1;
-        MaximumLength = Maximum;
-    }
-
-    do {
-        ULONG Chunk = Length - Done;
-        ULONG Moved = 0;
-        ULONG Interrupt;
-
-        if (Chunk > MaximumLength) {
-            Chunk = MaximumLength;
-        } else if (Chunk > Maximum) {
-            Packets = (Chunk + Maximum - 1) / Maximum;
-        } else {
-            Packets = 1;
-        }
-
-        Split = READ_REG(Extension, HCSPLT);
-        if (CompleteSplit) {
-            WRITE_REG(Extension, HCSPLT, Split | HCSPLT_COMPSPLT);
-        } else if (DoSplit) {
-            WRITE_REG(Extension, HCSPLT, Split & ~HCSPLT_COMPSPLT);
-        }
-
-        Status = UsbTransferChunk(Extension, Pid, In, Buffer + Done, Packets, Chunk, &Moved,
-                                  Type == EPTYPE_INTERRUPT && (READ_REG(Extension, HFNUM) & 1) == 0,
-                                  Type == EPTYPE_INTERRUPT ? POLL_INTERVAL_MS : TIMEOUT_MS);
-
-        Interrupt = READ_REG(Extension, HCINT);
-        if (CompleteSplit) {
-            Stop = FALSE;
-            if (Interrupt & HCINT_NYET) {
-                Status = XFER_DONE;
-                if (((READ_REG(Extension, HFNUM) - StartFrame) & HFNUM_FRNUM_MASK) > 4) {
-                    Status = XFER_AGAIN;
-                }
-
-            } else {
-                CompleteSplit = FALSE;
-            }
-
-        } else if (DoSplit && (Interrupt & HCINT_ACK)) {
-            StartFrame = READ_REG(Extension, HFNUM) & HFNUM_FRNUM_MASK;
-            Status = XFER_DONE;
-            CompleteSplit = TRUE;
-        }
-
-        if (Status != XFER_DONE) {
-            break;
-        }
-
-        if (Moved < Chunk) {
-            Stop = TRUE;
-        }
-
-        Done += Moved;
-    } while ((Done < Length && !Stop) || CompleteSplit);
-
-    WRITE_REG(Extension, HCINT, HCINT_ALL);
-    *Actual = Done;
-    return Status;
-}
-
-//
-// A stage of a control transfer, retried while the device is not ready.
-//
-
-static LONG
-UsbControlStage(
-    IN PDEVICE_EXTENSION Extension,
-    IN PUSB_FUNCTION Function,
-    IN BOOLEAN In,
-    IN ULONG Pid,
-    IN PUCHAR Buffer,
-    IN ULONG Length,
-    OUT PULONG Actual
-    )
-{
-    ULONG Retries;
-    LONG Status;
-
-    for (Retries = 0; ; Retries += 1) {
-        Status = UsbTransfer(Extension, Function, 0, In, EPTYPE_CONTROL, Function->ControlMaximum,
-                             &Pid, Buffer, Length, Actual);
-        if (Status != XFER_AGAIN || Retries == CONTROL_RETRIES) {
-            return Status;
-        }
-
-        KeStallExecutionProcessor(125);
-    }
-}
-
-//
-// A control transfer: the setup stage, the data stage if there is data, and
-// the status stage. Returns the length of the data, or -1.
-//
-
-static LONG
-UsbControl(
-    IN PDEVICE_EXTENSION Extension,
-    IN PUSB_FUNCTION Function,
-    IN ULONG RequestType,
-    IN ULONG Request,
-    IN ULONG Value,
-    IN ULONG Index,
-    IN PUCHAR Data,
-    IN ULONG Length
-    )
-{
-    UCHAR Setup[8];
-    UCHAR Empty[4];
-    ULONG Actual = 0;
-    ULONG Moved;
-    BOOLEAN In = (RequestType & 0x80) != 0;
-
-    Setup[0] = (UCHAR)RequestType;
-    Setup[1] = (UCHAR)Request;
-    Setup[2] = (UCHAR)Value;
-    Setup[3] = (UCHAR)(Value >> 8);
-    Setup[4] = (UCHAR)Index;
-    Setup[5] = (UCHAR)(Index >> 8);
-    Setup[6] = (UCHAR)Length;
-    Setup[7] = (UCHAR)(Length >> 8);
-    if (UsbControlStage(Extension, Function, FALSE, PID_SETUP, Setup, 8, &Moved) != XFER_DONE) {
-        return -1;
-    }
-
-    if (Length != 0) {
-        if (UsbControlStage(Extension, Function, In, PID_DATA1, Data, Length, &Actual) != XFER_DONE) {
-            return -1;
-        }
-    }
-
-    if (UsbControlStage(Extension, Function, Length != 0 ? !In : TRUE, PID_DATA1, Empty, 0, &Moved) != XFER_DONE) {
-        return -1;
-    }
-
-    return (LONG)Actual;
-}
-
-//
-// Put the interface of a function in the boot protocol, reporting only
-// changes. Some devices stall these requests and report anyway.
-//
-
-static VOID
-UsbSetBootProtocol(
-    IN PDEVICE_EXTENSION Extension,
-    IN PUSB_FUNCTION Function
-    )
-{
-    UsbControl(Extension, Function, 0x21, REQUEST_SET_PROTOCOL, 0, Function->Interface, NULL, 0);
-    UsbControl(Extension, Function, 0x21, REQUEST_SET_IDLE, 0, Function->Interface, NULL, 0);
-    Function->Toggle = PID_DATA0;
-}
-
-//
-// Enumerate the device the hub reset on one of its ports, at address 0: give
-// it its address, and if it has a keyboard or a mouse of the boot protocol
-// the driver does not have yet, select its configuration, put those
-// interfaces in the boot protocol and keep their interrupt endpoints.
-//
-
-static VOID
-UsbEnumerateDevice(
-    IN PDEVICE_EXTENSION Extension,
-    IN ULONG Port,
-    IN ULONG Speed,
-    IN ULONG Address
-    )
-{
-    UCHAR Data[256];
-    USB_FUNCTION Device;
-    USB_FUNCTION Keyboard;
-    USB_FUNCTION Mouse;
-    PUSB_FUNCTION Function = NULL;
-    ULONG Maximum;
-    ULONG Total;
-    ULONG Offset;
-    ULONG Configuration;
-
-    RtlZeroMemory(&Device, sizeof(Device));
-    Device.HubPort = Port;
-    Device.Speed = Speed;
-    Device.ControlMaximum = 8;
-    if (UsbControl(Extension, &Device, 0x80, REQUEST_GET_DESCRIPTOR,
-                   DESCRIPTOR_DEVICE << 8, 0, Data, 8) < 0) {
-        return;
-    }
-
-    Maximum = Data[7] != 0 ? Data[7] : 8;
-    if (UsbControl(Extension, &Device, 0x00, REQUEST_SET_ADDRESS, Address, 0, NULL, 0) < 0) {
-        return;
-    }
-
-    UsbDelay(2);
-    Device.Address = Address;
-    Device.ControlMaximum = Maximum;
-    if (UsbControl(Extension, &Device, 0x80, REQUEST_GET_DESCRIPTOR,
-                   DESCRIPTOR_CONFIG << 8, 0, Data, 9) < 0) {
-        return;
-    }
-
-    Total = Data[2] | (Data[3] << 8);
-    Configuration = Data[5];
-    if (Total > sizeof(Data)) {
-        Total = sizeof(Data);
-    }
-
-    if (UsbControl(Extension, &Device, 0x80, REQUEST_GET_DESCRIPTOR,
-                   DESCRIPTOR_CONFIG << 8, 0, Data, Total) < 0) {
-        return;
-    }
-
-    Keyboard = Device;
-    Mouse = Device;
-    for (Offset = 0; Offset + 2 <= Total && Data[Offset] != 0; Offset += Data[Offset]) {
-        if (Data[Offset + 1] == DESCRIPTOR_INTERFACE && Offset + 8 <= Total) {
-            Function = NULL;
-            if (Data[Offset + 5] != CLASS_HID || Data[Offset + 6] != SUBCLASS_BOOT) {
-                continue;
-            }
-
-            if (Data[Offset + 7] == PROTOCOL_KEYBOARD && !Extension->Keyboard.Present && !Keyboard.Present) {
-                Function = &Keyboard;
-            } else if (Data[Offset + 7] == PROTOCOL_MOUSE && !Extension->Mouse.Present && !Mouse.Present) {
-                Function = &Mouse;
-            }
-
-            if (Function != NULL) {
-                Function->Interface = Data[Offset + 2];
-            }
-
-            continue;
-        }
-
-        if (Data[Offset + 1] == DESCRIPTOR_ENDPOINT && Function != NULL && !Function->Present &&
-            Offset + 6 <= Total && (Data[Offset + 2] & 0x80) != 0 && (Data[Offset + 3] & 3) == 3) {
-            Function->Endpoint = Data[Offset + 2] & 0xF;
-            Function->EndpointMaximum = Data[Offset + 4] | (Data[Offset + 5] << 8);
-            Function->Present = TRUE;
-        }
-    }
-
-    if (!Keyboard.Present && !Mouse.Present) {
-        return;
-    }
-
-    if (UsbControl(Extension, &Device, 0x00, REQUEST_SET_CONFIG, Configuration, 0, NULL, 0) < 0) {
-        return;
-    }
-
-    if (Keyboard.Present) {
-        UsbSetBootProtocol(Extension, &Keyboard);
-        Extension->Keyboard = Keyboard;
-    }
-
-    if (Mouse.Present) {
-        UsbSetBootProtocol(Extension, &Mouse);
-        Extension->Mouse = Mouse;
-    }
-}
-
-//
-// Enumerate the hub on the root port: give it its address, power its ports,
-// and reset each connected one to look for the keyboard and the mouse behind
-// it (the LAN9514 has its ethernet controller on a port as well).
-//
-
-static BOOLEAN
-UsbEnumerateHub(
-    IN PDEVICE_EXTENSION Extension,
-    IN ULONG Speed
-    )
-{
-    UCHAR Data[16];
-    USB_FUNCTION Hub;
-    ULONG Maximum;
-    ULONG Ports;
-    ULONG Port;
-    ULONG Status;
-    ULONG Address = FIRST_DEVICE_ADDRESS;
-
-    RtlZeroMemory(&Hub, sizeof(Hub));
-    Hub.Speed = Speed;
-    Hub.ControlMaximum = 8;
-    if (UsbControl(Extension, &Hub, 0x80, REQUEST_GET_DESCRIPTOR,
-                   DESCRIPTOR_DEVICE << 8, 0, Data, 8) < 0) {
-        return FALSE;
-    }
-
-    Maximum = Data[7];
-    if (UsbControl(Extension, &Hub, 0x00, REQUEST_SET_ADDRESS, HUB_ADDRESS, 0, NULL, 0) < 0) {
-        return FALSE;
-    }
-
-    UsbDelay(2);
-    Hub.Address = HUB_ADDRESS;
-    Hub.ControlMaximum = Maximum;
-    if (UsbControl(Extension, &Hub, 0x80, REQUEST_GET_DESCRIPTOR,
-                   DESCRIPTOR_CONFIG << 8, 0, Data, 9) < 0 ||
-        UsbControl(Extension, &Hub, 0x00, REQUEST_SET_CONFIG, Data[5], 0, NULL, 0) < 0 ||
-        UsbControl(Extension, &Hub, 0xA0, REQUEST_GET_DESCRIPTOR,
-                   DESCRIPTOR_HUB << 8, 0, Data, sizeof(Data)) < 0) {
-        return FALSE;
-    }
-
-    Ports = Data[2];
-    for (Port = 1; Port <= Ports; Port += 1) {
-        UsbControl(Extension, &Hub, 0x23, REQUEST_SET_FEATURE, PORT_POWER, Port, NULL, 0);
-    }
-
-    UsbDelay(Data[5] * 2 + 10);
-
-    for (Port = 1; Port <= Ports; Port += 1) {
-        if (Extension->Keyboard.Present && Extension->Mouse.Present) {
-            break;
-        }
-
-        if (UsbControl(Extension, &Hub, 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 0) {
-            break;
-        }
-
-        if ((Data[0] & PORT_STATUS_CONNECTION) == 0) {
-            continue;
-        }
-
-        UsbControl(Extension, &Hub, 0x23, REQUEST_SET_FEATURE, PORT_RESET, Port, NULL, 0);
-        UsbDelay(60);
-        if (UsbControl(Extension, &Hub, 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 0) {
-            break;
-        }
-
-        Status = Data[0] | (Data[1] << 8);
-        UsbControl(Extension, &Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_RESET, Port, NULL, 0);
-        UsbControl(Extension, &Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION, Port, NULL, 0);
-
-        UsbEnumerateDevice(Extension, Port,
-                           (Status & PORT_STATUS_LOW_SPEED) ? SPEED_LOW :
-                           (Status & PORT_STATUS_HIGH_SPEED) ? SPEED_HIGH : SPEED_FULL,
-                           Address);
-        Address += 1;
-    }
-
-    return Extension->Keyboard.Present || Extension->Mouse.Present;
-}
-
-//
-// Bring up the host: power it, select the high speed PHY of the chip, force
-// host mode, set up DMA and the FIFOs, power and reset the root port, then
-// find the keyboard and the mouse behind the hub on it.
-//
-
-static BOOLEAN
-UsbInitialize(
-    IN PDEVICE_EXTENSION Extension
-    )
-{
-    ULONG Port;
-    ULONG Time;
-
-    UsbPowerOn(Extension);
-    if ((READ_REG(Extension, GSNPSID) & 0xFFFFF000) != 0x4F542000 || !UsbResetCore(Extension)) {
-        return FALSE;
-    }
-
-    WRITE_REG(Extension, GUSBCFG, READ_REG(Extension, GUSBCFG) &
-              ~(GUSBCFG_PHYSEL | GUSBCFG_ULPI_UTMI_SEL | GUSBCFG_PHYIF16));
-    if (!UsbResetCore(Extension)) {
-        return FALSE;
-    }
-
-    WRITE_REG(Extension, GUSBCFG, (READ_REG(Extension, GUSBCFG) &
-              ~(GUSBCFG_ULPI_FS_LS | GUSBCFG_ULPI_CLK_SUSP_M)) | GUSBCFG_FORCEHOSTMODE);
-    for (Time = 0; (READ_REG(Extension, GINTSTS) & GINTSTS_CURMODE_HOST) == 0; Time += 1) {
-        if (Time == 200) {
-            return FALSE;
-        }
-
-        UsbDelay(1);
-    }
-
-    WRITE_REG(Extension, GAHBCFG, GAHBCFG_DMA_EN | GAHBCFG_HBSTLEN_INCR4);
-    WRITE_REG(Extension, GINTMSK, 0);
-    WRITE_REG(Extension, PCGCCTL, 0);
-    WRITE_REG(Extension, HCFG, (READ_REG(Extension, HCFG) & ~7) | HCFG_FSLSPCLKSEL_30_60);
-    WRITE_REG(Extension, GRXFSIZ, 516 + 16);
-    WRITE_REG(Extension, GNPTXFSIZ, (0x100 << 16) | (516 + 16));
-    WRITE_REG(Extension, HPTXFSIZ, (0x200 << 16) | (516 + 16 + 0x100));
-    WRITE_REG(Extension, GRSTCTL, GRSTCTL_TXFNUM_ALL | GRSTCTL_TXFFLSH);
-    UsbWaitBits(Extension, GRSTCTL, GRSTCTL_TXFFLSH, FALSE, TIMEOUT_MS);
-    WRITE_REG(Extension, GRSTCTL, GRSTCTL_RXFFLSH);
-    UsbWaitBits(Extension, GRSTCTL, GRSTCTL_RXFFLSH, FALSE, TIMEOUT_MS);
-
-    WRITE_REG(Extension, HPRT0, (READ_REG(Extension, HPRT0) & ~HPRT0_W1C_MASK) | HPRT0_PWR);
-    UsbDelay(50);
-    if (!UsbWaitBits(Extension, HPRT0, HPRT0_CONNSTS, TRUE, TIMEOUT_MS)) {
-        return FALSE;
-    }
-
-    WRITE_REG(Extension, HPRT0, (READ_REG(Extension, HPRT0) & ~HPRT0_W1C_MASK) | HPRT0_RST);
-    UsbDelay(60);
-    WRITE_REG(Extension, HPRT0, READ_REG(Extension, HPRT0) & ~(HPRT0_W1C_MASK | HPRT0_RST));
-    UsbDelay(50);
-
-    Port = READ_REG(Extension, HPRT0);
-    if ((Port & HPRT0_ENA) == 0) {
-        return FALSE;
-    }
-
-    return UsbEnumerateHub(Extension, (Port & HPRT0_SPD_MASK) >> HPRT0_SPD_SHIFT);
 }
 
 //
@@ -1114,6 +365,7 @@ UsbInitializeQueue(
     return TRUE;
 }
 
+
 //
 // The input of a scan code of the keyboard.
 //
@@ -1143,98 +395,80 @@ UsbQueueScanCode(
 static VOID
 UsbQueueKey(
     IN PDEVICE_EXTENSION Extension,
-    IN UCHAR Usage,
+    IN ULONG Usage,
     IN USHORT Flags
     )
 {
-    USHORT Code;
+    if (Usage >= USAGE_FIRST_MODIFIER && Usage <= USAGE_LAST_MODIFIER) {
+        UsbQueueScanCode(Extension, ModifierScanCode[Usage - USAGE_FIRST_MODIFIER], Flags);
+        return;
+    }
 
     if (Usage < USAGE_FIRST_KEY ||
         Usage >= USAGE_FIRST_KEY + sizeof(UsageScanCode) / sizeof(UsageScanCode[0])) {
         return;
     }
 
-    Code = UsageScanCode[Usage - USAGE_FIRST_KEY];
     if (Usage == USAGE_PAUSE) {
         UsbQueueScanCode(Extension, 0x1D, Flags | KEY_E1);
         UsbQueueScanCode(Extension, 0x45, Flags);
         return;
     }
 
-    UsbQueueScanCode(Extension, Code, Flags);
-}
-
-static BOOLEAN
-UsbReportHasKey(
-    IN PUCHAR Report,
-    IN UCHAR Usage
-    )
-{
-    ULONG Index;
-
-    for (Index = 2; Index < REPORT_LENGTH; Index += 1) {
-        if (Report[Index] == Usage) {
-            return TRUE;
-        }
-    }
-
-    return FALSE;
+    UsbQueueScanCode(Extension, UsageScanCode[Usage - USAGE_FIRST_KEY], Flags);
 }
 
 //
-// The changes of a keyboard report: the modifiers and keys released, then
-// those pressed. The last key pressed is the one the thread repeats.
+// The changes of the keys down: the modifiers and keys released, then those
+// pressed. The last key pressed is the one the thread repeats.
 //
 
 static VOID
-UsbProcessReport(
+UsbProcessKeys(
     IN PDEVICE_EXTENSION Extension,
-    IN PUCHAR Report
+    IN OUT PUCHAR Last,
+    IN PUCHAR Keys
     )
 {
-    PUCHAR Last = Extension->Report;
     LARGE_INTEGER Now;
-    ULONG Index;
+    ULONG Usage;
 
-    if (Report[2] == USAGE_ERROR_ROLLOVER) {
-        return;
-    }
-
-    for (Index = 0; Index < 8; Index += 1) {
-        if ((Last[0] & ~Report[0]) & (1 << Index)) {
-            UsbQueueScanCode(Extension, ModifierScanCode[Index], KEY_BREAK);
+    for (Usage = USAGE_FIRST_MODIFIER; Usage <= USAGE_LAST_MODIFIER; Usage += 1) {
+        if (KEY_DOWN(Last, Usage) && !KEY_DOWN(Keys, Usage)) {
+            UsbQueueKey(Extension, Usage, KEY_BREAK);
         }
     }
 
-    for (Index = 2; Index < REPORT_LENGTH; Index += 1) {
-        if (Last[Index] >= USAGE_FIRST_KEY && !UsbReportHasKey(Report, Last[Index])) {
-            UsbQueueKey(Extension, Last[Index], KEY_BREAK);
-            if (Last[Index] == Extension->RepeatUsage) {
+    for (Usage = USAGE_FIRST_KEY; Usage < USAGE_FIRST_MODIFIER; Usage += 1) {
+        if (KEY_DOWN(Last, Usage) && !KEY_DOWN(Keys, Usage)) {
+            UsbQueueKey(Extension, Usage, KEY_BREAK);
+            if (Usage == Extension->RepeatUsage) {
                 Extension->RepeatUsage = 0;
             }
         }
     }
 
-    for (Index = 0; Index < 8; Index += 1) {
-        if ((Report[0] & ~Last[0]) & (1 << Index)) {
-            UsbQueueScanCode(Extension, ModifierScanCode[Index], KEY_MAKE);
+    for (Usage = USAGE_FIRST_MODIFIER; Usage <= USAGE_LAST_MODIFIER; Usage += 1) {
+        if (!KEY_DOWN(Last, Usage) && KEY_DOWN(Keys, Usage)) {
+            UsbQueueKey(Extension, Usage, KEY_MAKE);
         }
     }
 
     KeQuerySystemTime(&Now);
-    for (Index = 2; Index < REPORT_LENGTH; Index += 1) {
-        if (Report[Index] >= USAGE_FIRST_KEY && !UsbReportHasKey(Last, Report[Index])) {
-            UsbQueueKey(Extension, Report[Index], KEY_MAKE);
-            if (Report[Index] != 0x39 && Report[Index] != 0x47 && Report[Index] != 0x53 &&
-                Report[Index] != USAGE_PAUSE) {
-                Extension->RepeatUsage = Report[Index];
-                Extension->RepeatTime.QuadPart = Now.QuadPart +
-                    10000 * (LONGLONG)Extension->Typematic.Delay;
-            }
+    for (Usage = USAGE_FIRST_KEY; Usage < USAGE_FIRST_MODIFIER; Usage += 1) {
+        if (KEY_DOWN(Last, Usage) || !KEY_DOWN(Keys, Usage)) {
+            continue;
+        }
+
+        UsbQueueKey(Extension, Usage, KEY_MAKE);
+        if (Usage != USAGE_CAPS_LOCK && Usage != USAGE_SCROLL_LOCK && Usage != USAGE_NUM_LOCK &&
+            Usage != USAGE_PAUSE) {
+            Extension->RepeatUsage = (UCHAR)Usage;
+            Extension->RepeatTime.QuadPart = Now.QuadPart + 10000 * (LONGLONG)Extension->Typematic.Delay;
         }
     }
 
-    RtlMoveMemory(Last, Report, REPORT_LENGTH);
+    RtlMoveMemory(Last, Keys, USB_KEY_BYTES);
 }
 
 //
@@ -1258,119 +492,134 @@ UsbRepeatKey(
     }
 
     UsbQueueKey(Extension, Extension->RepeatUsage, KEY_MAKE);
-    Extension->RepeatTime.QuadPart = Now.QuadPart +
-        10000000 / (LONGLONG)Extension->Typematic.Rate;
+    Extension->RepeatTime.QuadPart = Now.QuadPart + 10000000 / (LONGLONG)Extension->Typematic.Rate;
 }
 
 //
-// Set the keyboard's indicators with an output report: bit 0 num lock, bit 1
-// caps lock, bit 2 scroll lock.
+// The indicators of the keyboards, for their output reports: bit 0 num lock,
+// bit 1 caps lock, bit 2 scroll lock.
 //
 
-static VOID
-UsbSetIndicators(
-    IN PDEVICE_EXTENSION Extension
+static ULONG
+UsbIndicators(
+    IN PDEVICE_EXTENSION Extension,
+    OUT PBOOLEAN Changed
     )
 {
-    UCHAR Leds = 0;
-    USHORT Flags = Extension->Indicators.LedFlags;
+    KIRQL Irql;
+    USHORT Flags;
 
-    if (Flags & KEYBOARD_NUM_LOCK_ON) {
-        Leds |= 1;
-    }
-
-    if (Flags & KEYBOARD_CAPS_LOCK_ON) {
-        Leds |= 2;
-    }
-
-    if (Flags & KEYBOARD_SCROLL_LOCK_ON) {
-        Leds |= 4;
-    }
-
-    UsbControl(Extension, &Extension->Keyboard, 0x21, REQUEST_SET_REPORT, 0x200,
-               Extension->Keyboard.Interface, &Leds, 1);
+    KeAcquireSpinLock(&Extension->KeyboardQueue.Lock, &Irql);
+    Flags = Extension->Indicators.LedFlags;
+    *Changed = Extension->IndicatorsChanged;
+    Extension->IndicatorsChanged = FALSE;
+    KeReleaseSpinLock(&Extension->KeyboardQueue.Lock, Irql);
+    return ((Flags & KEYBOARD_NUM_LOCK_ON) ? 1 : 0) |
+           ((Flags & KEYBOARD_CAPS_LOCK_ON) ? 2 : 0) |
+           ((Flags & KEYBOARD_SCROLL_LOCK_ON) ? 4 : 0);
 }
 
 //
-// The changes of a mouse report: the transitions of its buttons and its
-// relative motion. A USB mouse reports positive motion down, as the mouse
-// class driver takes it (that of the 8042 reports it up).
+// The changes of a pointer: the transitions of the buttons all the pointers
+// hold down, and its motion or, if it is absolute, its new position. A USB
+// pointer reports positive motion down, as the mouse class driver takes it
+// (that of the 8042 reports it up).
 //
 
 static VOID
-UsbProcessMouseReport(
+UsbProcessPointer(
     IN PDEVICE_EXTENSION Extension,
-    IN PUCHAR Report
+    IN ULONG Index,
+    IN PUSB_POINTER Pointer
     )
 {
     MOUSE_INPUT_DATA Input;
-    UCHAR Buttons = Report[0] & ((1 << MOUSE_BUTTONS) - 1);
-    UCHAR Changed = Buttons ^ Extension->MouseButtons;
-    ULONG Index;
+    ULONG Buttons = 0;
+    ULONG Changed;
+    ULONG Button;
 
+    Extension->Buttons[Index] = Pointer->Buttons & ((1 << MOUSE_BUTTONS) - 1);
+    for (Button = 0; Button < USB_MAXIMUM_HIDS; Button += 1) {
+        Buttons |= Extension->Buttons[Button];
+    }
+
+    Changed = Buttons ^ Extension->ButtonsDown;
+    Extension->ButtonsDown = Buttons;
     RtlZeroMemory(&Input, sizeof(Input));
-    Input.Flags = MOUSE_MOVE_RELATIVE;
-    for (Index = 0; Index < MOUSE_BUTTONS; Index += 1) {
-        if (Changed & (1 << Index)) {
-            Input.Buttons |= ((Buttons & (1 << Index)) ? MOUSE_BUTTON_1_DOWN : MOUSE_BUTTON_1_UP) << (2 * Index);
+    Input.Flags = Pointer->Absolute ? MOUSE_MOVE_ABSOLUTE : MOUSE_MOVE_RELATIVE;
+    for (Button = 0; Button < MOUSE_BUTTONS; Button += 1) {
+        if (Changed & (1 << Button)) {
+            Input.Buttons |= ((Buttons & (1 << Button)) ? MOUSE_BUTTON_1_DOWN : MOUSE_BUTTON_1_UP) << (2 * Button);
         }
     }
 
-    Input.LastX = (CHAR)Report[1];
-    Input.LastY = (CHAR)Report[2];
-    Extension->MouseButtons = Buttons;
-    if (Input.Buttons != 0 || Input.LastX != 0 || Input.LastY != 0) {
-        UsbQueueInput(&Extension->MouseQueue, &Input);
+    Input.LastX = Pointer->X;
+    Input.LastY = Pointer->Y;
+    if (Pointer->Absolute) {
+        if (Input.Buttons == 0 && Pointer->X == Extension->X[Index] && Pointer->Y == Extension->Y[Index]) {
+            return;
+        }
+
+        Extension->X[Index] = Pointer->X;
+        Extension->Y[Index] = Pointer->Y;
+    } else if (Input.Buttons == 0 && Input.LastX == 0 && Input.LastY == 0) {
+        return;
     }
+
+    UsbQueueInput(&Extension->MouseQueue, &Input);
 }
 
 //
-// Read a report from the interrupt endpoint of a function, up to a packet of
-// the endpoint so that a report is one transfer.
-//
-
-static BOOLEAN
-UsbReadReport(
-    IN PDEVICE_EXTENSION Extension,
-    IN PUSB_FUNCTION Function,
-    OUT PUCHAR Report
-    )
-{
-    ULONG Length = Function->EndpointMaximum < REPORT_LENGTH ? Function->EndpointMaximum : REPORT_LENGTH;
-    ULONG Actual;
-
-    RtlZeroMemory(Report, REPORT_LENGTH);
-    return UsbTransfer(Extension, Function, Function->Endpoint, TRUE, EPTYPE_INTERRUPT,
-                       Function->EndpointMaximum, &Function->Toggle, Report, Length,
-                       &Actual) == XFER_DONE && Actual >= 3;
-}
-
-//
-// A poll of the keyboard: the setting of its indicators, a report and the
-// repeat of the held key.
+// A HID interface that went, or whose slot a new device took: it holds no
+// keys or buttons down any more.
 //
 
 static VOID
-UsbPollKeyboard(
-    IN PDEVICE_EXTENSION Extension
+UsbReleaseInterface(
+    IN PDEVICE_EXTENSION Extension,
+    IN ULONG Index
     )
 {
-    UCHAR Report[REPORT_LENGTH];
+    USB_POINTER Pointer;
 
-    if (Extension->IndicatorsChanged) {
-        Extension->IndicatorsChanged = FALSE;
-        UsbSetIndicators(Extension);
+    RtlZeroMemory(Extension->Keys[Index], USB_KEY_BYTES);
+    if (Extension->Buttons[Index] != 0) {
+        RtlZeroMemory(&Pointer, sizeof(Pointer));
+        UsbProcessPointer(Extension, Index, &Pointer);
     }
 
-    if (UsbReadReport(Extension, &Extension->Keyboard, Report)) {
-        UsbProcessReport(Extension, Report);
-    }
-
-    UsbRepeatKey(Extension);
+    Extension->X[Index] = -1;
+    Extension->Y[Index] = -1;
 }
 
 //
-// The thread that polls the keyboard and the mouse each poll interval.
+// The keys all the keyboards hold down, and their changes.
+//
+
+static VOID
+UsbProcessKeyboards(
+    IN PDEVICE_EXTENSION Extension
+    )
+{
+    UCHAR Keys[USB_KEY_BYTES];
+    ULONG Index;
+    ULONG Byte;
+
+    RtlZeroMemory(Keys, sizeof(Keys));
+    for (Index = 0; Index < USB_MAXIMUM_HIDS; Index += 1) {
+        for (Byte = 0; Byte < USB_KEY_BYTES; Byte += 1) {
+            Keys[Byte] |= Extension->Keys[Index][Byte];
+        }
+    }
+
+    UsbProcessKeys(Extension, Extension->KeysDown, Keys);
+}
+
+//
+// The thread: each poll interval it reads a report from each keyboard and
+// pointer, sets the indicators of the keyboards when they change (and those
+// of a new one), repeats the held key, and now and then looks for devices
+// that came or went.
 //
 
 static VOID
@@ -1379,19 +628,56 @@ UsbPollThread(
     )
 {
     PDEVICE_EXTENSION Extension = Context;
-    UCHAR Report[REPORT_LENGTH];
+    PUSB_HOST Host = &Extension->Host;
+    UCHAR Report[USB_REPORT_LENGTH];
+    UCHAR Keys[USB_KEY_BYTES];
+    USB_POINTER Pointer;
+    PUSB_HID Hid;
+    ULONG Scan = UsbClock();
+    ULONG Leds;
+    ULONG Index;
+    BOOLEAN Changed;
+    LONG Length;
 
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
     for (;;) {
-        if (Extension->Keyboard.Present) {
-            UsbPollKeyboard(Extension);
+        Leds = UsbIndicators(Extension, &Changed);
+        for (Index = 0; Index < USB_MAXIMUM_HIDS; Index += 1) {
+            Hid = &Host->Hids[Index];
+            if (!Hid->Present || Hid->Generation != Extension->Generation[Index]) {
+                UsbReleaseInterface(Extension, Index);
+                Extension->Generation[Index] = Hid->Present ? Hid->Generation : 0;
+                if (!Hid->Present) {
+                    continue;
+                }
+
+                UsbHidSetIndicators(Host, Hid, Leds);
+            } else if (Changed) {
+                UsbHidSetIndicators(Host, Hid, Leds);
+            }
+
+            Length = UsbHidRead(Host, Hid, Report);
+            if (Length <= 0) {
+                continue;
+            }
+
+            if ((Hid->Kinds & HID_KEYBOARD) && UsbHidKeys(Hid, Report, Length, Keys)) {
+                RtlMoveMemory(Extension->Keys[Index], Keys, USB_KEY_BYTES);
+            }
+
+            if ((Hid->Kinds & HID_POINTER) && UsbHidPointer(Hid, Report, Length, &Pointer)) {
+                UsbProcessPointer(Extension, Index, &Pointer);
+            }
         }
 
-        if (Extension->Mouse.Present && UsbReadReport(Extension, &Extension->Mouse, Report)) {
-            UsbProcessMouseReport(Extension, Report);
+        UsbProcessKeyboards(Extension);
+        UsbRepeatKey(Extension);
+        if (UsbClock() - Scan >= SCAN_INTERVAL_MS * Host->ClockRate) {
+            UsbHostScan(Host);
+            Scan = UsbClock();
         }
 
-        UsbDelay(POLL_INTERVAL_MS);
+        UsbSleep(POLL_INTERVAL_MS);
     }
 }
 
@@ -1414,16 +700,11 @@ UsbOpenClose(
 
 static NTSTATUS
 UsbConnect(
-    IN PUSB_FUNCTION Function,
     IN PINPUT_QUEUE Queue,
     IN PIO_STACK_LOCATION Stack
     )
 {
     KIRQL Irql;
-
-    if (!Function->Present) {
-        return STATUS_NO_SUCH_DEVICE;
-    }
 
     if (Queue->ConnectData.ClassService != NULL) {
         return STATUS_SHARING_VIOLATION;
@@ -1473,15 +754,16 @@ UsbInternalDeviceControl(
     PVOID Buffer = Irp->AssociatedIrp.SystemBuffer;
     NTSTATUS Status = STATUS_SUCCESS;
     ULONG Size;
+    KIRQL Irql;
 
     Irp->IoStatus.Information = 0;
     switch (Stack->Parameters.DeviceIoControl.IoControlCode) {
     case IOCTL_INTERNAL_KEYBOARD_CONNECT:
-        Status = UsbConnect(&Extension->Keyboard, &Extension->KeyboardQueue, Stack);
+        Status = UsbConnect(&Extension->KeyboardQueue, Stack);
         break;
 
     case IOCTL_INTERNAL_MOUSE_CONNECT:
-        Status = UsbConnect(&Extension->Mouse, &Extension->MouseQueue, Stack);
+        Status = UsbConnect(&Extension->MouseQueue, Stack);
         break;
 
     case IOCTL_INTERNAL_KEYBOARD_DISCONNECT:
@@ -1545,8 +827,10 @@ UsbInternalDeviceControl(
              ~(KEYBOARD_SCROLL_LOCK_ON | KEYBOARD_NUM_LOCK_ON | KEYBOARD_CAPS_LOCK_ON)) != 0) {
             Status = STATUS_INVALID_PARAMETER;
         } else {
+            KeAcquireSpinLock(&Extension->KeyboardQueue.Lock, &Irql);
             Extension->Indicators = *(PKEYBOARD_INDICATOR_PARAMETERS)Buffer;
             Extension->IndicatorsChanged = TRUE;
+            KeReleaseSpinLock(&Extension->KeyboardQueue.Lock, Irql);
         }
 
         break;
@@ -1678,10 +962,10 @@ DriverEntry(
 Routine Description:
 
     This routine finds the keyboard controller in the hardware description,
-    maps it, brings up the USB host and finds the keyboard and the mouse,
-    then creates the keyboard port device, names it the pointer port as well
-    if there is a mouse, records the ports in the device map for the class
-    drivers and starts the thread that polls the keyboard and the mouse.
+    maps it, powers and brings up the USB host, which finds the keyboards
+    and pointers, then creates the keyboard port device, names it the pointer
+    port as well, records the ports in the device map for the class drivers
+    and starts the thread that polls the devices.
 
 Arguments:
 
@@ -1703,6 +987,7 @@ Return Value:
     DEVICE_DESCRIPTION Description;
     PADAPTER_OBJECT Adapter;
     PHYSICAL_ADDRESS Logical;
+    LARGE_INTEGER Frequency;
     ULONG MapRegisters;
     UNICODE_STRING DeviceName;
     UNICODE_STRING PointerName;
@@ -1729,8 +1014,8 @@ Return Value:
     RtlZeroMemory(Extension, sizeof(DEVICE_EXTENSION));
     Extension->DeviceObject = DeviceObject;
 
-    Extension->Registers = UsbMapRegisters(Configuration.BusNumber, Configuration.Memory[0],
-                                           Configuration.MemoryLength[0]);
+    Extension->Host.Registers = UsbMapRegisters(Configuration.BusNumber, Configuration.Memory[0],
+                                                Configuration.MemoryLength[0]);
     Extension->Mailbox = UsbMapRegisters(Configuration.BusNumber, Configuration.Memory[1],
                                          Configuration.MemoryLength[1]);
 
@@ -1743,11 +1028,11 @@ Return Value:
     Description.MaximumLength = COMMON_BUFFER_SIZE;
     Adapter = HalGetAdapter(&Description, &MapRegisters);
     if (Adapter != NULL) {
-        Extension->Buffer = HalAllocateCommonBuffer(Adapter, COMMON_BUFFER_SIZE, &Logical, FALSE);
-        Extension->BufferAddress = Logical.LowPart;
+        Extension->Host.Buffer = HalAllocateCommonBuffer(Adapter, COMMON_BUFFER_SIZE, &Logical, FALSE);
+        Extension->Host.BufferAddress = Logical.LowPart;
     }
 
-    if (Extension->Registers == NULL || Extension->Mailbox == NULL || Extension->Buffer == NULL ||
+    if (Extension->Host.Registers == NULL || Extension->Mailbox == NULL || Extension->Host.Buffer == NULL ||
         !UsbInitializeQueue(&Extension->KeyboardQueue, sizeof(KEYBOARD_INPUT_DATA)) ||
         !UsbInitializeQueue(&Extension->MouseQueue, sizeof(MOUSE_INPUT_DATA))) {
         IoDeleteDevice(DeviceObject);
@@ -1772,7 +1057,10 @@ Return Value:
     Extension->MouseAttributes.SampleRate = 1000 / POLL_INTERVAL_MS;
     Extension->MouseAttributes.InputDataQueueLength = INPUT_QUEUE_LENGTH * sizeof(MOUSE_INPUT_DATA);
 
-    if (!UsbInitialize(Extension)) {
+    KeQueryPerformanceCounter(&Frequency);
+    Extension->Host.ClockRate = Frequency.LowPart / 1000;
+    UsbPowerOn(Extension);
+    if (!UsbHostInitialize(&Extension->Host)) {
         IoDeleteDevice(DeviceObject);
         return STATUS_NO_SUCH_DEVICE;
     }
@@ -1781,14 +1069,12 @@ Return Value:
     DriverObject->MajorFunction[IRP_MJ_CLOSE] = UsbOpenClose;
     DriverObject->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = UsbInternalDeviceControl;
 
-    if (Extension->Keyboard.Present) {
-        RtlWriteRegistryValue(RTL_REGISTRY_DEVICEMAP, DD_KEYBOARD_PORT_BASE_NAME_U,
-                              DeviceName.Buffer, REG_SZ, RegistryPath->Buffer,
-                              RegistryPath->Length + sizeof(UNICODE_NULL));
-    }
+    RtlWriteRegistryValue(RTL_REGISTRY_DEVICEMAP, DD_KEYBOARD_PORT_BASE_NAME_U,
+                          DeviceName.Buffer, REG_SZ, RegistryPath->Buffer,
+                          RegistryPath->Length + sizeof(UNICODE_NULL));
 
     RtlInitUnicodeString(&PointerName, DD_POINTER_PORT_DEVICE_NAME_U L"0");
-    if (Extension->Mouse.Present && NT_SUCCESS(IoCreateSymbolicLink(&PointerName, &DeviceName))) {
+    if (NT_SUCCESS(IoCreateSymbolicLink(&PointerName, &DeviceName))) {
         RtlWriteRegistryValue(RTL_REGISTRY_DEVICEMAP, DD_POINTER_PORT_BASE_NAME_U,
                               PointerName.Buffer, REG_SZ, RegistryPath->Buffer,
                               RegistryPath->Length + sizeof(UNICODE_NULL));

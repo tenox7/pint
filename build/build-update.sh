@@ -23,6 +23,6 @@ INSTALL=1 step osloader $R/obj/bldr.lib $R/obj/boot.lib $R/obj/bconfig.lib $R/ob
     -- $K/make-osloader.sh
 $R/build/build-drivers.sh
 $R/build/build-user.sh
-step firmware $R/arcfw/arm $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
+step firmware $R/arcfw/arm $R/arcfw/drivers/bcmusb/usbhost.c $R/arcfw/drivers/bcmusb/usbhost.h $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
     $R/obj/bldrrtl.lib $R/obj/libcntpr.lib -- $R/build/build.sh
 $R/sdcard/make-sd-image.sh $([ -n "${FORCE:-}" ] || echo -u)

@@ -9,4 +9,5 @@ TARGETTYPE=DRIVER
 INCLUDES=..\..\inc
 
 SOURCES=bcmusb.c \
+        usbhost.c \
         bcmusb.rc

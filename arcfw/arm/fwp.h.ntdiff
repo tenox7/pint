@@ -173,6 +173,8 @@
 +UsbKeyboardReport (
 +    OUT UCHAR Report[8]
 =1 132 3
++UsbPrintDevices (
+=1 471 4
 +FwMmuInitialize (
 =1 165 4
 =1 616 6

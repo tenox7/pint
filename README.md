@@ -43,5 +43,5 @@ where the HAL keeps the time.
 The first run is NT's developer setup (three boots): Enter at the domain message, any key in the setup console,
 then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A C) and Enter log on as Administrator.
 
-For a real Pi 2, write `obj/nt-arcfw-sd.img` to an SD card; plug in the mouse before the first boot, as the setup
-disables the drivers of missing devices.
+For a real Pi 2, write `obj/nt-arcfw-sd.img` to an SD card. USB keyboards and mice, behind hubs too (and KVMs with an
+absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lists the USB devices it found.
