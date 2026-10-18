@@ -54,7 +54,4 @@ absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lis
 
 ## Legal
 
-This repository contains no Microsoft or Windows code whatsoever: it is a build toolchain and the port's own ARM
-code (ARC firmware, kernel, HAL, drivers), written from scratch by Dave Clunker with U-Boot as the Raspberry Pi
-hardware reference, and is in the public domain. Exception: the third-party Raspberry Pi boot firmware in
-`sdcard/firmware`.
+This repository contains no Microsoft or Windows code. It is just a build toolchain and own ARM ARC firmware code. Written from scratch by Dave Clunker with U-Boot as the Raspberry Pi hardware reference, and is in the public domain.
