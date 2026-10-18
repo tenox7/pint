@@ -5,6 +5,23 @@
 # clock (ds1338) on I2C1 holds the local time, as NT keeps it, and a USB mouse is always
 # plugged in (NT's first run disables the mouse driver if none is). M=raspi3b or
 # raspi3ap runs a Pi 3B or 3A+. Extra arguments go to QEMU.
+case "$1" in -h|-help|--help)
+    cat <<'EOF'
+Usage: [M=raspi3b|raspi3ap] build/run.sh [QEMU options]
+
+Boots obj/arcfw.elf with obj/nt-arcfw-sd.img in QEMU raspi2b (M=raspi3b: a Pi 3B, M=raspi3ap: a
+3A+ with 512 MB). Serial console and QEMU monitor in this terminal: Ctrl-A X quits, Ctrl-A C
+switches to the monitor.
+
+  -device usb-kbd       console on the HDMI window, with a USB keyboard
+  -device usb-tablet    absolute pointer (no mouse grab)
+  -display none         no window
+  -snapshot             leave the SD image unchanged
+  -gdb tcp::1235        gdb server for lldb (gdb-remote 1235)
+EOF
+    exit 0 ;;
+esac
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 Q=qemu-system-arm G=1G
 case ${M:=raspi2b} in raspi3*) Q="qemu-system-aarch64 -cpu cortex-a53,aarch64=off" ;; esac

@@ -37,6 +37,7 @@ system disk, keeping what NT wrote on it; the disk is made anew when the registr
     build/run.sh                  # console on serial in this terminal (Ctrl-A X quits)
     build/run.sh -device usb-kbd  # console on the HDMI window + USB keyboard
     M=raspi3b build/run.sh        # a Pi 3B (M=raspi3ap: a 3A+)
+    build/run.sh -h               # the common options; the others go to QEMU
 
 The firmware puts the console on HDMI when a USB keyboard is present, otherwise on serial. run.sh always attaches a USB
 mouse (click the window to give it to NT, Ctrl+Alt+G releases it) and a DS1307-type RTC at 0x68 on I2C1 (GPIO 2/3),
