@@ -1,7 +1,6 @@
-# PI NT
+# PINT - Raspberry **PI** Windows **NT**
 
-Windows NT 3.5 ported to 32-bit ARM (ARMv7-A, Thumb-2) on the Raspberry Pi 2 and 3,
-booted by its own ARC firmware the way NT booted on MIPS.
+Windows NT 3.5 ported to 32-bit ARM (ARMv7-A, Thumb-2) on the Raspberry Pi 2 and 3, with own ARC firmware.
 
 ## Raspberry Pi models
 
