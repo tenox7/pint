@@ -1,5 +1,23 @@
 #ntdiff PRIVATE/WINDOWS/USER/WINLOGON/REGINI.C
-=1 1 2095
+=1 1 15
++BOOL DomainMember = FALSE;
+=1 16 178
++SaveDomainId(
+=1 190 34
++    {"DomainId", REG_INI_VALUE, REG_INI_FLAG_SKIP_FOR_NETSETUP, SaveDomainId,
+=1 225 1323
++//
++// A domain id makes the machine a member of the domain; without one, the domain
++// is the name of its workgroup.
++//
++
++BOOL
++SaveDomainId(
+=1 637 5
++    DomainMember = TRUE;
+=1 1545 115
++        if ( NetFound && DomainMember ) {
+=1 1661 435
 +    TimeoutMessageBoxlpstr( NULL,
 +                            TEXT("Windows NT has configured the registry from REGISTRY.INI. ")
 +                            TEXT("This is done once, on the first start of a new installation.\n\n")

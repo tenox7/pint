@@ -13,7 +13,7 @@ A=/work/RASPI/arcfw
 O=/work/RASPI/obj
 bash $K/mkfarm.sh /tmp/f > /dev/null
 DIR=/tmp/fw; rm -rf $DIR; mkdir -p $DIR
-INCS="-I$A/arm -I$K/inc -I/tmp/f/ovr $(bash $K/incdirs.sh /work/PRIVATE/NTOS/BOOT/LIB "..\inc;..\..\inc;..\..\fastfat;..\..\pinball;..\..\cdfs;..\..\ntfs;..\..\config") -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+INCS="-I$A/arm -I$A/drivers/bcmeth -I$K/inc -I/tmp/f/ovr $(bash $K/incdirs.sh /work/PRIVATE/NTOS/BOOT/LIB "..\inc;..\..\inc;..\..\fastfat;..\..\pinball;..\..\cdfs;..\..\ntfs;..\..\config") -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 DEFS="$NTDEFINES -D_NTSYSTEM_"
 fail=0
 for s in main init mmu mailbox jxvendor jxmemory fwio fwprint jxserial jxdisp jxkbd usb sdcard config fwload \

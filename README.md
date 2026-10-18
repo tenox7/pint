@@ -46,10 +46,13 @@ then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A C) 
 For a real Pi 2 or 3, write `obj/nt-arcfw-sd.img` to an SD card. USB keyboards and mice, behind hubs too (and KVMs
 with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lists the USB devices it found.
 
+Networking: TCP/IP (DHCP) and NetBIOS over TCP/IP on the onboard Ethernet (LAN9514 on the Pi 2/3B, LAN7800 on
+the 3B+; not yet tested on a real Pi), in QEMU a USB Ethernet adapter (NONET=1 run.sh: none). ping, ipconfig,
+hostname, `net use`, `net share`.
+
 ## Roadmap
 
 - SMP: use all four cores (NT runs on one now).
-- Networking: the onboard Ethernet and USB Ethernet adapters.
 
 ## Legal
 

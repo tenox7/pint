@@ -32,6 +32,7 @@ Abstract:
 
 #define TAG_GET_FIRMWARE_REVISION 0x00000001
 #define TAG_GET_BOARD_REVISION  0x00010002
+#define TAG_GET_BOARD_MAC       0x00010003
 #define TAG_GET_BOARD_SERIAL    0x00010004
 #define TAG_GET_ARM_MEMORY      0x00010005
 #define TAG_SET_POWER_STATE     0x00028001
@@ -260,4 +261,36 @@ Routine Description:
     ULONG Answer[2];
 
     return MailboxTag(TAG_GET_FIRMWARE_REVISION, 0, 0, 0, Answer) ? 0 : Answer[0];
+}
+
+BOOLEAN
+MailboxGetBoardMacAddress (
+    OUT PUCHAR Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the Ethernet address of the board.
+
+Return Value:
+
+    TRUE if the VideoCore knows one, else FALSE.
+
+--*/
+
+{
+    ULONG Answer[2];
+    ULONG Index;
+
+    if (MailboxTag(TAG_GET_BOARD_MAC, 0, 0, 0, Answer) != 0) {
+        return FALSE;
+    }
+
+    for (Index = 0; Index < 6; Index += 1) {
+        Address[Index] = (UCHAR)(Answer[Index / 4] >> ((Index % 4) * 8));
+    }
+
+    return (Address[0] | Address[1] | Address[2] | Address[3] | Address[4] | Address[5]) != 0;
 }

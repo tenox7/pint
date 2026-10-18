@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/NTOS/RDR/UTILS.C
+=1 1 2067
++    return FILE_OPENED;
+=1 2068 1162

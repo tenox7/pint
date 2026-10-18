@@ -31,6 +31,8 @@
 +ProductType
 +    WinNt
 +
++;
++;  The workgroup of the machine (a domain with a DomainId would make it a member).
++;
 +Domain
 +    WORKGROUP
-=1 449 3

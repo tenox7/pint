@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/INC/SOCKETS/NETINET/IN.H
+=1 1 99
++#    ifdef _ARM_
+=1 98 336

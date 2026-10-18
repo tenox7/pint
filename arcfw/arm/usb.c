@@ -22,6 +22,7 @@ Abstract:
 #include <stdio.h>
 #include <string.h>
 #include "../drivers/bcmusb/usbhost.h"
+#include "bcmethhw.h"
 
 #define USB_BASE                0x3F980000
 #define POWER_DEVICE_USB        3
@@ -57,6 +58,43 @@ UsbClock(
     )
 {
     return FwGetMicroseconds();
+}
+
+//
+// The Ethernet controller among the devices: the board's (the function of
+// its LAN9514 or LAN7515), or a CDC Ethernet device, described in the
+// configuration tree for the network driver.
+//
+
+static VOID
+UsbFindNetworkController (
+    VOID
+    )
+{
+    PUSB_DEVICE Device;
+    ULONG Index;
+
+    for (Index = 0; Index < USB_MAXIMUM_DEVICES; Index += 1) {
+        Device = &UsbHost.Devices[Index];
+        if (!Device->Present || Device->Stage != USB_STAGE_READY) {
+            continue;
+        }
+
+        if (Device->Vendor == USB_VENDOR_SMSC && Device->Product == USB_PRODUCT_LAN9500) {
+            FwAddNetworkController(BCMETH_ID_LAN9500);
+            return;
+        }
+
+        if (Device->Vendor == USB_VENDOR_SMSC && Device->Product == USB_PRODUCT_LAN7800) {
+            FwAddNetworkController(BCMETH_ID_LAN7800);
+            return;
+        }
+
+        if (Device->Class == USB_CLASS_COMMUNICATION) {
+            FwAddNetworkController(BCMETH_ID_CDC);
+            return;
+        }
+    }
 }
 
 BOOLEAN
@@ -101,6 +139,7 @@ Return Value:
         UsbHostScan(&UsbHost);
     }
 
+    UsbFindNetworkController();
     UsbScanTime = FwGetMicroseconds();
     return UsbReady;
 }

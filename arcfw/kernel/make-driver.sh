@@ -1,3 +1,9 @@
+  b=$(basename "${f%.*}" | tr A-Z a-z)
+  case $f in
+  *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
+  # a quoted include finds a header beside the source (#line), the port version among the farmed ones
+  *) ntsrc $f $DIR/src/$b.c && { [ -z "$PH" ] || sed -i "1s|.*/|#line 1 \"/tmp/f/$c/|" $DIR/src/$b.c; } && ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $INCS ;;
+  esac && n=$((n+1)) || fail=$((fail+1))
 #!/usr/bin/env bash
 # Build an NT kernel-mode driver from its component's SOURCES (TARGETTYPE DRIVER or
 # EXPORT_DRIVER) as makefile.def does, with Microsoft C for ARM: compile with the
@@ -25,28 +31,43 @@ set -u
 O=/work/RASPI/obj
 SRC=$ROOT/$COMP
 c=$(echo $COMP | tr A-Z a-z)
-SUBSYS=$COMP bash mkfarm.sh /tmp/f
+# the component and the directory above it (a DAYTONA build of the sources there)
+SUBSYS="$COMP $([ $COMP = ${COMP%/*} ] || echo ${COMP%/*})" bash mkfarm.sh /tmp/f
 if [ $ROOT != /work/PRIVATE/NTOS ]; then
   mkdir -p /tmp/f/$c
   for h in $SRC/*.[Hh]; do
     [ -e "$h" ] && ntsrc "$h" /tmp/f/$c/$(basename "$h" | tr A-Z a-z)
   done
 fi
+# the port versions of its headers
+PH=
+mkdir -p /tmp/f/$c
+for h in /work/RASPI/arcfw/ported/$(echo ${SRC#/work/PRIVATE/} | tr A-Z a-z)/*.h; do
+  [ -e "$h" ] && ntsrc "$h" /tmp/f/$c/$(basename "$h") && PH=1
+done
 DIR=/tmp/drv; rm -rf $DIR; mkdir -p $DIR/obj $DIR/src
 
 macro() { bash srcmacro.sh $SRC/SOURCES $1 | sed -E "s/[\$][(][A-Za-z0-9_]+[)]//g"; }
 NAME=$(macro TARGETNAME | tr -d " " | tr A-Z a-z)
 TYPE=$(macro TARGETTYPE | tr -d " ")
 case $TYPE in DRIVER|EXPORT_DRIVER|MINIPORT) ;; *) echo "$COMP: not a driver ($TYPE)"; exit 1 ;; esac
-DEFS="$NTDEFINES $(macro C_DEFINES)"
-INCS="-I/tmp/f/$c -I/tmp/f/ovr -I$K/inc -I/tmp/f/priv -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+DEFS="$NTDEFINES $(macro C_DEFINES) $(macro NET_C_DEFINES) $(macro NTCPPFLAGS)"
+INCS="-I/tmp/f/$c -I/tmp/f/ovr -I$K/inc -I/tmp/f/priv $(bash incdirs.sh $SRC "$(macro INCLUDES)") -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+srcs=$(bash srclist.sh $COMP $ROOT)
+INCS="$INCS $(bash relinc.sh $INCS $(realpath -m $srcs))"
 
 echo ">> compiling $COMP ($NAME.sys, $TYPE)"
 n=0; fail=0
 arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm
-for f in $(bash srclist.sh $COMP $ROOT) $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
-  b=$(basename "${f%.[Cc]}" | tr A-Z a-z)
-  ntsrc $f $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $INCS && n=$((n+1)) || fail=$((fail+1))
+for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
+  b=$(basename "${f%.*}" | tr A-Z a-z)
+  case $f in
+  *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
+  # a quoted include finds the header beside the source (#line): with port versions of
+  # headers, the farmed ones
+  *) ntsrc $f $DIR/src/$b.c && { [ -z "$PH" ] || sed -i "1s|.*/|#line 1 \"/tmp/f/$c/|" $DIR/src/$b.c; } &&
+     ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $INCS ;;
+  esac && n=$((n+1)) || fail=$((fail+1))
 done
 echo "   $n compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
@@ -65,9 +86,15 @@ set +f
 
 DEF=""
 if [ $TYPE = EXPORT_DRIVER ]; then
+  # the exports: <name>.src preprocessed, or the DLLDEF of the SOURCES as it is
   s=$(ls $SRC | grep -ix "$NAME.src")
-  tr -d "\032\r" < $SRC/$s > $DIR/$NAME.src
-  cl -nologo -EP -D_ARM_ $DIR/$NAME.src > $DIR/$NAME.def 2>/dev/null
+  if [ -n "$s" ]; then
+    tr -d "\032\r" < $SRC/$s > $DIR/$NAME.src
+    cl -nologo -EP -D_ARM_ $DIR/$NAME.src > $DIR/$NAME.def 2>/dev/null
+  else
+    s=$(ls $SRC | grep -ix "$(macro DLLDEF | tr -d " ")")
+    tr -d "\032\r" < $SRC/$s | sed -f deffix.sed > $DIR/$NAME.def
+  fi
   DEF="-def:$DIR/$NAME.def"
 fi
 

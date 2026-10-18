@@ -133,6 +133,21 @@ for a in ATTRIB:attrib CHKDSK:chkdsk COMP:comp CONVERT:convert DISKCOMP:diskcomp
 done
 lib $P SDKTOOLS/PERFMON; exe $P SDKTOOLS/PERFMON perfmon
 
+# networking: Windows Sockets (wsock32, its NetBIOS and TCP/IP helpers, the STREAMS library winstrm),
+# the ICMP echo API and ping, the DHCP client, the LAN Manager services (server, workstation,
+# browser, messenger, alerter, netlogon), the transaction server and the net command
+for c in SOCKREG LIBUEMUL SOCKUTIL; do lib $P NET/SOCKETS/$c; done
+for c in WINSOCK WSHNETBS WINSTRM; do dll $P NET/SOCKETS/$c; done
+X=/work/RASPI/arcfw/net
+dll $X wshtcpip; dll $X icmp; for p in ping ipconfig hostname; do exe $X $p $p; done
+D=NET/SOCKETS/TCPCMD/DHCP
+lib $P $D/LIB; lib $P $D/CLIENT/DHCP; dll $P $D/CLIENT/NEWNT
+for c in SRVSVC/SERVER WKSSVC/SERVER/DAYTONA BROWSER/SERVER MSGSVC/SERVER ALRSVC LOGONSRV/SERVER; do dll $P NET/SVCDLLS/$c; done
+lib $P NET/DOSPRINT; dll $P NET/XACTSRV
+lib $P NET/NETCMD/COMMON; lib $P NET/NETCMD/MAP32
+lib $P NET/NETCMD/NETUSE; exe $P NET/NETCMD/NETUSE net
+lib $P NET/NETCMD/NETCMD; exe $P NET/NETCMD/NETCMD net1; dll $P NET/NETCMD/HELP
+
 # the network user interface: the class libraries of NET UI (strings, collections, BLT, the LAN
 # Manager objects) in the NETUI DLLs, which export what their libraries define (uixport); the
 # security editor (acledit), the LAN Manager network provider (ntlanman) with its sharing dialogs

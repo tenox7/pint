@@ -3,10 +3,12 @@ MINORCOMP=dd
 
 TARGETNAME=bcmusb
 TARGETPATH=\nt\public\sdk\lib
-TARGETTYPE=DRIVER
+TARGETTYPE=EXPORT_DRIVER
 
 
 INCLUDES=..\..\inc
+
+DLLDEF=bcmusb.def
 
 SOURCES=bcmusb.c \
         usbhost.c \

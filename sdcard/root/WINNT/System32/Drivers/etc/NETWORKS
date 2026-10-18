@@ -1,0 +1,4 @@
+# The network names (the TCP/IP network table): the name, the network
+# number and its aliases. # starts a comment.
+
+loopback        127

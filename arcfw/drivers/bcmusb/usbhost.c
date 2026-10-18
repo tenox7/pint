@@ -61,20 +61,25 @@ Abstract:
 #define GRXFSIZ             0x024
 #define GNPTXFSIZ           0x028
 #define GSNPSID             0x040
+#define GHWCFG2             0x048
 #define HPTXFSIZ            0x100
 #define HCFG                0x400
 #define HFIR                0x404
 #define HFNUM               0x408
+#define HAINT               0x414
+#define HAINTMSK            0x418
 #define HPRT0               0x440
 #define HCCHAR              0x500
 #define HCSPLT              0x504
 #define HCINT               0x508
+#define HCINTMSK            0x50C
 #define HCTSIZ              0x510
 #define HCDMA               0x514
 #define PCGCCTL             0xE00
 
 #define GAHBCFG_DMA_EN          0x00000020
 #define GAHBCFG_HBSTLEN_INCR4   0x00000006
+#define GAHBCFG_GLBL_INTR_EN    0x00000001
 #define GUSBCFG_FORCEHOSTMODE   0x20000000
 #define GUSBCFG_ULPI_CLK_SUSP_M 0x00080000
 #define GUSBCFG_ULPI_FS_LS      0x00020000
@@ -87,6 +92,8 @@ Abstract:
 #define GRSTCTL_RXFFLSH         0x00000010
 #define GRSTCTL_CSFTRST         0x00000001
 #define GINTSTS_CURMODE_HOST    0x00000001
+#define GINTSTS_HCHINT          0x02000000
+#define GHWCFG2_CHANNELS_SHIFT  14
 #define HCFG_FSLSPCLKSEL_30_60  0x00000000
 
 #define HPRT0_SPD_SHIFT         17
@@ -139,6 +146,7 @@ Abstract:
 #define PID_SETUP               3
 
 #define EPTYPE_CONTROL          0
+#define EPTYPE_BULK             2
 #define EPTYPE_INTERRUPT        3
 
 //
@@ -150,10 +158,6 @@ Abstract:
 #define XACT_STALL              2
 #define XACT_TOGGLE             3
 #define XACT_ERROR              4
-
-#define XFER_NAK                (-1)
-#define XFER_STALL              (-2)
-#define XFER_ERROR              (-3)
 
 #define CONTROL_TIMEOUT_MS      1000
 #define PERIODIC_TIMEOUT_MS     4
@@ -2002,3 +2006,346 @@ Return Value:
     UsbControl(Host, &Host->Devices[Hid->Device], 0x21, REQUEST_SET_REPORT, 0x200 | Hid->LedId,
                Hid->Interface, Report, Hid->LedLength + Offset / 8);
 }
+
+#ifndef USB_FIRMWARE
+
+//
+// The function drivers of the devices the host leaves unconfigured: control
+// transfers on channel 0, and pipes, each a bulk endpoint on a channel of its
+// own that interrupts when it halts. The core repeats a transaction the device
+// does not acknowledge, so an IN pipe waits for data without the processor.
+//
+
+#define CHANNEL(Offset, Channel) ((Offset) + (Channel) * 0x20)
+
+LONG
+UsbDeviceControl(
+    IN PUSB_HOST Host,
+    IN ULONG Index,
+    IN ULONG RequestType,
+    IN ULONG Request,
+    IN ULONG Value,
+    IN ULONG Interface,
+    IN OUT PVOID Data,
+    IN ULONG Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs a control transfer to a device.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Index - Supplies the index of the device.
+
+    RequestType, Request, Value, Interface, Length - Supply the setup packet.
+
+    Data - Supplies the data of the transfer, or receives it.
+
+Return Value:
+
+    The length of the data, or a negative XFER_ status.
+
+--*/
+
+{
+    if (Index >= USB_MAXIMUM_DEVICES || !Host->Devices[Index].Present) {
+        return XFER_ERROR;
+    }
+
+    return UsbControl(Host, &Host->Devices[Index], RequestType, Request, Value, Interface, Data, Length);
+}
+
+BOOLEAN
+UsbOpenPipe(
+    IN PUSB_HOST Host,
+    IN ULONG Index,
+    IN ULONG Endpoint,
+    IN BOOLEAN In,
+    IN ULONG Maximum,
+    OUT PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gives a bulk endpoint of a device a free channel and lets
+    the channel interrupt when it halts. A device reached through a
+    transaction translator has no pipes.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Index - Supplies the index of the device.
+
+    Endpoint - Supplies the endpoint number.
+
+    In - Supplies TRUE for an IN endpoint.
+
+    Maximum - Supplies the maximum packet size of the endpoint.
+
+    Pipe - Receives the pipe.
+
+Return Value:
+
+    TRUE if the pipe was opened, else FALSE.
+
+--*/
+
+{
+    PUSB_DEVICE Device = &Host->Devices[Index];
+    ULONG Channels = ((READ_REG(Host, GHWCFG2) >> GHWCFG2_CHANNELS_SHIFT) & 0xF) + 1;
+    ULONG Channel;
+
+    if (Index >= USB_MAXIMUM_DEVICES || !Device->Present || Device->TtAddress != 0 ||
+        Maximum == 0 || Maximum > 0x7FF) {
+        return FALSE;
+    }
+
+    for (Channel = 1; Channel < Channels && (Host->Channels & (1 << Channel)); Channel += 1) {
+    }
+
+    if (Channel >= Channels) {
+        return FALSE;
+    }
+
+    Host->Channels |= 1 << Channel;
+    RtlZeroMemory(Pipe, sizeof(USB_PIPE));
+    Pipe->Device = (UCHAR)Index;
+    Pipe->Channel = (UCHAR)Channel;
+    Pipe->Endpoint = (UCHAR)Endpoint;
+    Pipe->In = In;
+    Pipe->Maximum = (USHORT)Maximum;
+    Pipe->Pid = PID_DATA0;
+    Pipe->Character = ((ULONG)Device->Address << HCCHAR_DEVADDR_SHIFT) | (Endpoint << HCCHAR_EPNUM_SHIFT) |
+                      (EPTYPE_BULK << HCCHAR_EPTYPE_SHIFT) | (In ? HCCHAR_EPDIR_IN : 0) | Maximum |
+                      HCCHAR_MULTICNT_ONE;
+    WRITE_REG(Host, CHANNEL(HCINTMSK, Channel), HCINT_CHHLTD);
+    WRITE_REG(Host, CHANNEL(HCINT, Channel), HCINT_ALL);
+    WRITE_REG(Host, HAINTMSK, READ_REG(Host, HAINTMSK) | (1 << Channel));
+    WRITE_REG(Host, GINTMSK, READ_REG(Host, GINTMSK) | GINTSTS_HCHINT);
+    WRITE_REG(Host, GAHBCFG, READ_REG(Host, GAHBCFG) | GAHBCFG_GLBL_INTR_EN);
+    return TRUE;
+}
+
+VOID
+UsbClosePipe(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine halts the channel of a pipe and frees it.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Pipe - Supplies the pipe.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    ULONG Channel = Pipe->Channel;
+    ULONG Start = UsbClock();
+
+    WRITE_REG(Host, HAINTMSK, READ_REG(Host, HAINTMSK) & ~(1 << Channel));
+    if (READ_REG(Host, CHANNEL(HCCHAR, Channel)) & HCCHAR_CHENA) {
+        WRITE_REG(Host, CHANNEL(HCCHAR, Channel), READ_REG(Host, CHANNEL(HCCHAR, Channel)) | HCCHAR_CHDIS);
+        while ((READ_REG(Host, CHANNEL(HCINT, Channel)) & HCINT_CHHLTD) == 0 &&
+               UsbClock() - Start < 10 * Host->ClockRate) {
+        }
+    }
+
+    WRITE_REG(Host, CHANNEL(HCINTMSK, Channel), 0);
+    WRITE_REG(Host, CHANNEL(HCINT, Channel), HCINT_ALL);
+    Host->Channels &= ~(1 << Channel);
+}
+
+VOID
+UsbStartPipe(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe,
+    IN ULONG Address,
+    IN ULONG Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine starts a transfer on a pipe, through a buffer the core
+    reaches with its bus address. An IN transfer is of whole packets, so the
+    buffer must hold the length rounded up to the packet size; it ends at a
+    short packet. An OUT transfer of no length sends a zero length packet.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Pipe - Supplies the pipe.
+
+    Address - Supplies the bus address of the buffer, aligned to a word.
+
+    Length - Supplies the length of the transfer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    ULONG Channel = Pipe->Channel;
+    ULONG Packets = Length == 0 ? 1 : (Length + Pipe->Maximum - 1) / Pipe->Maximum;
+
+    Pipe->Packets = Packets;
+    Pipe->Length = Pipe->In ? Packets * Pipe->Maximum : Length;
+    WRITE_REG(Host, CHANNEL(HCSPLT, Channel), 0);
+    WRITE_REG(Host, CHANNEL(HCTSIZ, Channel),
+              ((ULONG)Pipe->Pid << HCTSIZ_PID_SHIFT) | (Packets << HCTSIZ_PKTCNT_SHIFT) | Pipe->Length);
+    WRITE_REG(Host, CHANNEL(HCDMA, Channel), Address);
+    WRITE_REG(Host, CHANNEL(HCINT, Channel), HCINT_ALL);
+    MEMORY_BARRIER();
+    WRITE_REG(Host, CHANNEL(HCCHAR, Channel), Pipe->Character | HCCHAR_CHENA);
+}
+
+VOID
+UsbPipeInterrupt(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe,
+    IN BOOLEAN Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine lets the channel of a pipe interrupt when it halts, or
+    stops it; a halt while it may not interrupt does once it may.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Pipe - Supplies the pipe.
+
+    Enable - Supplies TRUE to let the channel interrupt.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    WRITE_REG(Host, CHANNEL(HCINTMSK, Pipe->Channel), Enable ? HCINT_CHHLTD : 0);
+}
+
+BOOLEAN
+UsbPipeHalted(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine, of the interrupt service routine of the function driver,
+    sees if the channel of a pipe halted: it keeps the interrupts and the
+    transfer size of the halt and acknowledges them.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Pipe - Supplies the pipe.
+
+Return Value:
+
+    TRUE if the channel halted, else FALSE.
+
+--*/
+
+{
+    ULONG Channel = Pipe->Channel;
+    ULONG Interrupt;
+
+    if ((READ_REG(Host, HAINT) & (1 << Channel)) == 0) {
+        return FALSE;
+    }
+
+    Interrupt = READ_REG(Host, CHANNEL(HCINT, Channel));
+    if ((Interrupt & HCINT_CHHLTD) == 0) {
+        return FALSE;
+    }
+
+    Pipe->Interrupt = Interrupt;
+    Pipe->Transfer = READ_REG(Host, CHANNEL(HCTSIZ, Channel));
+    WRITE_REG(Host, CHANNEL(HCINT, Channel), HCINT_ALL);
+    MEMORY_BARRIER();
+    return TRUE;
+}
+
+LONG
+UsbPipeResult(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gives the result of the transfer a pipe halted at, and
+    keeps the toggle of the next. A NAK ends a transfer early in some cores:
+    the length of the whole packets moved is kept (Moved), for the caller to
+    start the rest. A stalled endpoint starts again at DATA0 once the caller
+    cleared its halt.
+
+Arguments:
+
+    Host - Supplies the host.
+
+    Pipe - Supplies the pipe.
+
+Return Value:
+
+    The length moved, or XFER_NAK, XFER_STALL or XFER_ERROR.
+
+--*/
+
+{
+    ULONG Interrupt = Pipe->Interrupt;
+    ULONG Transfer = Pipe->Transfer;
+    ULONG Left = (Transfer & HCTSIZ_PKTCNT_MASK) >> HCTSIZ_PKTCNT_SHIFT;
+
+    if (Interrupt & HCINT_STALL) {
+        Pipe->Pid = PID_DATA0;
+        return XFER_STALL;
+    }
+
+    Pipe->Pid = (UCHAR)((Transfer >> HCTSIZ_PID_SHIFT) & 3);
+    if (Interrupt & HCINT_XFERCOMPL) {
+        return (LONG)(Pipe->In ? Pipe->Length - (Transfer & HCTSIZ_XFERSIZE_MASK) : Pipe->Length);
+    }
+
+    Pipe->Moved = (Pipe->Packets - Left) * Pipe->Maximum;
+    return UsbStatus(Interrupt) == XACT_NAK ? XFER_NAK : XFER_ERROR;
+}
+
+#endif // USB_FIRMWARE

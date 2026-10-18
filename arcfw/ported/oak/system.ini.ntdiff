@@ -22,7 +22,15 @@
 +#endif // _HIVE_RASPI_
 =1 173 17
 +    defined(MITSUMI) || defined(BCMEMMC)
-=1 191 1018
+=1 191 821
++#if defined(NETWORK) || defined(RASPI)
+=1 1013 3
++#if defined(RASPI)
++            ServiceProvider
++                Order
++                    ExcludedProviders = REG_MULTI_SZ ""
++                    ProviderOrder = REG_MULTI_SZ "Tcpip"
+=1 1014 195
 +#if defined(RASPI)
 +                //
 +                // The Raspberry Pi 2 has no printing system: the spooler is disabled.
@@ -32,14 +40,308 @@
 =1 1210 39
 +#if defined(RASPI)
 +            //
-+            // The Raspberry Pi 2 has no network yet: the workstation service is
-+            // disabled, and its parameters hold the account domain of a developer
-+            // install (registry.ini) for the LSA.
-=1 1252 3
-=1 1346 2
-=1 1257 3
++            // The network of the Raspberry Pi, as the network setup of NT 3.5 (the
++            // network control panel and the INFs of its options) configures it: the
++            // Ethernet controller of the board (the Bcmeth miniport, adapter Bcmeth1),
++            // TCP/IP with DHCP and NetBIOS over TCP/IP, the NetBIOS interface, Windows
++            // Sockets, and the workstation, server, browser, messenger, alerter and net
++            // logon services. The linkage is the one the binding of the control panel
++            // computes, without its Route values, which only the control panel reads.
++            // The workgroup and the account domain of a developer install come from
++            // registry.ini.
++            //
++
++            Bcmeth
+=1 2802 3
++                Group = NDIS
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\bcmeth.sys
++                DisplayName = REG_SZ Raspberry Pi Ethernet Adapter Driver
++                Parameters
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Disabled
++
++            Bcmeth1
+=1 3034 3
++                Parameters
++                    MediaType = REG_DWORD 1
++                    BusType = REG_DWORD 0
++                    BusNumber = REG_DWORD 0
++                    Tcpip
++                        EnableDHCP = REG_DWORD 1
++                        UseZeroBroadcast = REG_DWORD 0
++                        LLInterface = REG_SZ
++                        IPAddress = REG_MULTI_SZ "0.0.0.0"
++                        SubnetMask = REG_MULTI_SZ "0.0.0.0"
++                        DefaultGateway = REG_MULTI_SZ ""
++                Linkage
++                    Disabled
++
++            Tcpip
+=1 2802 3
+=1 3294 1
++                DisplayName = REG_SZ TCP/IP Service
+=1 3481 1
++                Parameters
++                    DataBasePath = REG_EXPAND_SZ %SystemRoot%\System32\drivers\etc
++                    Domain = REG_SZ
++                    Hostname = REG_SZ raspi
++                    NameServer = REG_SZ
++                    ForwardBroadcasts = REG_DWORD 0
++                    IPEnableRouter = REG_DWORD 0
++                    SearchList = REG_SZ
++                    Winsock
++                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\System32\wshtcpip.dll
++                        MaxSockAddrLength = REG_DWORD 16
++                        MinSockAddrLength = REG_DWORD 16
++                        Mapping = REG_BINARY 128 \
++                            0x0000000A 0x00000003 \
++                            0x00000002 0x00000001 0x00000006 \
++                            0x00000002 0x00000001 0x00000000 \
++                            0x00000002 0x00000000 0x00000006 \
++                            0x00000000 0x00000000 0x00000006 \
++                            0x00000000 0x00000001 0x00000006 \
++                            0x00000002 0x00000002 0x00000011 \
++                            0x00000002 0x00000002 0x00000000 \
++                            0x00000002 0x00000000 0x00000011 \
++                            0x00000000 0x00000000 0x00000011 \
++                            0x00000000 0x00000002 0x00000011
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\Tcpip\Bcmeth1"
++                    Disabled
++                ServiceProvider
++                    Class = REG_DWORD 8
++                    DnsPriority = REG_DWORD 2000
++                    HostsPriority = REG_DWORD 500
++                    LocalPriority = REG_DWORD 499
++                    NetbtPriority = REG_DWORD 2001
++                    ProviderPath = REG_EXPAND_SZ %SystemRoot%\System32\wsock32.dll
++                    Name = REG_SZ TCP/IP
++
++            NetBT
+=1 2802 3
++                Group = TDI
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbt.sys
++                DisplayName = REG_SZ WINS Client(TCP/IP)
++                DependOnService = REG_MULTI_SZ "Tcpip"
+=1 3481 1
++                Parameters
++                    NbProvider = REG_SZ _tcp
++                    NameServerPort = REG_DWORD 137
++                    EnableLMHOSTS = REG_DWORD 1
++                    EnableProxy = REG_DWORD 0
++                    EnableDNS = REG_DWORD 0
++                    CacheTimeout = REG_DWORD 600000
++                    BcastNameQueryCount = REG_DWORD 3
++                    BcastQueryTimeout = REG_DWORD 750
++                    NameSrvQueryCount = REG_DWORD 3
++                    NameSrvQueryTimeout = REG_DWORD 1500
++                    Size/Small/Medium/Large = REG_DWORD 1
++                    SessionKeepAlive = REG_DWORD 3600000
++                    ScopeID = REG_SZ
++                    // \Device\, as a string a line can end with (RCPP joins the line after
++                    // a final backslash): TCP/IP has \Device\Tcp and \Device\Udp
++                    TransportBindName = REG_MULTI_SZ "\Device\"
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    OtherDependencies = REG_MULTI_SZ "Tcpip"
++                    Disabled
++                Adapters
++                    Bcmeth1
++
++            DHCP
+=1 1254 3
++                Group = TDI
+=1 3300 1
+=1 1217 1
++                DisplayName = REG_SZ DHCP Client
++                DependOnService = REG_MULTI_SZ "Tcpip" "Afd" "NetBT"
++                Parameters
++                    Options
++                        3
++                            RegLocation = REG_SZ System\CurrentControlSet\Services\?\Parameters\Tcpip\DhcpDefaultGateway
++                            KeyType = REG_DWORD 7
++                        6
++                            RegLocation = REG_SZ System\CurrentControlSet\Services\Tcpip\Parameters\DhcpNameServer
++                            KeyType = REG_DWORD 1
++                        44
++                            RegLocation = REG_SZ System\CurrentControlSet\Services\NetBT\Adapters\?\DhcpNameServer
++                            KeyType = REG_DWORD 1
++                        46
++                            RegLocation = REG_SZ System\CurrentControlSet\Services\NetBT\Parameters\DhcpNodeType
++                            KeyType = REG_DWORD 4
++                        47
++                            RegLocation = REG_SZ System\CurrentControlSet\Services\NetBT\Parameters\DhcpScopeID
++                            KeyType = REG_DWORD 1
++                Linkage
++                    Disabled
+=1 3559 4
+=1 1215 1
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\afd.sys
++                DisplayName = REG_SZ AFD Networking Support Environment
++                Parameters
++                Linkage
++                    Disabled
++
++            Winsock
+=1 3034 3
++                Parameters
++                    Transports = REG_MULTI_SZ "Tcpip" "NetBIOS"
++                Linkage
++                    Disabled
++
++            NetBIOS
+=1 3523 2
+=1 1215 1
++                Group = NetBIOSGroup
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbios.sys
++                DisplayName = REG_SZ NetBIOS Interface
+=1 3514 1
++                Parameters
++                    Winsock
++                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\System32\wshnetbs.dll
++                        MaxSockAddrLength = REG_DWORD 20
++                        MinSockAddrLength = REG_DWORD 20
++                        Mapping = REG_BINARY 32 \
++                            0x00000002 0x00000003 \
++                            0x00000011 0x00000005 0x00000000 \
++                            0x00000011 0x00000002 0x00000000
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\Netbios\NetBT_Bcmeth1"
++                    LanaMap = REG_BINARY 2 0x00000001
++                    Disabled
+=1 3547 5
++                Parameters
++                    LanaNum1 = REG_DWORD 0
++                    EnumExport1 = REG_DWORD 1
++                    MaxLana = REG_DWORD 0
++                Linkage
++                    Disabled
++
+=1 1253 4
++                Group = NetworkProvider
+=1 1257 2
++                DisplayName = REG_SZ Workstation
+=1 1260 1
+=1 3514 1
++                Parameters
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\LanmanWorkstation\NetBT_Bcmeth1"
++                    OtherDependencies = REG_MULTI_SZ "Mup"
++                    Disabled
++                NetworkProvider
++                    Devicename = REG_SZ \device\LanmanRedirector
+=1 1264 1
++                    Name = REG_SZ Microsoft Windows Network
+=1 3521 4
+=1 1215 1
++                Group = Network
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\rdr.sys
++                DisplayName = REG_SZ Rdr
++                Parameters
++                Linkage
++                    Disabled
+=1 3515 3
+=1 1269 2
++                Group = Network
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\mup.sys
++                DisplayName = REG_SZ Mup
++                Parameters
++                Linkage
++                    Disabled
+=1 1297 3
+=1 1255 4
++                DisplayName = REG_SZ Computer Browser
+=1 1303 1
++                Parameters
++                    MaintainServerList = REG_SZ Auto
++                    IsDomainMaster = REG_SZ FALSE
++                Linkage
++                    Disabled
++
++            Messenger
+=1 1254 5
++                DisplayName = REG_SZ Messenger
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation" "NetBIOS"
++                Parameters
++                Linkage
++                    Disabled
+=1 1334 6
+=1 1217 1
++                DisplayName = REG_SZ Alerter
+=1 1290 1
++                Parameters
++                    AlertNames = REG_MULTI_SZ ""
++                Linkage
++                    Disabled
+=1 1280 3
+=1 1269 2
++                Group = RemoteValidation
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\system32\lsass.exe
+=1 1217 1
++                DisplayName = REG_SZ Net Logon
+=1 1290 1
++                Parameters
++                    Update = REG_SZ no
+=1 1294 1
++                    DBFlag = REG_SZ 0
++                Linkage
++                    Disabled
+=1 1266 3
+=1 1255 4
++                DisplayName = REG_SZ Server
+=1 3514 1
++                Parameters
++                    NullSessionPipes = REG_MULTI_SZ "COMNAP" "COMNODE" "SQL\QUERY" "SPOOLSS"
++                    NullSessionShares = REG_MULTI_SZ "COMCFG" "DFS$"
++                    Size = REG_DWORD 1
++                    Lmannounce = REG_DWORD 0
+=1 1275 2
++                    Security
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\LanmanServer\NetBT_Bcmeth1"
++                    Disabled
+=1 3508 3
+=1 1269 2
++                Group = Network
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\srv.sys
++                DisplayName = REG_SZ Srv
++                Parameters
++                Linkage
++                    Disabled
 +#endif // defined(RASPI)
-=1 1248 769
+=1 1248 241
++#if defined(RASPI)
+=1 1490 6
++                  Bcmeth
+=1 1503 2
+=1 1496 3
++                  Browser
+=1 1503 2
++                  DHCP
++                    EventMessageFile = REG_EXPAND_SZ %SystemRoot%\System32\dhcpcsvc.dll
+=1 1526 1
+=1 1457 1
+=1 1527 3
++                  NetBT
+=1 1537 5
+=1 1523 2
+=1 1526 1
+=1 1544 4
+=1 1517 3
+=1 1551 3
+=1 1557 3
+=1 1520 3
++#endif // defined(RASPI)
+=1 1489 10
+=1 1502 28
+=1 1533 484
 +#if defined(BCMEMMC)
 +            Bcmemmc
 =1 2527 2
@@ -90,4 +392,5 @@
 +#if !defined(RASPI)
 =1 3193 40
 +#endif // !defined(RASPI)
-=1 3233 368
+=1 3233 243
+=1 3486 115

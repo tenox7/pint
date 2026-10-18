@@ -7,4 +7,5 @@ bin\windows-x86_64\qemu-system-arm.exe ^
  -serial mon:stdio ^
  -device ds1338,bus=i2c-bus.1,address=0x68 -rtc base=localtime ^
  -device usb-mouse -device usb-kbd ^
+ -netdev user,id=n0 -device usb-net,netdev=n0 ^
  %*

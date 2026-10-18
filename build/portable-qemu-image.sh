@@ -9,13 +9,14 @@
 # Usage:  [IMG=disk.img] [FORCE=1] build/portable-qemu-image.sh
 set -euo pipefail
 V=${QEMU_VERSION:-11.1.1}
+SV=4.9.1
 
 configure_qemu() {
     mkdir -p /work
     tar -C /work -xJf /dl/qemu-$V.tar.xz
     mkdir /work/qemu-$V/b && cd /work/qemu-$V/b
     ../configure --target-list=arm-softmmu --without-default-features --enable-system \
-        --enable-tcg --enable-gtk --enable-pixman --enable-vnc --enable-fdt=internal \
+        --enable-tcg --enable-slirp --enable-gtk --enable-pixman --enable-vnc --enable-fdt=internal \
         --enable-stack-protector --disable-docs "$@"
 }
 
@@ -23,22 +24,26 @@ linux() {
     dnf -y -q install dnf-plugins-core
     dnf config-manager --set-enabled crb
     dnf -y -q install gcc-toolset-13-gcc gcc-toolset-13-binutils make ninja-build python3.12 \
-        glib2-devel pixman-devel gtk3-devel zlib-devel diffutils findutils bzip2 tar xz git
+        glib2-devel pixman-devel gtk3-devel libslirp-devel zlib-devel diffutils findutils bzip2 tar xz git
     set +u; . /opt/rh/gcc-toolset-13/enable; set -u
     configure_qemu --python=/usr/bin/python3.12 --enable-malloc-trim --enable-membarrier
     ninja qemu-system-arm
     local o=/out/linux-$(uname -m)
-    rm -rf $o && mkdir -p $o /out/share/qemu/keymaps
+    rm -rf $o && mkdir -p $o/lib /out/share/qemu/keymaps
     install -m 755 -s qemu-system-arm $o/
+    cp -L /usr/lib64/libslirp.so.0 $o/lib/
     readelf -d $o/qemu-system-arm | grep NEEDED
     find ../pc-bios/keymaps -type f ! -name meson.build -exec cp {} /out/share/qemu/keymaps/ \;
     cp ../COPYING ../COPYING.LIB /out/
 }
 
 windows() {
-    dnf -y -q install gcc mingw64-gcc mingw64-glib2 mingw64-pixman mingw64-gtk3 \
+    dnf -y -q install gcc mingw64-gcc mingw64-glib2 mingw64-pixman mingw64-gtk3 meson \
         mingw64-adwaita-icon-theme mingw64-hicolor-icon-theme mingw64-pkg-config make ninja-build \
         python3 bzip2 diffutils findutils tar xz git
+    tar -C /tmp -xzf /dl/libslirp-v$SV.tar.gz
+    (cd /tmp/libslirp-v$SV && meson setup b --cross-file /usr/share/mingw/toolchain-mingw64.meson \
+        --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw && ninja -C b install)
     configure_qemu --cross-prefix=x86_64-w64-mingw32-
     ninja qemu-system-arm.exe
     local o=/out/windows-x86_64 m=/usr/x86_64-w64-mingw32/sys-root/mingw f d todo next
@@ -78,6 +83,10 @@ if [[ ! -s $P/dl/qemu-$V.tar.xz ]]; then
     echo ">> fetching qemu-$V.tar.xz"
     curl -fL# -o $P/dl/qemu-$V.tar.xz.part https://download.qemu.org/qemu-$V.tar.xz
     mv $P/dl/qemu-$V.tar.xz.part $P/dl/qemu-$V.tar.xz
+fi
+if [[ ! -s $P/dl/libslirp-v$SV.tar.gz ]]; then
+    echo ">> fetching libslirp-v$SV.tar.gz"
+    curl -fL# -o $P/dl/libslirp-v$SV.tar.gz https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v$SV/libslirp-v$SV.tar.gz
 fi
 
 build() {  # NAME DOCKER_PLATFORM IMAGE MODE

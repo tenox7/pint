@@ -1,0 +1,14 @@
+MAJORCOMP=sockets
+MINORCOMP=wshtcpip
+
+TARGETNAME=wshtcpip
+TARGETPATH=$(BASEDIR)\public\sdk\lib
+TARGETTYPE=DYNLINK
+
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib \
+           $(BASEDIR)\public\sdk\lib\*\kernel32.lib
+
+INCLUDES=$(BASEDIR)\private\inc
+
+SOURCES=wshtcpip.c \
+        wshtcpip.rc

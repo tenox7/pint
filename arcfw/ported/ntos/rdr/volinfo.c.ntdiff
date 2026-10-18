@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/NTOS/RDR/VOLINFO.C
+=1 1 1339
++    return FALSE;
+=1 1340 497

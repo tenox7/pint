@@ -36,7 +36,7 @@ Environment:
 #include "ntddkbd.h"
 #include "ntddmou.h"
 #include "kbdmou.h"
-#include "usbhost.h"
+#include "bcmusb.h"
 
 //
 // VideoCore mailbox registers, the property channel and the power of the USB
@@ -150,7 +150,20 @@ typedef struct _DEVICE_EXTENSION {
 
     MOUSE_ATTRIBUTES MouseAttributes;
     HANDLE Thread;
+
+    //
+    // The lock of channel 0 and the devices, which the thread and the
+    // function drivers take.
+    //
+
+    KMUTEX HostLock;
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
+
+//
+// The host of the function drivers, once it is up.
+//
+
+static PDEVICE_EXTENSION FunctionHost;
 
 static const INDICATOR_LIST IndicatorList[] = {
     {0x3A, KEYBOARD_CAPS_LOCK_ON},
@@ -641,6 +654,7 @@ UsbPollThread(
 
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
     for (;;) {
+        KeWaitForSingleObject(&Extension->HostLock, Executive, KernelMode, FALSE, NULL);
         Leds = UsbIndicators(Extension, &Changed);
         for (Index = 0; Index < USB_MAXIMUM_HIDS; Index += 1) {
             Hid = &Host->Hids[Index];
@@ -677,6 +691,7 @@ UsbPollThread(
             Scan = UsbClock();
         }
 
+        KeReleaseMutex(&Extension->HostLock, FALSE);
         UsbSleep(POLL_INTERVAL_MS);
     }
 }
@@ -1059,12 +1074,14 @@ Return Value:
 
     KeQueryPerformanceCounter(&Frequency);
     Extension->Host.ClockRate = Frequency.LowPart / 1000;
+    KeInitializeMutex(&Extension->HostLock, 0);
     UsbPowerOn(Extension);
     if (!UsbHostInitialize(&Extension->Host)) {
         IoDeleteDevice(DeviceObject);
         return STATUS_NO_SUCH_DEVICE;
     }
 
+    FunctionHost = Extension;
     DriverObject->MajorFunction[IRP_MJ_CREATE] = UsbOpenClose;
     DriverObject->MajorFunction[IRP_MJ_CLOSE] = UsbOpenClose;
     DriverObject->MajorFunction[IRP_MJ_INTERNAL_DEVICE_CONTROL] = UsbInternalDeviceControl;
@@ -1082,4 +1099,297 @@ Return Value:
 
     return PsCreateSystemThread(&Extension->Thread, THREAD_ALL_ACCESS, NULL, NULL, NULL,
                                 UsbPollThread, Extension);
+}
+
+//
+// The interface of the function drivers (bcmusb.h).
+//
+
+BOOLEAN
+UsbGetFunction(
+    IN ULONG Index,
+    OUT PUSB_FUNCTION Function
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gives a function: a device the host found and left
+    unconfigured, one that is not a hub and has no keyboards or pointers.
+
+Arguments:
+
+    Index - Supplies the number of the function, from 0.
+
+    Function - Receives the function.
+
+Return Value:
+
+    TRUE if there is such a function, else FALSE.
+
+--*/
+
+{
+    PUSB_DEVICE Device;
+    ULONG Slot;
+    BOOLEAN Found = FALSE;
+
+    if (FunctionHost == NULL) {
+        return FALSE;
+    }
+
+    KeWaitForSingleObject(&FunctionHost->HostLock, Executive, KernelMode, FALSE, NULL);
+    for (Slot = 0; Slot < USB_MAXIMUM_DEVICES; Slot += 1) {
+        Device = &FunctionHost->Host.Devices[Slot];
+        if (!Device->Present || Device->Stage != USB_STAGE_READY || Device->Ports != 0 || Device->Kinds != 0) {
+            continue;
+        }
+
+        if (Index != 0) {
+            Index -= 1;
+            continue;
+        }
+
+        Function->Device = Slot;
+        Function->Vendor = Device->Vendor;
+        Function->Product = Device->Product;
+        Function->Class = Device->Class;
+        Function->Speed = Device->Speed;
+        Found = TRUE;
+        break;
+    }
+
+    KeReleaseMutex(&FunctionHost->HostLock, FALSE);
+    return Found;
+}
+
+LONG
+UsbFunctionControl(
+    IN ULONG Device,
+    IN ULONG RequestType,
+    IN ULONG Request,
+    IN ULONG Value,
+    IN ULONG Interface,
+    IN OUT PVOID Data,
+    IN ULONG Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs a control transfer to a function.
+
+Arguments:
+
+    Device - Supplies the device of the function.
+
+    RequestType, Request, Value, Interface, Length - Supply the setup packet.
+
+    Data - Supplies the data of the transfer, or receives it.
+
+Return Value:
+
+    The length of the data, or a negative XFER_ status.
+
+--*/
+
+{
+    LONG Status;
+
+    if (FunctionHost == NULL) {
+        return XFER_ERROR;
+    }
+
+    KeWaitForSingleObject(&FunctionHost->HostLock, Executive, KernelMode, FALSE, NULL);
+    Status = UsbDeviceControl(&FunctionHost->Host, Device, RequestType, Request, Value, Interface,
+                              Data, Length);
+    KeReleaseMutex(&FunctionHost->HostLock, FALSE);
+    return Status;
+}
+
+BOOLEAN
+UsbFunctionOpenPipe(
+    IN ULONG Device,
+    IN ULONG Endpoint,
+    IN BOOLEAN In,
+    IN ULONG Maximum,
+    OUT PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine opens a pipe to a bulk endpoint of a function.
+
+Arguments:
+
+    Device - Supplies the device of the function.
+
+    Endpoint - Supplies the endpoint number.
+
+    In - Supplies TRUE for an IN endpoint.
+
+    Maximum - Supplies the maximum packet size of the endpoint.
+
+    Pipe - Receives the pipe.
+
+Return Value:
+
+    TRUE if the pipe was opened, else FALSE.
+
+--*/
+
+{
+    BOOLEAN Opened;
+
+    if (FunctionHost == NULL) {
+        return FALSE;
+    }
+
+    KeWaitForSingleObject(&FunctionHost->HostLock, Executive, KernelMode, FALSE, NULL);
+    Opened = UsbOpenPipe(&FunctionHost->Host, Device, Endpoint, In, Maximum, Pipe);
+    KeReleaseMutex(&FunctionHost->HostLock, FALSE);
+    return Opened;
+}
+
+VOID
+UsbFunctionClosePipe(
+    IN PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine closes a pipe.
+
+Arguments:
+
+    Pipe - Supplies the pipe.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    KeWaitForSingleObject(&FunctionHost->HostLock, Executive, KernelMode, FALSE, NULL);
+    UsbClosePipe(&FunctionHost->Host, Pipe);
+    KeReleaseMutex(&FunctionHost->HostLock, FALSE);
+}
+
+VOID
+UsbFunctionStartPipe(
+    IN PUSB_PIPE Pipe,
+    IN ULONG Address,
+    IN ULONG Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine starts a transfer on a pipe (UsbStartPipe).
+
+Arguments:
+
+    Pipe - Supplies the pipe.
+
+    Address - Supplies the bus address of the buffer.
+
+    Length - Supplies the length of the transfer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    UsbStartPipe(&FunctionHost->Host, Pipe, Address, Length);
+}
+
+VOID
+UsbFunctionPipeInterrupt(
+    IN PUSB_PIPE Pipe,
+    IN BOOLEAN Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine lets the channel of a pipe interrupt, or stops it
+    (UsbPipeInterrupt).
+
+Arguments:
+
+    Pipe - Supplies the pipe.
+
+    Enable - Supplies TRUE to let the channel interrupt.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+    UsbPipeInterrupt(&FunctionHost->Host, Pipe, Enable);
+}
+
+BOOLEAN
+UsbFunctionPipeHalted(
+    IN PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine, of the interrupt service routine of a function driver,
+    sees if the channel of a pipe halted (UsbPipeHalted).
+
+Arguments:
+
+    Pipe - Supplies the pipe.
+
+Return Value:
+
+    TRUE if the channel halted, else FALSE.
+
+--*/
+
+{
+    return UsbPipeHalted(&FunctionHost->Host, Pipe);
+}
+
+LONG
+UsbFunctionPipeResult(
+    IN PUSB_PIPE Pipe
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gives the result of the transfer a pipe halted at
+    (UsbPipeResult).
+
+Arguments:
+
+    Pipe - Supplies the pipe.
+
+Return Value:
+
+    The length moved, or a negative XFER_ status.
+
+--*/
+
+{
+    return UsbPipeResult(&FunctionHost->Host, Pipe);
 }

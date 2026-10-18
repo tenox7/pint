@@ -55,6 +55,14 @@ Abstract:
 #define USB_STAGE_RESET         7
 
 //
+// The results of a transfer that failed, else its length.
+//
+
+#define XFER_NAK                (-1)
+#define XFER_STALL              (-2)
+#define XFER_ERROR              (-3)
+
+//
 // A device behind the root port: its address is its index plus one. A full
 // or low speed device behind a high speed hub is reached through the
 // transaction translator of that hub's port.
@@ -171,10 +179,32 @@ typedef struct _USB_HOST {
     ULONG ResetFrameInterval;
     UCHAR ResetFrames;
     UCHAR Frames;
+    UCHAR Channels;
     USB_DEVICE Devices[USB_MAXIMUM_DEVICES];
     USB_HID Hids[USB_MAXIMUM_HIDS];
     UCHAR Descriptor[USB_DESCRIPTOR_SIZE];
 } USB_HOST, *PUSB_HOST;
+
+//
+// A pipe: a bulk endpoint of a device on a channel of the core of its own,
+// with the toggle of its next transfer, the packets and length of the one
+// started, and the interrupts and transfer size it halted with.
+//
+
+typedef struct _USB_PIPE {
+    UCHAR Device;
+    UCHAR Channel;
+    UCHAR Endpoint;
+    UCHAR Pid;
+    BOOLEAN In;
+    USHORT Maximum;
+    ULONG Character;
+    ULONG Packets;
+    ULONG Length;
+    ULONG Moved;
+    ULONG Interrupt;
+    ULONG Transfer;
+} USB_PIPE, *PUSB_PIPE;
 
 //
 // The routines of the user of the host.
@@ -237,6 +267,65 @@ UsbHidSetIndicators(
     IN PUSB_HOST Host,
     IN PUSB_HID Hid,
     IN ULONG Leds
+    );
+
+//
+// The function drivers of the devices the host leaves unconfigured.
+//
+
+LONG
+UsbDeviceControl(
+    IN PUSB_HOST Host,
+    IN ULONG Index,
+    IN ULONG RequestType,
+    IN ULONG Request,
+    IN ULONG Value,
+    IN ULONG Interface,
+    IN OUT PVOID Data,
+    IN ULONG Length
+    );
+
+BOOLEAN
+UsbOpenPipe(
+    IN PUSB_HOST Host,
+    IN ULONG Index,
+    IN ULONG Endpoint,
+    IN BOOLEAN In,
+    IN ULONG Maximum,
+    OUT PUSB_PIPE Pipe
+    );
+
+VOID
+UsbClosePipe(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe
+    );
+
+VOID
+UsbStartPipe(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe,
+    IN ULONG Address,
+    IN ULONG Length
+    );
+
+VOID
+UsbPipeInterrupt(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe,
+    IN BOOLEAN Enable
+    );
+
+BOOLEAN
+UsbPipeHalted(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe
+    );
+
+LONG
+UsbPipeResult(
+    IN PUSB_HOST Host,
+    IN PUSB_PIPE Pipe
     );
 
 #endif // _USBHOST_

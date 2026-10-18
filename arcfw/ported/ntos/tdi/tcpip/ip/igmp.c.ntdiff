@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/NTOS/TDI/TCPIP/IP/IGMP.C
+=1 1 212
++	return IP_SUCCESS;
+=1 213 396

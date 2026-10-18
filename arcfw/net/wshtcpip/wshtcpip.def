@@ -1,0 +1,13 @@
+LIBRARY WSHTCPIP
+
+DESCRIPTION 'TCP/IP Windows Sockets Helper DLL'
+
+EXPORTS
+    WSHEnumProtocols
+    WSHGetSockaddrType
+    WSHGetSocketInformation
+    WSHGetWildcardSockaddr
+    WSHGetWinsockMapping
+    WSHNotify
+    WSHOpenSocket
+    WSHSetSocketInformation

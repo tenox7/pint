@@ -1,0 +1,11 @@
+NAME BCMUSB.SYS
+
+EXPORTS
+    UsbGetFunction
+    UsbFunctionControl
+    UsbFunctionOpenPipe
+    UsbFunctionClosePipe
+    UsbFunctionStartPipe
+    UsbFunctionPipeInterrupt
+    UsbFunctionPipeHalted
+    UsbFunctionPipeResult

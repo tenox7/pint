@@ -79,6 +79,12 @@ function command(cmd,    a, n, f, i) {
         sub(/[ \t]*<[ \t]*/, " < ", cmd)
         sub(/[ \t]*>[ \t]*/, " > ", cmd)
     }
+    # copy: its /a and /b switches dropped, and "a+b" spaced as "a + b"
+    if (tolower(cmd) ~ /^copy[ \t]/) {
+        gsub(/[ \t]+\/[AaBb]([ \t]|$)/, " ", cmd)
+        gsub(/[ \t]*\+[ \t]*/, " + ", cmd)
+        sub(/[ \t]+$/, "", cmd)
+    }
     n = split(cmd, a, /[ \t]+/)
     if (tolower(a[1]) == "if" && tolower(a[2]) == "exist") {
         f = a[3]
@@ -114,6 +120,10 @@ function command(cmd,    a, n, f, i) {
         sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
         return "nmk_mapmsg " substr(cmd, 8)
     }
+    if (tolower(a[1]) == "cl") {
+        sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
+        return "nmk_cpp " substr(cmd, 4)
+    }
     if (a[1] == "rcpp" || a[1] == "solidpp" || a[1] == "binplace" || a[1] == "link32" || a[1] == "uixport")
         return "nmk_" cmd
     return "echo \x27nmk: unsupported command: " cmd "\x27 >&2; exit 1"
@@ -129,10 +139,22 @@ function infer(    r, e, ext, base, src, i, l) {
         base = substr(tgt, 1, length(tgt) - length(ext) - 1)
         src = base "." e[1]
         if (ENVIRON["NMK_DEPS"]) { print src; return }
+        b = base; sub(/^.*\//, "", b)
         for (i = 1; i <= infn[r]; i++) {
             l = infc[r, i]
+            if (substr(l, 1, 1) == "\001") {
+                l = substr(l, 2)
+                print (l == "<<" ? "NMK_EOF" : l)
+                continue
+            }
+            gsub(/\$\(<B\)/, b, l); gsub(/\$\(<F\)/, src, l); gsub(/\$\(@B\)/, b, l); gsub(/\$\(@F\)/, tgt, l)
             gsub(/\$</, src, l); gsub(/\$\*/, base, l); gsub(/\$@/, tgt, l)
             l = expand(l); sub(/^[ \t]+/, "", l)
+            split(l, a, /[ \t]+/)
+            if (a[1] == "type" && a[2] == "<<") {
+                print (a[3] == ">" ? "nmk_new " : "nmk_add ") a[4] " <<'NMK_EOF'"
+                continue
+            }
             print command(l)
         }
         return
@@ -206,11 +228,14 @@ inline {
 }
 !active { next }
 
+# The lines of an inline file (<<) of an inference rule, as they are.
+infinline { infc[inf, ++infn[inf]] = "\001" $0; if ($0 == "<<") infinline = 0; next }
+
 # Comment lines, in and out of recipes.
 /^#/ { next }
 
 # Inference rules (.FROM.TO:) and their commands, for a target without a rule of its own.
-ininf && /^[ \t]+[^ \t]/ { infc[inf, ++infn[inf]] = $0; next }
+ininf && /^[ \t]+[^ \t]/ { infc[inf, ++infn[inf]] = $0; if ($0 ~ /<<[ \t]*(>|$)/) infinline = 1; next }
 ininf { ininf = 0 }
 !inrecipe && /^\.[A-Za-z0-9]+\.[A-Za-z0-9]+[ \t]*:/ {
     inf = $0; sub(/[ \t]*:.*/, "", inf); infn[inf] = 0; ininf = 1
@@ -271,6 +296,7 @@ inrecipe && /^[ \t]+[^ \t]/ {
     n = split(line, a, /[ \t]+/)
     if (a[1] == "type" && a[2] == "<<") {
         print (a[3] == ">" ? "nmk_new " : "nmk_add ") a[4] " <<'NMK_EOF'"
+        ncmds++
         inline = 1
         next
     }
@@ -285,6 +311,8 @@ inrecipe && /^[ \t]+[^ \t]/ {
     } else
         for (i = 2; i <= n; i++) out = out "; " command(part[i])
     print out
+    ncmds++
 }
 
-END { if (!matched) infer() }
+# A target without a rule, or whose rule has no commands, takes an inference rule.
+END { if (!matched || !ncmds) infer() }

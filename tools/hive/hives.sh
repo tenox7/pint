@@ -61,8 +61,8 @@ KERNEL="SeTokenType SeCreateClientSecurity ObfDereferenceObject ExAcquireFastMut
         SeLockSubjectContext SeUnlockSubjectContext SeAccessCheck SeQuerySecurityDescriptorInfo ObAssignObjectSecurityDescriptor"
 lnk() {
     local out=$1 s; shift
-    link -nologo -machine:arm -release -force -subsystem:console -entry:mainCRTStartup -base:$BASE -nodefaultlib \
-         -out:$H/$out.EXE "$@" $B/obj/ut_EDITHIVE.obj $B/obj/ut_CMWRAPER.obj $B/obj/hostnt.obj $B/uconfig.lib $B/rtl.lib \
+    link -nologo -machine:arm -release -brepro -force -subsystem:console -entry:mainCRTStartup -base:$BASE -nodefaultlib \
+         -out:$B/$out.EXE "$@" $B/obj/ut_EDITHIVE.obj $B/obj/ut_CMWRAPER.obj $B/obj/hostnt.obj $B/uconfig.lib $B/rtl.lib \
          $U/libc.lib $U/ntdll.lib $U/kernel32.lib $U/advapi32.lib > $B/$out.err 2>&1
     for s in $(tr -d "\r" < $B/$out.err | sed -n "s/.*unresolved external symbol \([A-Za-z_0-9]*\).*/\1/p" | sort -u); do
         case " $(echo $KERNEL) " in *" $s "*) ;; *) echo "   LINK FAIL $out: $s"; return 1 ;; esac
@@ -70,6 +70,8 @@ lnk() {
     if tr -d "\r" < $B/$out.err | grep "fatal error" | grep -qv LNK1120; then
         echo "   LINK FAIL $out:"; tr -d "\r" < $B/$out.err | grep "fatal error"; return 1
     fi
+    # the steps after take obj/host as an input: replace the program only when it changed
+    cmp -s $B/$out.EXE $H/$out.EXE || cp $B/$out.EXE $H/$out.EXE
     echo "   obj/host/$out.EXE"
 }
 lnk HIVEDMP $B/obj/ut_HIVEDMP.obj $B/obj/ut_REGUTIL.obj

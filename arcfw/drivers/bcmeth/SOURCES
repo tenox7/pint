@@ -1,0 +1,17 @@
+MAJORCOMP=ntos
+MINORCOMP=ndis
+
+TARGETNAME=bcmeth
+TARGETPATH=\nt\public\sdk\lib
+TARGETTYPE=DRIVER
+
+INCLUDES=..\..\inc;..\bcmusb
+
+TARGETLIBS=\nt\public\sdk\lib\*\ndis.lib \
+           \nt\public\sdk\lib\*\bcmusb.lib
+
+C_DEFINES=-DNDIS_MINIPORT_DRIVER
+
+SOURCES=bcmeth.c \
+        chip.c \
+        bcmeth.rc

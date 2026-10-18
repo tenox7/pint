@@ -1,0 +1,4 @@
+# The host names of this machine (the TCP/IP host table): an address, the
+# name and its aliases, one host a line. # starts a comment.
+
+127.0.0.1       localhost

@@ -1,0 +1,11 @@
+#ntdiff PRIVATE/NTOS/NDIS/WRAPPER/WRAPPER.C
+=1 1 659
++#if defined(_M_MRX000) || defined(_M_ARM)
+=1 661 129
++#if defined(_M_MRX000) || defined(_M_ARM)
+=1 791 296
++#elif defined(_M_ARM)
++            NdisProcessorArm
+=1 1087 14755
++#if defined(_M_MRX000) || defined(_M_ARM)
+=1 15843 1439

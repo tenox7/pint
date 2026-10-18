@@ -86,6 +86,19 @@ nmk_mapmsg() {
     if [ -n "$o" ]; then bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" > "$o" 2> /tmp/mapmsg.log
     else bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" 2> /tmp/mapmsg.log; fi || { cat /tmp/mapmsg.log >&2; return 1; }
 }
+# the C preprocessor ($(TARGET_CPP) /EP): the export list of a library from its .src
+nmk_cpp() {
+    local o= args=() s=
+    while [ $# -gt 0 ]; do
+        case $1 in
+        ">") o=$(out "$2"); shift 2 ;;
+        [-/]*) args+=("$1"); shift ;;
+        *) s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; shift ;;
+        esac
+    done
+    tr -d '\032\r' < "$s" > /tmp/nmkcpp.src
+    cl -nologo "${args[@]}" -D_ARM_ /tmp/nmkcpp.src > "$o" 2> /tmp/nmkcpp.log || { cat /tmp/nmkcpp.log >&2; return 1; }
+}
 # uixport, the export list of a NET UI DLL from the symbols of its libraries
 nmk_uixport() {
     local a h o x= args=()
@@ -134,6 +147,9 @@ out() { echo "$(gen $D)/$(basename "$1" | tr A-Z a-z)"; }
 # IF EXIST f: a file of the tree or one the build made (an image of the component is
 # not made yet: winchat copies its winchat.exe to bin\arm, as binplace)
 nmk_exists() { locate "$1" > /dev/null || [ -e "$(out "$1")" ]; }
+# an inline file of a recipe (type << > f, type << >> f)
+nmk_new() { cat > "$(out $1)"; }
+nmk_add() { cat >> "$(out $1)"; }
 nmk_cat() { local s; s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; cat "$s" >> "$(out $2)"; }
 nmk_wcshdr() { local s; s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; bash /work/RASPI/tools/host.sh wcshdr < "$s" > "$(out $2)"; }
 # the build tools of the recipes (tools/host.sh), on files of the tree or generated ones
@@ -175,6 +191,7 @@ targets() { bash $K/srcmacro.sh $D/SOURCES $1 | tr " " "\n" | sed 's/\*/$(TARGET
 # the macros of the component (its makefile and SOURCES) and of the build of ARM
 macros="$(bash $K/srcmacro.sh $D/SOURCES '*')
 TARGET_DIRECTORY=arm
+TARGET_CPP=cl
 386=0
 MIPS=0
 ALPHA=0

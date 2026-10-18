@@ -112,7 +112,9 @@ function take(line,    d, w, rest, c, more, n, v, f) {
         return
     }
     if (!on[depth]) return
-    if (cont == "" && line ~ /^[ \t]*#/) return
+    # a comment line, also one inside a definition continued over lines (nmake drops it
+    # and the definition goes on)
+    if (line ~ /^[ \t]*#/) return
     more = sub(/\\[ \t]*$/, "", line)
     if (cont != "") line = cont " " line
     if (more) { cont = line; return }

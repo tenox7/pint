@@ -15,12 +15,14 @@
 //                  -> MonitorPeripheral(monitor)
 //   MultiFunctionAdapter -> KeyboardController(key, the USB host) -> KeyboardPeripheral(keyboard)
 //   MultiFunctionAdapter -> PointerController(point, the USB host) -> PointerPeripheral(pointer)
+//   MultiFunctionAdapter -> NetworkController(net, a function of the USB host), if one is found
 //   System(arc) -> ScsiAdapter(scsi) -> DiskController(disk) -> DiskPeripheral(rdisk)
 // BlGetPathnameFromComponent renders the SD card as "scsi(0)disk(0)rdisk(0)".
 //
 #include "fwp.h"
 #include "fwstring.h"
 #include "bcmvdeo.h"
+#include "bcmethhw.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -36,6 +38,7 @@ static CONFIGURATION_COMPONENT_DATA ArcKeyboardControllerNode;
 static CONFIGURATION_COMPONENT_DATA ArcKeyboardNode;
 static CONFIGURATION_COMPONENT_DATA ArcPointerControllerNode;
 static CONFIGURATION_COMPONENT_DATA ArcPointerNode;
+static CONFIGURATION_COMPONENT_DATA ArcNetworkNode;
 
 //
 // The BCM2836 has four Cortex-A7 cores and the BCM2837 four Cortex-A53, each
@@ -382,6 +385,62 @@ MakeInputNodes(
     SetComponent(&ArcPointerNode, PeripheralClass, PointerPeripheral, 0);
     SetIdentifier(&ArcPointerNode, ArcPointerId);
     ArcPointerNode.ComponentEntry.Flags.Input = 1;
+}
+
+//
+// The Ethernet controller, a function of the USB host the firmware found
+// (usb.c): the network controller of the internal bus, with the interrupt and
+// registers of the USB host and the station address of the board, as Jazz
+// describes its SONIC.
+//
+
+static CHAR ArcNetworkId[16];
+
+static struct {
+    CM_PARTIAL_RESOURCE_LIST List;
+    CM_PARTIAL_RESOURCE_DESCRIPTOR More[2];
+    CM_BCMETH_DEVICE_DATA EthernetData;
+} ArcNetworkData;
+
+VOID
+FwAddNetworkController (
+    IN PCHAR Identifier
+    )
+{
+    PCM_PARTIAL_RESOURCE_DESCRIPTOR Partial = ArcNetworkData.List.PartialDescriptors;
+
+    if (ArcNetworkNode.Parent != NULL) {
+        return;
+    }
+
+    ArcNetworkData.List.Version = ARC_VERSION;
+    ArcNetworkData.List.Revision = ARC_REVISION;
+    ArcNetworkData.List.Count = 3;
+
+    SetDescriptor(&Partial[0], CmResourceTypeInterrupt, CM_RESOURCE_INTERRUPT_LEVEL_SENSITIVE);
+    Partial[0].u.Interrupt.Level = USB_LEVEL;
+    Partial[0].u.Interrupt.Vector = USB_VECTOR;
+
+    SetDescriptor(&Partial[1], CmResourceTypeMemory, CM_RESOURCE_MEMORY_READ_WRITE);
+    Partial[1].u.Memory.Start.LowPart = USB_PHYSICAL_BASE;
+    Partial[1].u.Memory.Length = USB_REGISTERS_SIZE;
+
+    SetDescriptor(&Partial[2], CmResourceTypeDeviceSpecific, 0);
+    Partial[2].u.DeviceSpecificData.DataSize = sizeof(CM_BCMETH_DEVICE_DATA);
+    ArcNetworkData.EthernetData.Version = ARC_VERSION;
+    ArcNetworkData.EthernetData.Revision = ARC_REVISION;
+    MailboxGetBoardMacAddress(ArcNetworkData.EthernetData.EthernetAddress);
+
+    strncpy(ArcNetworkId, Identifier, sizeof(ArcNetworkId) - 1);
+    SetComponent(&ArcNetworkNode, ControllerClass, NetworkController, 0);
+    SetIdentifier(&ArcNetworkNode, ArcNetworkId);
+    ArcNetworkNode.ComponentEntry.Flags.Input = 1;
+    ArcNetworkNode.ComponentEntry.Flags.Output = 1;
+    ArcNetworkNode.ConfigurationData = &ArcNetworkData;
+    ArcNetworkNode.ComponentEntry.ConfigurationDataLength =
+        sizeof(CM_PARTIAL_RESOURCE_LIST) + 2 * sizeof(CM_PARTIAL_RESOURCE_DESCRIPTOR) +
+        sizeof(CM_BCMETH_DEVICE_DATA);
+    Link(&ArcBusNode, &ArcNetworkNode);
 }
 
 //

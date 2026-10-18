@@ -1,0 +1,5 @@
+#ntdiff PRIVATE/NTOS/INC/NDISMAIN.H
+=1 1 199
++    NdisProcessorPpc,
++    NdisProcessorArm
+=1 201 1653

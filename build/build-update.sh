@@ -14,8 +14,9 @@ GEN= step tools $R/tools/pe2img.c $R/tools/midl/midlcpp.c $R/arcfw/ported/ntos/m
 GEN=$HOSTGEN step hives $R/tools/hive $R/arcfw/ported/oak -- $R/tools/hive/make-hives.sh
 GEN=$HOSTGEN step ksarm $K/ke/genarm.c -- $K/make-ksarm.sh
 GEN=$HOSTGEN step midl $R/tools/midl -- $R/tools/midl/gen-midl.sh
+GEN=$HOSTGEN step nethdr $R/arcfw/ported/ntos/inc $R/arcfw/ported/inc -- $K/make-nethdr.sh
 step crt $CRT -- $R/arcfw/crt/make-crt.sh
-INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/arcfw/ported/ntos \
+INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/arcfw/ported/ntos/rtl $R/arcfw/ported/ntos/makefil0 $R/arcfw/ported/ntos/diskreg \
     $R/obj/libcntpr.lib -- $K/make-execlink.sh
 INSTALL=1 step hal $R/arcfw/hal $R/obj/ntoskrnl.lib $R/obj/libcntpr.lib -- $R/arcfw/hal/make-hal.sh
 for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do cstep lib /work/PRIVATE/NTOS $c -- $K/make-lib.sh $c; done
@@ -23,6 +24,6 @@ INSTALL=1 step osloader $R/obj/bldr.lib $R/obj/boot.lib $R/obj/bconfig.lib $R/ob
     -- $K/make-osloader.sh
 $R/build/build-drivers.sh
 $R/build/build-user.sh
-step firmware $R/arcfw/arm $R/arcfw/drivers/bcmusb/usbhost.c $R/arcfw/drivers/bcmusb/usbhost.h $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
+step firmware $R/arcfw/arm $R/arcfw/drivers/bcmusb/usbhost.c $R/arcfw/drivers/bcmusb/usbhost.h $R/arcfw/drivers/bcmeth/bcmethhw.h $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
     $R/obj/bldrrtl.lib $R/obj/libcntpr.lib -- $R/build/build.sh
 $R/sdcard/make-sd-image.sh $([ -n "${FORCE:-}" ] || echo -u)

@@ -162,8 +162,13 @@
 =1 116 3
 +ULONG
 +MailboxGetFirmwareRevision (
-=1 116 3
-+ULONG
+=1 476 4
++MailboxGetBoardMacAddress (
++    OUT PUCHAR Address
+=1 132 3
++FwAddNetworkController (
++    IN PCHAR Identifier
+=1 137 3
 +FwGetMicroseconds (
 =1 476 4
 +UsbInitialize (

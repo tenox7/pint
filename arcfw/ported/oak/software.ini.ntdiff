@@ -1,2 +1,9 @@
 #ntdiff PUBLIC/OAK/BIN/SOFTWARE.INI
-=1 1 1911
+=1 1 880
++                    1
++                        ServiceName = Bcmeth1
++                        Title = [1] Raspberry Pi USB Ethernet Adapter
++                        Description = Raspberry Pi USB Ethernet Adapter
++                        Manufacturer = Microchip
++                        ProductName = Bcmeth
+=1 881 1031
