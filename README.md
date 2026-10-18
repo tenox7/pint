@@ -4,9 +4,9 @@ Windows NT 3.5 ported to 32-bit ARM (ARMv7-A) on the Raspberry Pi 2 and 3, with 
 
 ## Raspberry Pi models
 
-- Tested: Pi 2 Model B v1.1 (BCM2836, Cortex-A7), Pi 3 Model B v1.2 and v1.3 (BCM2837, Cortex-A53) and QEMU
+- Tested: Pi 2 Model B v1.1 (BCM2836, Cortex-A7), Pi 3 Model B v1.2, v1.3 and B+ v1.3 (BCM2837, Cortex-A53) and QEMU
   `raspi2b`, `raspi3b`, `raspi3ap`.
-- Untested, should work: Pi 2 v1.2, 3B+, 3A+, Zero 2 W (BCM2837).
+- Untested, should work: Pi 2 v1.2, 3A+, Zero 2 W (BCM2837).
 - Planned: CM4, Pi 4B, Pi 400 (BCM2711, Cortex-A72): needs the new peripheral window, GIC and EMMC2; the 4B and 400
   also PCIe and an xHCI USB driver.
 - Not planned:
