@@ -14,6 +14,14 @@
 =1 30 3
 +
 +#define TIMER_FREQUENCY 1000000
++
++//
++// The least time, in timer counts, between setting the clock compare and the
++// match: the timer interrupts only when the counter equals the compare, so a
++// compare it has passed would not interrupt again until the counter wraps.
++//
++
++#define CLOCK_COMPARE_MARGIN 100
 =1 86 7
 =3 35 1
 =1 95 2
@@ -63,6 +71,7 @@
 =1 115 8
 +    ULONG TimeIncrement = HalpCurrentTimeIncrement;
 +    ULONG Compare;
++    ULONG Lead;
 +
 +    HAL_REG(HAL_ST_CS) = 1 << HAL_CLOCK_IRQ;
 +    if (HalpNewTimeIncrement != 0) {
@@ -72,7 +81,8 @@
 +    }
 +
 +    Compare = HAL_REG(HAL_ST_C3) + HalpIntervalCount;
-+    if ((Compare - HAL_REG(HAL_ST_CLO)) > HalpIntervalCount) {
++    Lead = Compare - HAL_REG(HAL_ST_CLO);
++    if (Lead < CLOCK_COMPARE_MARGIN || Lead > HalpIntervalCount) {
 +        Compare = HAL_REG(HAL_ST_CLO) + HalpIntervalCount;
 +    }
 +
