@@ -18,8 +18,9 @@ booted by its own ARC firmware the way NT booted on MIPS.
 
 ## Build
 
-The NT 3.5 source (`PRIVATE`, `PUBLIC`) goes beside this tree and is not part of it; the port's versions of NT
-files are edit scripts (`*.ntdiff`) the build applies to it (`tools/ntdiff.pl`).
+The NT 3.5 source (`PRIVATE`, `PUBLIC`) and DEC's ADK (`arc/adk`, for the ARC DOS shell) go beside this tree and are
+not part of it; the port's versions of their files are edit scripts (`*.ntdiff`) the build applies to them
+(`tools/ntdiff.pl`).
 
 Everything builds in Docker with Microsoft C for ARM ([msvc-arm32](https://hub.docker.com/r/tenox7/msvc-arm32)),
 installed once into `../msvc` beside the NT source; sources and outputs stay on the host, Docker only runs the tools:
@@ -55,5 +56,5 @@ absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lis
 
 This repository contains no Microsoft or Windows code whatsoever: it is a build toolchain and the port's own ARM
 code (ARC firmware, kernel, HAL, drivers), written from scratch by Dave Clunker with U-Boot as the Raspberry Pi
-hardware reference, and is in the public domain. Third-party exceptions: the Raspberry Pi boot firmware in
-`sdcard/firmware` and DEC's ARC DOS shell, `arcfw/ported/arcdos.c`.
+hardware reference, and is in the public domain. Exception: the third-party Raspberry Pi boot firmware in
+`sdcard/firmware`.

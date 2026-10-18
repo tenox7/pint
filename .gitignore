@@ -81,6 +81,7 @@ arcfw/kernel/rtl/getcalr.c
 arcfw/kernel/rtl/trampoln.asm
 arcfw/kernel/rtl/vunwind.c
 arcfw/kernel/rtl/xcptmisc.asm
+arcfw/ported/arcdos.c
 arcfw/ported/fp32/include/cv.h
 arcfw/ported/fp32/include/trans.h
 arcfw/ported/lsa/crypt/engine/cbc.c
