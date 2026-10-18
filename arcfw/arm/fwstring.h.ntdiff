@@ -12,6 +12,7 @@
 +
 +--*/
 +
++extern PCHAR FW_TITLE_MSG;
 =1 7 1
 =1 9 1
 =1 16 1

@@ -1,6 +1,5 @@
-Windows NT 3.5 ARC loader - SD disk image
+PI NT: Windows NT 3.5 on the Raspberry Pi 2 and 3.
 
-These files are packaged into ramdisk.img by make-ramdisk.sh and read by the
-loader's FAT engine. On a real Pi 2 the GPU firmware stages ramdisk.img in RAM
-(config.txt initramfs); the loader serves it as its Arc disk. Edit anything in
-this directory, re-run make-ramdisk.sh, rebuild, reflash. 8.3 file names only.
+The Pi boot firmware (bootcode.bin, start.elf) loads arcfw.bin, the ARC
+firmware (config.txt), which runs \os\nt\OSLOADER.EXE to boot NT from \WINNT.
+https://github.com/tenox7/pint

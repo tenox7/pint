@@ -11,7 +11,7 @@
 // adapter, and the disk controller is a ScsiAdapter child of the root whose
 // configuration data describes it to the SCSI port driver:
 //   System(arc) -> CentralProcessor(cpu) -> FloatingPointProcessor, caches
-//   System(arc) -> MultiFunctionAdapter("BCM2836-Internal Bus") -> DisplayController(video)
+//   System(arc) -> MultiFunctionAdapter("BCM283x-Internal Bus") -> DisplayController(video)
 //                  -> MonitorPeripheral(monitor)
 //   MultiFunctionAdapter -> KeyboardController(key, the USB host) -> KeyboardPeripheral(keyboard)
 //   MultiFunctionAdapter -> PointerController(point, the USB host) -> PointerPeripheral(pointer)
@@ -19,6 +19,7 @@
 // BlGetPathnameFromComponent renders the SD card as "scsi(0)disk(0)rdisk(0)".
 //
 #include "fwp.h"
+#include "fwstring.h"
 #include "bcmvdeo.h"
 #include <stdio.h>
 #include <string.h>
@@ -37,9 +38,10 @@ static CONFIGURATION_COMPONENT_DATA ArcPointerControllerNode;
 static CONFIGURATION_COMPONENT_DATA ArcPointerNode;
 
 //
-// The BCM2836 has four Cortex-A7 cores, each with split L1 caches and a VFPv4
-// unit, sharing one L2. As on every ARC machine, each processor component
-// carries its floating point and cache components; a cache's Key encodes its
+// The BCM2836 has four Cortex-A7 cores and the BCM2837 four Cortex-A53, each
+// with split L1 caches and a VFPv4 unit, sharing one L2. As on every ARC machine,
+// each processor component carries its floating point and cache components; its
+// identifier names the core (the MIDR part number), and a cache's Key encodes its
 // geometry (lines per block << 24 | log2 line size << 16 | log2 pages).
 //
 
@@ -51,10 +53,10 @@ static CONFIGURATION_COMPONENT_DATA ArcIcacheNode[ARC_PROCESSORS];
 static CONFIGURATION_COMPONENT_DATA ArcDcacheNode[ARC_PROCESSORS];
 static CONFIGURATION_COMPONENT_DATA ArcL2cacheNode[ARC_PROCESSORS];
 
-static CHAR ArcSystemId[64] = "Raspberry Pi 2";
-static CHAR ArcCpuId[] = "ARM-CortexA7";
+static CHAR ArcSystemId[64] = "Raspberry Pi";
+static PCHAR ArcCpuId;
 static CHAR ArcFpuId[] = "ARM-VFPv4";
-static CHAR ArcBusId[] = "BCM2836-Internal Bus";
+static CHAR ArcBusId[24] = "BCM2836-Internal Bus";
 static CHAR ArcScsiId[] = "BCM2835-EMMC";
 static CHAR ArcVideoId[] = BCM_VIDEO_IDENTIFIER;
 static CHAR ArcMonitorId[24];
@@ -75,7 +77,8 @@ static PCHAR BoardNames[] = {
     "Raspberry Pi Model B+", "Raspberry Pi 2 Model B", "Raspberry Pi Alpha",
     "Raspberry Pi Compute Module", NULL, "Raspberry Pi 3 Model B", "Raspberry Pi Zero",
     "Raspberry Pi Compute Module 3", NULL, "Raspberry Pi Zero W", "Raspberry Pi 3 Model B+",
-    "Raspberry Pi 3 Model A+", NULL, "Raspberry Pi Compute Module 3+", "Raspberry Pi 4 Model B"
+    "Raspberry Pi 3 Model A+", NULL, "Raspberry Pi Compute Module 3+", "Raspberry Pi 4 Model B",
+    "Raspberry Pi Zero 2 W", "Raspberry Pi 400", "Raspberry Pi Compute Module 4"
 };
 static PCHAR Processors[] = {"BCM2835", "BCM2836", "BCM2837", "BCM2711"};
 static PCHAR Makers[] = {"Sony UK", "Egoman", "Embest", "Sony Japan", "Embest", "Stadium"};
@@ -264,6 +267,10 @@ MakeSystemData(
     SetDescriptor(&ArcSystemData.List.PartialDescriptors[0], CmResourceTypeDeviceSpecific, 0);
     ArcSystemData.List.PartialDescriptors[0].u.DeviceSpecificData.DataSize = sizeof(*Data);
 
+    if ((Revision & (1 << 23)) != 0 && Processor < 4) {
+        sprintf(ArcBusId, "%s-Internal Bus", Processors[Processor]);
+    }
+
     if ((Revision & (1 << 23)) != 0 && Type < sizeof(BoardNames) / sizeof(BoardNames[0]) &&
         BoardNames[Type] != NULL) {
         sprintf(ArcSystemId, "%s v1.%lu", BoardNames[Type], Revision & 0xf);
@@ -275,7 +282,7 @@ MakeSystemData(
     } else {
         Version += sprintf(Version, "%s", ArcSystemId) + 1;
     }
-    sprintf(Version, "ARC Firmware for the Raspberry Pi 2");
+    sprintf(Version, "%s", FW_TITLE_MSG);
     FormatBuildDate(Data->SystemFirmwareDate);
 
     sprintf(Data->VideoFirmwareVersion, "%s firmware %08lX",
@@ -430,6 +437,21 @@ CacheKey(
     return (1 << 24) | (LineLog2 << 16) | SizeLog2;
 }
 
+static PCHAR
+CpuIdentifier(
+    VOID
+    )
+{
+    switch ((_MoveFromCoprocessor(15, 0, 0, 0, 0) >> 4) & 0xFFF) {
+    case 0xC07:
+        return "ARM-CortexA7";
+    case 0xD03:
+        return "ARM-CortexA53";
+    default:
+        return "ARM";
+    }
+}
+
 static VOID
 FwBuildConfigurationTree(
     VOID
@@ -437,6 +459,8 @@ FwBuildConfigurationTree(
 {
     ULONG Clidr, Index;
     ULONG IcacheKey, DcacheKey, L2Key;
+
+    ArcCpuId = CpuIdentifier();
 
     SetComponent(&ArcSystemNode,     SystemClass,     ArcSystem,            0);
     SetComponent(&ArcBusNode,        AdapterClass,    MultiFunctionAdapter, 0);

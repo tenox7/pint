@@ -14,6 +14,7 @@ Abstract:
 --*/
 
 #include "fwp.h"
+#include "fwstring.h"
 
 VOID
 FwSystemBlockInitialize (
@@ -30,6 +31,6 @@ cmain (
     SerialBootSetup(SERIAL_PORT0_BASE);
     SerialOutput = TRUE;
     DisplayOutput = DisplayBootInitialize() == ESUCCESS;
-    FwPrint("\r\nARC Firmware for the Raspberry Pi 2\r\n");
+    FwPrint("\r\n%s\r\n", FW_TITLE_MSG);
     FwBootSystem();
 }

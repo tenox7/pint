@@ -1,4 +1,6 @@
 #ntdiff PRIVATE/SDKTOOLS/WINTOOLS/WINMSD/STRRESID.H
 =1 1 95
 +#define IDS_PROCESSOR_ARM_CORTEX_A7                 (  64 )
-=1 96 270
+=1 96 84
++#define IDS_PROCESSOR_ARM_CORTEX_A53                ( 145 )
+=1 180 186

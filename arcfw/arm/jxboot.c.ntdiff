@@ -83,6 +83,7 @@
 =1 165 19
 +    ULONG PreviousTime = 0;
 =1 185 6
+=2 1280 1
 =1 200 5
 +    FwInitialize();
 =1 212 4
@@ -101,7 +102,24 @@
 +        Choices[NumberOfBootChoices + 1] = FW_RUN_ARCDOS_MSG;
 +
 +        if (DefaultChoice >= (LONG)NumberOfMenuChoices) {
-=1 271 13
+=1 271 10
++
++        //
++        // The firmware, and the board and its processor from the configuration
++        // tree.
++        //
++
++        FwSetPosition( 0, 0);
++        FwPrint(" %s", FW_TITLE_MSG);
++        Component = ArcGetChild(NULL);
++        FwSetPosition( 1, 0);
++        FwPrint(" %s", Component->Identifier);
++        Component = ArcGetChild(Component);
++        if ((Component != NULL) && (Component->Type == CentralProcessor)) {
++            FwPrint(", %s", Component->Identifier);
++        }
++
+=1 281 3
 +        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
 =1 285 14
 +        FwSetPosition(NumberOfMenuChoices + 13, 0);

@@ -13,12 +13,15 @@
 =1 150 39
 +        // Initialize the address of the interrupt dispatch routine.
 =1 190 6
-+        // and flush the dcache so the code is actually in memory.
++        // and flush the caches so the code is actually in memory and
++        // no stale instructions are cached for it.
 =1 198 3
 +            KxUnexpectedInterrupt.DispatchCode[Index] =
 +                        ((PULONG)((ULONG)KiInterruptTemplate & ~1))[Index];
 +        }
-=1 208 6
++
++        KeSweepCurrentIcache();
+=1 210 4
 +            (PKINTERRUPT_ROUTINE)((ULONG)(&KxUnexpectedInterrupt.DispatchCode) | 1);
 =1 215 133
 +    // If the current processor is 0, then set the appropriate bit in the active

@@ -3,7 +3,9 @@
 +    This module implements the serial boot driver for the Raspberry Pi 2 (the
 +    ARM FW\MIPS\JXSERIAL.C) over the PL011 UART, serial port 0 on GPIO 14 and
 +    15. Its reference clock is the 48 MHz the VideoCore gives it when the
-+    UART is enabled (enable_uart=1), which runs it at 115200 baud.
++    UART is enabled (enable_uart=1), which runs it at 115200 baud. A BCM2837
++    board with Bluetooth (Pi 3) wires the UART to its Bluetooth chip on GPIO 32
++    and 33 (ALT3); those pins are made inputs, so it receives from GPIO 15 alone.
 =1 14 7
 +    Kernel mode
 =1 23 6
@@ -30,10 +32,13 @@
 +#define CR_RXE          0x200
 +
 +//
-+// Define the GPIO registers that select the UART on pins 14 and 15.
++// Define the GPIO registers that select the UART on pins 14 and 15, and take it
++// off pins 32 and 33.
 +//
 +
 +#define GPFSEL1         (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200004))
++#define GPFSEL3         (*(volatile ULONG *)(PERIPHERAL_BASE + 0x20000C))
++#define GPIO_ALT3       7
 +#define GPPUD           (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200094))
 +#define GPPUDCLK0       (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200098))
 =1 30 22
@@ -110,8 +115,9 @@
 =1 105 3
 =1 376 7
 +    This routine initializes the serial port controller: it selects the UART
-+    on GPIO 14 and 15 without pulls, and programs 115200 baud, eight bits,
-+    no parity, one stop bit, with the fifos enabled and interrupts masked.
++    on GPIO 14 and 15 without pulls, makes GPIO 32 and 33 inputs if they
++    select it, and programs 115200 baud, eight bits, no parity, one stop bit,
++    with the fifos enabled and interrupts masked.
 =1 384 10
 +
 +{
@@ -119,6 +125,16 @@
 +
 +    Select = GPFSEL1 & ~((7 << 12) | (7 << 15));
 +    GPFSEL1 = Select | (4 << 12) | (4 << 15);
++    Select = GPFSEL3;
++    if (((Select >> 6) & 7) == GPIO_ALT3) {
++        Select &= ~(7 << 6);
++    }
++
++    if (((Select >> 9) & 7) == GPIO_ALT3) {
++        Select &= ~(7 << 9);
++    }
++
++    GPFSEL3 = Select;
 +    GPPUD = 0;
 +    FwStallExecution(5);
 +    GPPUDCLK0 = (1 << 14) | (1 << 15);

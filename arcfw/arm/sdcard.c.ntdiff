@@ -19,6 +19,12 @@
 +    (a clock domain crossing), so every register write but the data port's is
 +    followed by a delay longer than two clocks at the 400 kHz identification
 +    clock.
++
++    The card slot is on GPIO 48-53, which function ALT3 connects to the EMMC.
++    The VideoCore firmware of a BCM2837 board (Pi 2 v1.2, Pi 3) leaves them on
++    ALT0, its SD host controller, and connects the EMMC to the wireless chip on
++    GPIO 34-39 (ALT3 too); those pins are made inputs, so the EMMC drives the
++    slot alone.
 =1 23 3
 =3 28 2
 +#include "string.h"
@@ -84,6 +90,10 @@
 +#define CMD(n)              ((ULONG)(n) << 24)
 +#define APP                 0x80000000
 +
++#define GPFSEL(Pin)         (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200000 + ((Pin) / 10) * 4))
++#define GPIO_INPUT          0
++#define GPIO_ALT3           7
++
 +#define POWER_DEVID_SD      0
 +#define CLOCK_ID_EMMC       1
 +#define IDENT_CLOCK         400000
@@ -95,6 +105,25 @@
 +static ULONG SdSectors;
 +static BOOLEAN SdHighCapacity;
 +static ULONG SdBounce[SECTOR_SIZE / sizeof(ULONG)];
++
++static ULONG
++SdGetPinFunction(
++    IN ULONG Pin
++    )
++{
++    return (GPFSEL(Pin) >> ((Pin % 10) * 3)) & 7;
++}
++
++static VOID
++SdSetPinFunction(
++    IN ULONG Pin,
++    IN ULONG Function
++    )
++{
++    ULONG shift = (Pin % 10) * 3;
++
++    GPFSEL(Pin) = (GPFSEL(Pin) & ~(7 << shift)) | (Function << shift);
++}
 +
 +static VOID
 +SdWrite(
@@ -316,6 +345,14 @@
 +    ULONG ocr;
 +    ULONG i;
 +    BOOLEAN v2;
++
++    for (i = 34; i <= 39; i += 1) {
++        if (SdGetPinFunction(i) == GPIO_ALT3) {
++            SdSetPinFunction(i, GPIO_INPUT);
+=1 938 3
++    for (i = 48; i <= 53; i += 1) {
++        SdSetPinFunction(i, GPIO_ALT3);
++    }
 +
 +    MailboxSetPowerState(POWER_DEVID_SD, TRUE);
 +    SdBaseClock = MailboxGetClockRate(CLOCK_ID_EMMC);

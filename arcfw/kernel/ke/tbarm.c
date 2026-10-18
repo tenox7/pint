@@ -61,6 +61,14 @@ Environment:
 #define L2_AP2              (1 << 9)
 #define L2_NG               (1 << 11)
 
+//
+// The translation table walks are cached as the tables are (inner and outer
+// write back, write allocate: TTBR0 IRGN and RGN), so they see the descriptors
+// the kernel writes through the data cache.
+//
+
+#define TTBR_WALK_CACHED    ((1 << 6) | (1 << 3))
+
 #define L1_ENTRIES          4096
 #define L2_ENTRIES          256
 #define L1_TABLE_SIZE       (L1_ENTRIES * sizeof(ULONG))
@@ -541,11 +549,11 @@ Routine Description:
 
     PCR->CurrentPdr = ((PHARDWARE_PTE)&PageDirectory)->PageFrameNumber << PAGE_SHIFT;
     PCR->CurrentTb = (ULONG)Tb;
-    _MoveToCoprocessor(KiPhysical(KiKernelTable), 15, 0, 2, 0, 0);
+    _MoveToCoprocessor(KiPhysical(KiKernelTable) | TTBR_WALK_CACHED, 15, 0, 2, 0, 0);
     __isb(_ARM_BARRIER_SY);
     _MoveToCoprocessor(ProcessId, 15, 0, 13, 0, 1);
     __isb(_ARM_BARRIER_SY);
-    _MoveToCoprocessor(KiPhysical(Tb), 15, 0, 2, 0, 0);
+    _MoveToCoprocessor(KiPhysical(Tb) | TTBR_WALK_CACHED, 15, 0, 2, 0, 0);
     __isb(_ARM_BARRIER_SY);
 }
 

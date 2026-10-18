@@ -62,7 +62,9 @@ ntlib() {
 
 # ntimplib DEF LIB OUT: install the import library LIB of DEF as OUT (DEF beside it)
 # when DEF changed: makefile.def made an import library again only from a changed
-# .def, so relinking an image does not relink the images that import from it.
+# .def, so relinking an image does not relink the images that import from it. OUT
+# is installed again when something wrote it after DEF: a library of the same name
+# (ACLEDIT\ACLEDIT, of ACLEDIT.DLL).
 ntimplib() {
-    [ -f $3 ] && cmp -s $1 ${3%.lib}.def || { cp $2 $3 && cp $1 ${3%.lib}.def; }
+    [ -f $3 ] && [ ! $3 -nt ${3%.lib}.def ] && cmp -s $1 ${3%.lib}.def || { cp $2 $3 && cp $1 ${3%.lib}.def; }
 }

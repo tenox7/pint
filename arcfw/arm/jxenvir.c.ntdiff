@@ -141,13 +141,19 @@
 =1 133 3
 +    // The console is the keyboard and the monitor when a keyboard is attached, as
 +    // Setup configures a Jazz system with video, otherwise the serial port, as on a
-+    // Jazz system with its configuration jumper set.
++    // Jazz system with its configuration jumper set. The monitor then says so and
++    // lists the USB devices found.
 +    //
 +
 +    if (DisplayOutput && UsbKeyboardPresent()) {
 +        FwSetEnvironmentVariable("CONSOLEIN", "multi()key()keyboard()console()");
 +        FwSetEnvironmentVariable("CONSOLEOUT", "multi()video()monitor()console()");
 +    } else {
++        if (DisplayOutput) {
++            FwPrint("No USB keyboard: the console is the serial port.\r\n");
++            UsbPrintDevices();
++        }
++
 +        FwSetEnvironmentVariable("CONSOLEIN", "multi(0)serial(0)");
 +        FwSetEnvironmentVariable("CONSOLEOUT", "multi(0)serial(0)");
 +    }

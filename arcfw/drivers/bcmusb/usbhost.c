@@ -39,10 +39,12 @@ Abstract:
 #include "fwp.h"
 #define READ_REG(Host, Offset) (*(volatile ULONG *)((Host)->Registers + (Offset)))
 #define WRITE_REG(Host, Offset, Value) (*(volatile ULONG *)((Host)->Registers + (Offset)) = (Value))
+#define MEMORY_BARRIER() __dsb(_ARM_BARRIER_SY)
 #else
 #include "ntddk.h"
 #define READ_REG(Host, Offset) READ_REGISTER_ULONG((PULONG)((Host)->Registers + (Offset)))
 #define WRITE_REG(Host, Offset, Value) WRITE_REGISTER_ULONG((PULONG)((Host)->Registers + (Offset)), (Value))
+#define MEMORY_BARRIER() KeFlushWriteBuffer()
 #endif
 
 #include "usbhost.h"
@@ -342,8 +344,10 @@ UsbWaitChannel(
 // Run one transaction group on channel 0 and wait for it: the packets and
 // the size of the transfer go through the buffer of the host, and a periodic
 // transfer goes in the next microframe (or frame). A channel a deadline left
-// running is halted first. Returns the interrupts of the channel, and its
-// transfer size register at the halt.
+// running is halted first. What the channel sends must be in memory before it
+// starts, and what it received is read after it halted: to the processor the
+// buffer is ordinary memory, which it may reorder with the registers. Returns
+// the interrupts of the channel, and its transfer size register at the halt.
 //
 
 static ULONG
@@ -373,8 +377,10 @@ UsbRunChannel(
         Character |= HCCHAR_ODDFRM;
     }
 
+    MEMORY_BARRIER();
     WRITE_REG(Host, HCCHAR, Character | HCCHAR_MULTICNT_ONE | HCCHAR_CHENA);
     Interrupt = UsbWaitChannel(Host, Limit);
+    MEMORY_BARRIER();
     *Transfer = READ_REG(Host, HCTSIZ);
     WRITE_REG(Host, HCINT, HCINT_ALL);
     Host->Interrupt = Interrupt;

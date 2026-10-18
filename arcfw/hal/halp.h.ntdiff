@@ -111,7 +111,8 @@
 +//
 +// GPIO function select, and the BSC1 I2C controller of the expansion header
 +// (GPIO 2 and 3), the bus of the realtime clock. The divider makes 100 kHz of
-+// the 250 MHz core clock.
++// the 250 MHz core clock: the default of a Pi 2, which enable_uart=1 sets on a
++// Pi 3 too (its primary UART, the mini UART, runs on the core clock).
 +//
 +
 +#define HAL_GPFSEL0             (PERIPHERAL_VIRTUAL + 0x200000u)

@@ -7,9 +7,10 @@ Module Name:
 Abstract:
 
     This is the miniport driver for the SD card on the EMMC controller (an
-    Arasan SD host controller) of the BCM2835 in the Raspberry Pi 2. The card
-    is presented to the SCSI class drivers as a direct access device at
-    target 0, as the ATAPI miniport presents IDE disks.
+    Arasan SD host controller) of the BCM2835 in the Raspberry Pi 2 and 3, to
+    which the ARC firmware connects the card slot. The card is presented to
+    the SCSI class drivers as a direct access device at target 0, as the ATAPI
+    miniport presents IDE disks.
 
     The firmware describes the controller as the ScsiAdapter of the system,
     with the controller registers and the VideoCore mailbox as its two memory
@@ -101,6 +102,7 @@ Environment:
 #define MBOX_PROPERTY       8
 #define MBOX_SUCCESS        0x80000000
 #define TAG_GET_CLOCK_RATE  0x00030002
+#define TAG_GET_MAX_CLOCK_RATE 0x00030004
 #define CLOCK_EMMC          1
 #define PROPERTY_LENGTH     8
 
@@ -202,14 +204,16 @@ MailboxWait(
 }
 
 //
-// Ask the VideoCore for the EMMC base clock. The property buffer is uncached
-// memory the VideoCore reads and writes; it is filled with register writes so
-// it is in memory before the mailbox write that hands it over.
+// Ask the VideoCore for a rate of the EMMC clock: its rate, or its maximum rate
+// (Tag). The property buffer is uncached memory the VideoCore reads and writes;
+// it is filled with register writes so it is in memory before the mailbox write
+// that hands it over.
 //
 
 static ULONG
-EmmcGetBaseClock(
-    IN PHW_DEVICE_EXTENSION DeviceExtension
+EmmcGetClock(
+    IN PHW_DEVICE_EXTENSION DeviceExtension,
+    IN ULONG Tag
     )
 {
     PULONG Buffer = DeviceExtension->Property;
@@ -219,7 +223,7 @@ EmmcGetBaseClock(
 
     Request[0] = PROPERTY_LENGTH * sizeof(ULONG);
     Request[1] = 0;
-    Request[2] = TAG_GET_CLOCK_RATE;
+    Request[2] = Tag;
     Request[3] = 2 * sizeof(ULONG);
     Request[4] = sizeof(ULONG);
     Request[5] = CLOCK_EMMC;
@@ -905,7 +909,11 @@ Return Value:
 
     DeviceExtension->PropertyAddress = ScsiPortConvertPhysicalAddressToUlong(
         ScsiPortGetPhysicalAddress(DeviceExtension, NULL, DeviceExtension->Property, &Length));
-    DeviceExtension->BaseClock = EmmcGetBaseClock(DeviceExtension);
+    DeviceExtension->BaseClock = EmmcGetClock(DeviceExtension, TAG_GET_CLOCK_RATE);
+    if (DeviceExtension->BaseClock == 0) {
+        DeviceExtension->BaseClock = EmmcGetClock(DeviceExtension, TAG_GET_MAX_CLOCK_RATE);
+    }
+
     if (DeviceExtension->BaseClock == 0) {
         return SP_RETURN_ERROR;
     }

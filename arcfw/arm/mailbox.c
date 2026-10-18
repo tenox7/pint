@@ -36,6 +36,7 @@ Abstract:
 #define TAG_GET_ARM_MEMORY      0x00010005
 #define TAG_SET_POWER_STATE     0x00028001
 #define TAG_GET_CLOCK_RATE      0x00030002
+#define TAG_GET_MAX_CLOCK_RATE  0x00030004
 
 #define POWER_STATE_ON          1
 #define POWER_STATE_WAIT        2
@@ -66,7 +67,9 @@ MailboxPropertyCall (
 Routine Description:
 
     This routine sends a property message to the VideoCore and waits for its
-    answer.
+    answer. The message is in memory before the VideoCore is given it, and the
+    answer is read after it is back: the processor may reorder the buffer, which
+    is ordinary memory to it, with the mailbox registers.
 
 Arguments:
 
@@ -85,12 +88,14 @@ Return Value:
     while ((MAILBOX_STATUS & MAILBOX_FULL) != 0) {
     }
 
+    __dsb(_ARM_BARRIER_SY);
     MAILBOX_WRITE = Message;
     do {
         while ((MAILBOX_STATUS & MAILBOX_EMPTY) != 0) {
         }
     } while ((MAILBOX_READ & MAILBOX_CHANNEL_MASK) != MAILBOX_PROPERTY);
 
+    __dsb(_ARM_BARRIER_SY);
     return Buffer[1] == MAILBOX_SUCCESS ? 0 : 1;
 }
 
@@ -157,14 +162,19 @@ MailboxGetClockRate (
 
 Routine Description:
 
-    This routine returns the rate of a clock in hertz, or 0.
+    This routine returns the rate of a clock in hertz, or its maximum rate if
+    the VideoCore reports none, or 0.
 
 --*/
 
 {
     ULONG Answer[2];
 
-    return MailboxTag(TAG_GET_CLOCK_RATE, 4, ClockId, 0, Answer) ? 0 : Answer[1];
+    if (MailboxTag(TAG_GET_CLOCK_RATE, 4, ClockId, 0, Answer) == 0 && Answer[1] != 0) {
+        return Answer[1];
+    }
+
+    return MailboxTag(TAG_GET_MAX_CLOCK_RATE, 4, ClockId, 0, Answer) ? 0 : Answer[1];
 }
 
 ULONG

@@ -211,11 +211,12 @@
 +// direct map of physical memory, KSEG2 the mapped system space.
 =1 859 8
 +//
-+// Define the processor type reported by SystemProcessorInformation: the
++// Define the processor types reported by SystemProcessorInformation: the
 +// core's part number, MIDR[15:4].
 +//
 +
 +#define PROCESSOR_ARM_CORTEX_A7 0xC07 // winnt
++#define PROCESSOR_ARM_CORTEX_A53 0xD03 // winnt
 +
 +//
 +// Define ARM exception handling structures and function prototypes.

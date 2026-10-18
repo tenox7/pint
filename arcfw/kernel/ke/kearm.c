@@ -10,8 +10,9 @@ Abstract:
 
     ARMv7-A kernel architecture glue for the NT 3.5 / Raspberry Pi 2 port: the
     system startup C entry, which initializes the boot processor's PCR from the
-    structures the OS Loader allocated and calls KiInitializeKernel (the KE/MIPS
-    X4START.S KiSystemBegin sequence), and the APC software interrupt.
+    structures the OS Loader allocated, turns on the caches and calls
+    KiInitializeKernel (the KE/MIPS X4START.S KiSystemBegin sequence), and the
+    APC software interrupt.
 
 Environment:
 
@@ -37,11 +38,62 @@ VOID KiApcInterrupt(VOID)
 }
 
 //
+// Turn on the caches, which the ARC firmware leaves off: invalidate the data and
+// unified caches by set and way to the level of coherency, the instruction cache,
+// the branch predictor and the TB, then enable the data and instruction caches
+// and branch prediction. The translation table walks are cached as well
+// (tbarm.c). The interlocked operations need the caches on a Cortex-A53, which
+// makes exclusive accesses to uncached memory through a global monitor the
+// BCM2837 does not have.
+//
+
+#define SCTLR_C     (1 << 2)
+#define SCTLR_Z     (1 << 11)
+#define SCTLR_I     (1 << 12)
+
+static VOID KiArmEnableCaches(VOID)
+{
+    ULONG Clidr = _MoveFromCoprocessor(15, 1, 0, 0, 1);
+    ULONG Level, Ccsidr, LineShift, Ways, Sets, WayShift, Way, Set;
+
+    for (Level = 0; Level < ((Clidr >> 24) & 7); Level += 1) {
+        if (((Clidr >> (Level * 3)) & 7) < 2) {
+            continue;
+        }
+
+        _MoveToCoprocessor(Level << 1, 15, 2, 0, 0, 0);
+        __isb(_ARM_BARRIER_SY);
+        Ccsidr = _MoveFromCoprocessor(15, 1, 0, 0, 0);
+        LineShift = (Ccsidr & 7) + 4;
+        Ways = (Ccsidr >> 3) & 0x3FF;
+        Sets = (Ccsidr >> 13) & 0x7FFF;
+        WayShift = Ways != 0 ? _CountLeadingZeros(Ways) : 0;
+        for (Way = 0; Way <= Ways; Way += 1) {
+            for (Set = 0; Set <= Sets; Set += 1) {
+                _MoveToCoprocessor((Way << WayShift) | (Set << LineShift) | (Level << 1),
+                                   15, 0, 7, 6, 2);
+            }
+        }
+    }
+
+    _MoveToCoprocessor(0, 15, 2, 0, 0, 0);
+    __dsb(_ARM_BARRIER_SY);
+    _MoveToCoprocessor(0, 15, 0, 7, 5, 0);
+    _MoveToCoprocessor(0, 15, 0, 7, 5, 6);
+    _MoveToCoprocessor(0, 15, 0, 8, 7, 0);
+    __dsb(_ARM_BARRIER_SY);
+    __isb(_ARM_BARRIER_SY);
+    _MoveToCoprocessor(_MoveFromCoprocessor(15, 0, 1, 0, 0) | SCTLR_C | SCTLR_Z | SCTLR_I,
+                       15, 0, 1, 0, 0);
+    __isb(_ARM_BARRIER_SY);
+}
+
+//
 // System startup, called from KiSystemStartup (armstart.asm) with the loader
 // parameter block: install the exception vectors, initialize the PCR from the
-// structures the OS Loader allocated, start translation, and initialize the
-// kernel (the KE/MIPS X4START.S KiSystemBegin sequence). Returns as the idle
-// thread at HIGH_LEVEL.
+// structures the OS Loader allocated, start translation, turn on the caches,
+// and initialize the kernel (the KE/MIPS X4START.S KiSystemBegin sequence).
+// Returns as the idle thread at HIGH_LEVEL.
 //
 
 VOID KiArmInitialize(PLOADER_PARAMETER_BLOCK LoaderBlock)
@@ -99,6 +151,7 @@ VOID KiArmInitialize(PLOADER_PARAMETER_BLOCK LoaderBlock)
     //
 
     KiArmStartTranslation(LoaderBlock);
+    KiArmEnableCaches();
 
     KiInitializeKernel((PKPROCESS)LoaderBlock->Process,
                        (PKTHREAD)LoaderBlock->Thread,

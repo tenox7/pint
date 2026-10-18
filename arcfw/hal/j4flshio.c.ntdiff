@@ -5,4 +5,11 @@
 +    the Jazz HAL's j4flshio.c over the ARM cache primitives (j4cache.S).
 =1 15 56
 +    // The Cortex-A7 uses a write back data cache and, therefore, must be
-=1 72 137
+=1 72 79
++                // If the I/O operation is a DMA operation or a page read
++                // operation, then flush the data cache. A purge would discard
++                // the data of other objects in the cache lines the ends of the
++                // buffer share with them.
+=1 90 3 8
+=1 105 1 8
+=1 160 49

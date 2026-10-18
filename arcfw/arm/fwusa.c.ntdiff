@@ -5,6 +5,7 @@
 =1 20 3
 +#include "fwp.h"
 +
++PCHAR FW_TITLE_MSG = "ARC Firmware for the Raspberry Pi";
 =2 35 2
 =1 39 1
 +PCHAR FW_NOT_ENOUGH_ENTRIES_MSG = "Error: Not enough entries in the lookup table.\r\n";
