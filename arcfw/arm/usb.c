@@ -26,6 +26,7 @@ Abstract:
 #define USB_BASE                0x3F980000
 #define POWER_DEVICE_USB        3
 #define SCAN_INTERVAL_MS        250
+#define KEYBOARD_WAIT_MS        2000
 
 static USB_HOST UsbHost;
 static __declspec(align(64)) UCHAR UsbBuffer[USB_BUFFER_SIZE];
@@ -68,7 +69,8 @@ UsbInitialize (
 Routine Description:
 
     This routine powers the USB host and brings it up, which finds the
-    devices behind its root port.
+    devices behind its root port. If no keyboard is among them, it looks for
+    one coming up for a while, as the console is chosen by it.
 
 Return Value:
 
@@ -77,6 +79,8 @@ Return Value:
 --*/
 
 {
+    ULONG Start;
+
     if (MailboxSetPowerState(POWER_DEVICE_USB, TRUE) != 0) {
         FwPrint("USB: power on failed\r\n");
     }
@@ -87,11 +91,17 @@ Return Value:
     UsbHost.BufferAddress = MailboxPhysicalToBus((ULONG)UsbBuffer);
     UsbHost.ClockRate = 1000;
     UsbReady = UsbHostInitialize(&UsbHost);
-    UsbScanTime = FwGetMicroseconds();
     if (!UsbReady) {
         FwPrint("USB: no host\r\n");
     }
 
+    Start = FwGetMicroseconds();
+    while (UsbReady && !UsbKeyboardPresent() && FwGetMicroseconds() - Start < KEYBOARD_WAIT_MS * 1000) {
+        FwStallExecution(SCAN_INTERVAL_MS * 1000);
+        UsbHostScan(&UsbHost);
+    }
+
+    UsbScanTime = FwGetMicroseconds();
     return UsbReady;
 }
 

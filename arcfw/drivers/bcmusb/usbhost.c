@@ -162,6 +162,8 @@ Abstract:
 #define START_SPLIT_FRAMES      16
 #define RETRY_FIRST_MS          13
 #define RETRY_LAST_MS           104
+#define ENUMERATION_TRIES       4
+#define POWER_CYCLE_MS          200
 #define PHY_CLOCK_MHZ           60
 
 //
@@ -1361,9 +1363,43 @@ UsbEnumerate(
 }
 
 //
+// Read the status of a port of a hub and acknowledge its changes.
+//
+
+static BOOLEAN
+UsbPortStatus(
+    IN PUSB_HOST Host,
+    IN PUSB_DEVICE Hub,
+    IN ULONG Port,
+    OUT PULONG Status,
+    OUT PULONG Change
+    )
+{
+    UCHAR Data[4];
+    ULONG Feature;
+
+    if (UsbControl(Host, Hub, 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 4) {
+        return FALSE;
+    }
+
+    *Status = Data[0] | (Data[1] << 8);
+    *Change = Data[2] | (Data[3] << 8);
+    for (Feature = 0; Feature < 5; Feature += 1) {
+        if (*Change & (1 << Feature)) {
+            UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION + Feature, Port, NULL, 0);
+        }
+    }
+
+    return TRUE;
+}
+
+//
 // Look at a port of a hub: acknowledge its changes, remove the device that
 // was on it if it went (or came again), and reset and enumerate the device
-// connected to it if there is none yet.
+// connected to it if there is none yet. A device that fails is tried again
+// from a reset of its port, with the power of the port cycled halfway, as
+// Linux does; one that fails every try stays listed with the step it failed
+// at.
 //
 
 static VOID
@@ -1374,23 +1410,14 @@ UsbCheckPort(
     )
 {
     PUSB_DEVICE Hub = &Host->Devices[HubIndex];
-    UCHAR Data[4];
     ULONG Child = UsbFindDevice(Host, HubIndex, Port);
     ULONG Status;
     ULONG Change;
-    ULONG Feature;
     ULONG Time;
+    ULONG Try;
 
-    if (UsbControl(Host, Hub, 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 4) {
+    if (!UsbPortStatus(Host, Hub, Port, &Status, &Change)) {
         return;
-    }
-
-    Status = Data[0] | (Data[1] << 8);
-    Change = Data[2] | (Data[3] << 8);
-    for (Feature = 0; Feature < 5; Feature += 1) {
-        if (Change & (1 << Feature)) {
-            UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION + Feature, Port, NULL, 0);
-        }
     }
 
     if (Child != USB_NONE && ((Status & PORT_STATUS_CONNECTION) == 0 || (Change & PORT_CHANGE_CONNECTION))) {
@@ -1402,26 +1429,43 @@ UsbCheckPort(
         return;
     }
 
-    UsbSleep(100);
-    UsbControl(Host, Hub, 0x23, REQUEST_SET_FEATURE, PORT_RESET, Port, NULL, 0);
-    for (Time = 0; Time < 500; Time += 10) {
+    for (Try = 1; ; Try += 1) {
+        UsbSleep(100);
+        UsbControl(Host, Hub, 0x23, REQUEST_SET_FEATURE, PORT_RESET, Port, NULL, 0);
+        for (Time = 0; Time < 500; Time += 10) {
+            UsbSleep(10);
+            if (!UsbPortStatus(Host, Hub, Port, &Status, &Change)) {
+                return;
+            }
+
+            if ((Status & PORT_STATUS_RESET) == 0 || (Change & PORT_CHANGE_RESET)) {
+                break;
+            }
+        }
+
+        UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION + 4, Port, NULL, 0);
         UsbSleep(10);
-        if (UsbControl(Host, Hub, 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 4) {
+        UsbEnumerate(Host, HubIndex, Port,
+                     (Status & PORT_STATUS_LOW_SPEED) ? SPEED_LOW :
+                     (Status & PORT_STATUS_HIGH_SPEED) ? SPEED_HIGH : SPEED_FULL,
+                     (Status & PORT_STATUS_ENABLE) != 0);
+        Child = UsbFindDevice(Host, HubIndex, Port);
+        if (Child == USB_NONE || Host->Devices[Child].Stage == USB_STAGE_READY || Try == ENUMERATION_TRIES) {
             return;
         }
 
-        Status = Data[0] | (Data[1] << 8);
-        if ((Status & PORT_STATUS_RESET) == 0 || (Data[2] & PORT_CHANGE_RESET)) {
-            break;
+        UsbRemoveDevice(Host, Child);
+        if (Try == ENUMERATION_TRIES / 2) {
+            UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, PORT_POWER, Port, NULL, 0);
+            UsbSleep(POWER_CYCLE_MS);
+            UsbControl(Host, Hub, 0x23, REQUEST_SET_FEATURE, PORT_POWER, Port, NULL, 0);
+            UsbSleep(POWER_CYCLE_MS);
+        }
+
+        if (!UsbPortStatus(Host, Hub, Port, &Status, &Change) || (Status & PORT_STATUS_CONNECTION) == 0) {
+            return;
         }
     }
-
-    UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION + 4, Port, NULL, 0);
-    UsbSleep(10);
-    UsbEnumerate(Host, HubIndex, Port,
-                 (Status & PORT_STATUS_LOW_SPEED) ? SPEED_LOW :
-                 (Status & PORT_STATUS_HIGH_SPEED) ? SPEED_HIGH : SPEED_FULL,
-                 (Status & PORT_STATUS_ENABLE) != 0);
 }
 
 //
@@ -1459,7 +1503,7 @@ UsbSetFrameInterval(
 //
 // Look at the root port: remove the device on it if it went or the port was
 // disabled, and reset and enumerate the device connected to it if there is
-// none.
+// none, trying a device that fails again from a reset of the port.
 //
 
 static VOID
@@ -1469,6 +1513,7 @@ UsbCheckRoot(
 {
     ULONG Port = READ_REG(Host, HPRT0);
     ULONG Root = UsbFindDevice(Host, USB_ROOT, 0);
+    ULONG Try;
 
     if (Port & (HPRT0_CONNDET | HPRT0_ENACHG)) {
         WRITE_REG(Host, HPRT0, (Port & ~HPRT0_W1C_MASK) | (Port & (HPRT0_CONNDET | HPRT0_ENACHG)));
@@ -1484,18 +1529,27 @@ UsbCheckRoot(
         return;
     }
 
-    WRITE_REG(Host, HPRT0, (READ_REG(Host, HPRT0) & ~HPRT0_W1C_MASK) | HPRT0_RST);
-    UsbSleep(60);
-    WRITE_REG(Host, HPRT0, READ_REG(Host, HPRT0) & ~(HPRT0_W1C_MASK | HPRT0_RST));
-    UsbSleep(50);
-    Port = READ_REG(Host, HPRT0);
-    WRITE_REG(Host, HPRT0, (Port & ~HPRT0_W1C_MASK) | (Port & (HPRT0_CONNDET | HPRT0_ENACHG)));
-    Host->RootSpeed = (UCHAR)((Port & HPRT0_SPD_MASK) >> HPRT0_SPD_SHIFT);
-    if (Port & HPRT0_ENA) {
-        UsbSetFrameInterval(Host);
-    }
+    for (Try = 1; ; Try += 1) {
+        WRITE_REG(Host, HPRT0, (READ_REG(Host, HPRT0) & ~HPRT0_W1C_MASK) | HPRT0_RST);
+        UsbSleep(60);
+        WRITE_REG(Host, HPRT0, READ_REG(Host, HPRT0) & ~(HPRT0_W1C_MASK | HPRT0_RST));
+        UsbSleep(50);
+        Port = READ_REG(Host, HPRT0);
+        WRITE_REG(Host, HPRT0, (Port & ~HPRT0_W1C_MASK) | (Port & (HPRT0_CONNDET | HPRT0_ENACHG)));
+        Host->RootSpeed = (UCHAR)((Port & HPRT0_SPD_MASK) >> HPRT0_SPD_SHIFT);
+        if (Port & HPRT0_ENA) {
+            UsbSetFrameInterval(Host);
+        }
 
-    UsbEnumerate(Host, USB_ROOT, 0, Host->RootSpeed, (Port & HPRT0_ENA) != 0);
+        UsbEnumerate(Host, USB_ROOT, 0, Host->RootSpeed, (Port & HPRT0_ENA) != 0);
+        Root = UsbFindDevice(Host, USB_ROOT, 0);
+        if (Root == USB_NONE || Host->Devices[Root].Stage == USB_STAGE_READY || Try == ENUMERATION_TRIES ||
+            (READ_REG(Host, HPRT0) & HPRT0_CONNSTS) == 0) {
+            return;
+        }
+
+        UsbRemoveDevice(Host, Root);
+    }
 }
 
 BOOLEAN
