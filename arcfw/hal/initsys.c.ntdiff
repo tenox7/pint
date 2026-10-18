@@ -33,6 +33,7 @@
 =1 155 1
 =1 171 1
 =1 195 1
++            HalpInitializeClock(LoaderBlock);
 +        }
 =1 230 3
 +    }

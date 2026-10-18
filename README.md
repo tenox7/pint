@@ -38,7 +38,7 @@ system disk, keeping what NT wrote on it; the disk is made anew when the registr
 
 The firmware puts the console on HDMI when a USB keyboard is present, otherwise on serial. run.sh always attaches a USB
 mouse (click the window to give it to NT, Ctrl+Alt+G releases it) and a DS1307-type RTC at 0x68 on I2C1 (GPIO 2/3),
-where the HAL keeps the time.
+where the HAL keeps the time. Without an RTC the clock starts each boot at the firmware build date.
 
 The first run is NT's developer setup (three boots): Enter at the domain message, any key in the setup console,
 then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A C) and Enter log on as Administrator.

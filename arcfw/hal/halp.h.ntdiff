@@ -144,8 +144,10 @@
 +VOID
 +HalpClockInterrupt (
 +    IN PVOID Routine,
-=2 121 3
-=3 106 16
+=2 121 4
++HalpInitializeClock (
+=3 108 4
+=3 107 15
 +HalpInterruptDispatch (
 +    IN PVOID Routine,
 =2 121 4

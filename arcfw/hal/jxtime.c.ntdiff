@@ -4,6 +4,8 @@
 +    the Raspberry Pi 2 (the Jazz HAL's jxtime.c). The Pi 2 has no realtime
 +    clock of its own; its realtime clock is a Dallas DS1307 (or compatible)
 +    on the I2C bus of the expansion header, BSC1 on GPIO 2 and 3.
++    Without one the clock runs in memory, as a PC whose CMOS battery is flat:
++    from midnight of the date of the ARC firmware, plus the system timer.
 =1 17 5
 =1 24 3
 +
@@ -40,6 +42,19 @@
 +    IN PUCHAR Registers
 +    );
 +
++LARGE_INTEGER
++HalpSystemTimerTime (
++    VOID
++    );
++
++//
++// The local time of the memory clock at the system timer zero, valid once
++// the firmware date or a time set is in.
++//
++
++static LARGE_INTEGER HalpClockBase;
++static BOOLEAN HalpClockBaseValid;
++
 =1 46 21
 +    If the realtime clock is present and running, then the time values are
 +    read from the realtime clock and a value of TRUE is returned. Otherwise,
@@ -49,15 +64,24 @@
 +    UCHAR Hour;
 +    KIRQL OldIrql;
 +    BOOLEAN Valid;
++    LARGE_INTEGER Time;
 +
 +    //
 +    // Read the realtime clock registers in one transfer: the clock latches
-+    // its time at the start of the read.
++    // its time at the start of the read. Without a running clock, the memory
++    // clock gives the time.
 =1 82 3
 +    Valid = HalpReadClockRegisters(Registers);
++    Time = HalpSystemTimerTime();
 =1 108 1 -4
 +    if (!Valid || (Registers[RTC_SECOND] & RTC_CLOCK_HALT) != 0) {
-+        return FALSE;
++        if (!HalpClockBaseValid) {
++            return FALSE;
++        }
++
++        Time.QuadPart += HalpClockBase.QuadPart;
++        RtlTimeToTimeFields(&Time, TimeFields);
++        return TRUE;
 +    }
 +
 +    Hour = Registers[RTC_HOUR];
@@ -79,16 +103,24 @@
 +}
 +
 =1 117 21
-+    If the realtime clock is present and the time is one it holds, then the
-+    time values are written to the realtime clock (which starts it) and a
-+    value of TRUE is returned. Otherwise, a value of FALSE is returned.
++    The time is set in the memory clock. If the realtime clock is present and
++    the time is one it holds, then the time values are written to the realtime
++    clock (which starts it) too. A value of TRUE is returned if the time is
++    valid. Otherwise, a value of FALSE is returned.
 =1 70 5
 +    UCHAR Registers[RTC_REGISTERS];
 +    KIRQL OldIrql;
-+    BOOLEAN Written;
++    LARGE_INTEGER Time;
 +
-+    if (TimeFields->Year < 2000 || TimeFields->Year > 2099) {
++    if (!RtlTimeFieldsToTime(TimeFields, &Time)) {
 +        return FALSE;
++    }
+=1 83 2
++    HalpClockBase.QuadPart = Time.QuadPart - HalpSystemTimerTime().QuadPart;
++    HalpClockBaseValid = TRUE;
+=1 108 1 -4
++    if (TimeFields->Year < 2000 || TimeFields->Year > 2099) {
++        return TRUE;
 +    }
 +
 +    Registers[RTC_SECOND] = BINARY_TO_BCD(TimeFields->Second);
@@ -99,9 +131,74 @@
 +    Registers[RTC_MONTH] = BINARY_TO_BCD(TimeFields->Month);
 +    Registers[RTC_YEAR] = BINARY_TO_BCD(TimeFields->Year - 2000);
 =1 84 1
-+    Written = HalpWriteClockRegisters(Registers);
-=1 108 1 -4
-+    return Written;
++    HalpWriteClockRegisters(Registers);
+=1 108 2 -4
++}
++
++LARGE_INTEGER
++HalpSystemTimerTime (
++    VOID
+=1 49 6
++    This routine returns the time since power on in 100ns units from the
++    64-bit 1 MHz system timer, its high word read again if the low one wrapped
++    between the reads.
+=1 70 5
++    LARGE_INTEGER Time;
++    ULONG High;
++
++    do {
++        High = HAL_REG(HAL_ST_CHI);
++        Time.LowPart = HAL_REG(HAL_ST_CLO);
++        Time.HighPart = HAL_REG(HAL_ST_CHI);
++    } while (Time.HighPart != (LONG)High);
++
++    Time.QuadPart *= 10;
++    return Time;
++}
++
++VOID
++HalpInitializeClock (
++    IN PLOADER_PARAMETER_BLOCK LoaderBlock
+=1 49 6
++    This routine starts the memory clock at midnight of the date of the ARC
++    firmware ("mm/dd/yy", in the device specific data of the system entry of
++    the configuration tree), as the firmware's own time does.
+=1 59 3
++    LoaderBlock - Supplies a pointer to the loader parameter block.
+=1 70 5
++    PCONFIGURATION_COMPONENT_DATA SystemEntry;
++    PCM_PARTIAL_RESOURCE_LIST List;
++    PCHAR Date;
++    TIME_FIELDS TimeFields;
++    LARGE_INTEGER Time;
++
++    SystemEntry = KeFindConfigurationEntry(LoaderBlock->ConfigurationRoot, SystemClass, ArcSystem, NULL);
++    if (SystemEntry == NULL || SystemEntry->ConfigurationData == NULL ||
++        SystemEntry->ComponentEntry.ConfigurationDataLength <
++            sizeof(CM_PARTIAL_RESOURCE_LIST) + sizeof(ARM_SYSTEM_FIRMWARE_DATA)) {
++        return;
++    }
++
++    List = (PCM_PARTIAL_RESOURCE_LIST)SystemEntry->ConfigurationData;
++    if (List->Count != 1 || List->PartialDescriptors[0].Type != CmResourceTypeDeviceSpecific) {
++        return;
++    }
++
++    Date = ((PARM_SYSTEM_FIRMWARE_DATA)(List + 1))->SystemFirmwareDate;
++    if (Date[2] != '/' || Date[5] != '/') {
++        return;
++    }
++
++    RtlZeroMemory(&TimeFields, sizeof(TimeFields));
++    TimeFields.Month = (CSHORT)((Date[0] - '0') * 10 + Date[1] - '0');
++    TimeFields.Day = (CSHORT)((Date[3] - '0') * 10 + Date[4] - '0');
++    TimeFields.Year = (CSHORT)(2000 + (Date[6] - '0') * 10 + Date[7] - '0');
++    if (!RtlTimeFieldsToTime(&TimeFields, &Time)) {
++        return;
++    }
++
++    HalpClockBase.QuadPart = Time.QuadPart - HalpSystemTimerTime().QuadPart;
++    HalpClockBaseValid = TRUE;
 +}
 +
 +BOOLEAN
