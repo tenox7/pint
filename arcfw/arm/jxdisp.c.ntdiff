@@ -10,7 +10,9 @@
 +#include "string.h"
 +
 +//
-+// Define the requested display resolution; the VideoCore may grant another.
++// Define the display resolution used when the VideoCore reports none. The
++// resolution is that of the VideoCore's frame buffer: framebuffer_width and
++// framebuffer_height of config.txt, else the mode of the display.
 +//
 +
 +#define FW_DISPLAY_WIDTH        1920
@@ -20,6 +22,7 @@
 +// Define the mailbox property tags that allocate the frame buffer.
 +//
 +
++#define TAG_GET_PHYSICAL_SIZE   0x00040003
 +#define TAG_SET_PHYSICAL_SIZE   0x00048003
 +#define TAG_SET_VIRTUAL_SIZE    0x00048004
 +#define TAG_SET_DEPTH           0x00048005
@@ -159,9 +162,9 @@
 +static ARC_STATUS
 +InitializeVideoCore (
 =1 1142 7
-+    This routine asks the VideoCore for a 32 bit per pixel frame buffer of the
-+    requested resolution in one property message, and records the frame
-+    buffer and the resolution it granted.
++    This routine asks the VideoCore for the resolution of its frame buffer,
++    then for a 32 bit per pixel frame buffer of that resolution, and records
++    the frame buffer and the resolution it granted.
 =1 297 3
 +    ESUCCESS if a frame buffer was allocated, otherwise EINVAL.
 =1 301 4
@@ -171,18 +174,34 @@
 +    ULONG OrderIndex;
 +    ULONG BufferIndex;
 +    ULONG PitchIndex;
++    ULONG Width = FW_DISPLAY_WIDTH;
++    ULONG Height = FW_DISPLAY_HEIGHT;
 +
++    Message[Index++] = TAG_GET_PHYSICAL_SIZE;
++    Message[Index++] = 8;
++    Message[Index++] = 0;
++    Message[Index++] = 0;
++    Message[Index++] = 0;
++    Message[Index++] = 0;
++    Message[0] = Index * sizeof(ULONG);
++    Message[1] = 0;
++    if ((MailboxPropertyCall(Message) == 0) && (Message[5] != 0) && (Message[6] != 0)) {
++        Width = Message[5];
++        Height = Message[6];
++    }
++
++    Index = 2;
 +    SizeIndex = Index;
 +    Message[Index++] = TAG_SET_PHYSICAL_SIZE;
 +    Message[Index++] = 8;
 +    Message[Index++] = 8;
-+    Message[Index++] = FW_DISPLAY_WIDTH;
-+    Message[Index++] = FW_DISPLAY_HEIGHT;
++    Message[Index++] = Width;
++    Message[Index++] = Height;
 +    Message[Index++] = TAG_SET_VIRTUAL_SIZE;
 +    Message[Index++] = 8;
 +    Message[Index++] = 8;
-+    Message[Index++] = FW_DISPLAY_WIDTH;
-+    Message[Index++] = FW_DISPLAY_HEIGHT;
++    Message[Index++] = Width;
++    Message[Index++] = Height;
 +    Message[Index++] = TAG_SET_DEPTH;
 +    Message[Index++] = 4;
 +    Message[Index++] = 4;

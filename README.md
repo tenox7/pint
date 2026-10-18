@@ -40,15 +40,21 @@ The firmware puts the console on HDMI when a USB keyboard is present, otherwise 
 mouse (click the window to give it to NT, Ctrl+Alt+G releases it) and a DS1307-type RTC at 0x68 on I2C1 (GPIO 2/3),
 where the HAL keeps the time. Without an RTC the clock starts each boot at the firmware build date.
 
-The first run is NT's developer setup (three boots): Enter at the domain message, any key in the setup console,
+The first run is NT's developer setup (three boots): any key in the setup console,
 then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A C) and Enter log on as Administrator.
+
+The resolution is `framebuffer_width` and `framebuffer_height` of the SD card's `config.txt` (1920x1080; without them the
+display's mode), in QEMU `RES=1280x1024 build/run.sh`.
 
 For a real Pi 2 or 3, write `obj/nt-arcfw-sd.img` to an SD card. USB keyboards and mice, behind hubs too (and KVMs
 with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lists the USB devices it found.
 
-Networking: TCP/IP (DHCP) and NetBIOS over TCP/IP on the onboard Ethernet (LAN9514 on the Pi 2/3B, LAN7800 on
-the 3B+; not yet tested on a real Pi), in QEMU a USB Ethernet adapter (NONET=1 run.sh: none). ping, ipconfig,
-hostname, `net use`, `net share`.
+## Networking
+
+Networking works: TCP/IP with DHCP and NetBIOS over TCP/IP, so NT maps shares of Windows and Samba servers (File Manager
+or `net use`), shares its own folders (`net share`), and has ping, ipconfig and hostname. It uses the onboard Ethernet
+(LAN9514 on the Pi 2/3B, LAN7800 on the 3B+; not yet tested on a real Pi), in QEMU a USB Ethernet adapter
+(`NONET=1 build/run.sh`: none).
 
 ## Roadmap
 

@@ -26,3 +26,8 @@ hdmi_drive=2
 # If the screen stays blank on a particular monitor, uncomment this conservative
 # mode and re-copy the file (it forces a safe 640x480-ish HDMI mode):
 # hdmi_safe=1
+
+# The resolution of NT (firmware, blue screen and Windows): the size of the frame
+# buffer. Without these lines it is the display's mode (hdmi_group/hdmi_mode).
+framebuffer_width=1920
+framebuffer_height=1080

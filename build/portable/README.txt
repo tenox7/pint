@@ -6,5 +6,6 @@ are in the terminal: Ctrl-A C switches between them (monitor: sendkey ctrl-alt-d
 A new disk first runs NT's developer setup (three boots): any key in the setup console,
 then Ctrl+Alt+Del and Enter to log on as Administrator. Extra QEMU options are passed through, e.g. -display vnc=:1.
 Networking: a USB Ethernet adapter on QEMU user mode networking (NAT, DHCP).
+Resolution: RES=1280x1024 ./run.sh (run.cmd: set RES=1280x1024 first), default 1920x1080.
 
 QEMU @V@ source: https://download.qemu.org/qemu-@V@.tar.xz (GPLv2, see bin/COPYING).
