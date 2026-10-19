@@ -205,4 +205,11 @@ dll $N NDIS/DETECT/DLL; dll $P NET/DETECT/DLL
 for c in PCH XLATE SP C NCPA; do lib $P NET/UI/NCPA/$c; done; dll $P NET/UI/NCPA/BIN
 for c in XLATE SRC; do lib $P NET/UI/NCPA/TCPIP/$c; done; dll $P NET/UI/NCPA/TCPIP/BIN
 
+# the TCP/IP services the network control panel installs, hosted by tcpsvcs.exe: the FTP server (its
+# administration API, performance counters, Control Panel applet and Server Manager extension) and
+# the simple TCP/IP services
+D=NET/SOCKETS/TCPCMD/FTPSVC
+dll $P $D/CLIENT; dll $P $D/SERVER; dll $P $D/FTPCTRS; dll $P NET/UI/FTPMGR/CPL; dll $P NET/UI/FTPMGR/FTPSMX
+dll $P NET/SOCKETS/TCPSVCS/SIMPTCP; exe $P NET/SOCKETS/TCPSVCS/TCPSVCS tcpsvcs
+
 exe /work/RASPI/arcfw/apps hello hello

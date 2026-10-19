@@ -55,7 +55,8 @@ Networking works: TCP/IP with DHCP and NetBIOS over TCP/IP, so NT maps shares of
 or `net use`), shares its own folders (`net share`), and has ping, ipconfig and hostname. It uses the onboard Ethernet
 (LAN9514 on the Pi 2/3B, LAN7800 on the 3B+), in QEMU a USB Ethernet adapter
 (`NONET=1 build/run.sh`: none). Control Panel > Network configures it: TCP/IP (DHCP or a static address, DNS, WINS),
-bindings, computer name and workgroup.
+bindings, computer name and workgroup. Its Add Software > TCP/IP Protocol installs the FTP Server and the Simple TCP/IP
+Services.
 
 ## Roadmap
 

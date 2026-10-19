@@ -219,5 +219,6 @@ arcfw/ported/net/detect/dll/msncdet.c
 arcfw/ported/net/detect/dll/detect.h
 arcfw/ported/rpc/runtime/trans/win32/clntnb/netbcom.c
 arcfw/ported/rpc/runtime/trans/win32/clntnb/nbltclnt.c
+arcfw/ported/net/ui/ftpmgr/ftpsmx/ftpmgr.cxx
 arcfw/ported/rpc/runtime/trans/win32/svrnb/netbcom.c
 arcfw/ported/rpc/runtime/trans/win32/svrnb/nbltsvr.c
