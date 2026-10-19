@@ -1,0 +1,12 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/MIPSINF.MK
++#
++# doarminf
++#
++
++doeacharminf:: \
+=1 7 4
++        ..\$(NEWINF)$(LOCATION)\oemnadbc.inf
++
+=1 15 12
++..\$(NEWINF)$(LOCATION)\oemnadbc.inf: oemnadbc.inf
+=1 28 2

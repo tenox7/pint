@@ -1,0 +1,14 @@
+;
+; NCPABIND.INF: the network control panel computes the bindings of the installed
+; network components and stores them (NCPA.CPL CPlSetup BINDONLY). Run by the
+; developer first run (registry.ini InsertScript) for the Route values REGINI cannot
+; write into the hives.
+;
+[Shell Commands]
+    set-title "Windows NT Network Bindings"
+    LoadLibrary "x" $(!STF_CWDDIR)ncpa.cpl !NCPA_HANDLE
+    LibraryProcedure NCPA_RESULT $(!NCPA_HANDLE), CPlSetup $(!STF_HWND), BINDONLY
+    FreeLibrary $(!NCPA_HANDLE)
+    exit
+[Source Media Descriptions]
+    1 = "Windows NT Workstation CD-ROM"

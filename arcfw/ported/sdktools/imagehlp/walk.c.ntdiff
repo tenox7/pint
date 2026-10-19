@@ -1,0 +1,12 @@
+#ntdiff PRIVATE/SDKTOOLS/IMAGEHLP/WALK.C
+=1 1 85
++BOOL
++WalkArm(
+=1 70 4
+=1 63 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
+=1 84 54
++        case IMAGE_FILE_MACHINE_ARMNT:
++            rval = WalkArm( hProcess, StackFrame, (PCONTEXT) ContextRecord,
++                            ReadMemory, FunctionTableAccess, GetModuleBase );
+=1 136 52

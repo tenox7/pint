@@ -1,0 +1,15 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/ENG_NET.TXT
+=1 1 7060
++#####oemnadbc.inf arm
+=1 2 15
++    BCMETH     = "Raspberry Pi Ethernet Adapter"
+=1 18 21
++FunctionTitle   = "Raspberry Pi Ethernet Adapter Card Setup"
+=1 40 3
++ProductSoftwareDescription      = "Raspberry Pi Ethernet Adapter Driver"
+=1 44 8
++ProductSoftwareTitle    = "Raspberry Pi Ethernet Adapter Driver"
++ProductHardwareBCMETHTitle       = "Raspberry Pi Ethernet Adapter"
+=1 54 20
++; No UI for bcmeth
+=1 75 5

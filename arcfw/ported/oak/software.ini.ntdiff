@@ -1,9 +1,188 @@
 #ntdiff PUBLIC/OAK/BIN/SOFTWARE.INI
 =1 1 880
++#if defined(_RASPI_) && !defined(_NETIDW_SETUP_)
 +                    1
 +                        ServiceName = Bcmeth1
-+                        Title = [1] Raspberry Pi USB Ethernet Adapter
-+                        Description = Raspberry Pi USB Ethernet Adapter
-+                        Manufacturer = Microchip
++                        Manufacturer = Microsoft
++                        Title = [1] Raspberry Pi Ethernet Adapter
++                        Description = Raspberry Pi Ethernet Adapter
 +                        ProductName = Bcmeth
-=1 881 1031
+=1 876 1 8
++                        NetRules
++                            InfName = OEMNADBC.INF
++                            type = bcmeth bcmethAdapter
++                            bindform = "Bcmeth1" yes yes container
++                            class = REG_MULTI_SZ "bcmethAdapter basic"
++                            InfOption = BCMETH
++#endif // defined(_RASPI_) && !defined(_NETIDW_SETUP_)
+=1 881 891
++#if defined(_RASPI_) && !defined(_NETIDW_SETUP_)
++                ncacn_nb_tcp0 = REG_DWORD 0x00000000
++#endif // defined(_RASPI_) && !defined(_NETIDW_SETUP_)
+=1 1772 3
++#if defined(_RASPI_) && !defined(_NETIDW_SETUP_)
++                ncacn_ip_tcp=rpclts3.dll
++                ncadg_ip_udp=rpcdgs3.dll
++                ncacn_nb_tcp=rpclts5.dll
++#endif // defined(_RASPI_) && !defined(_NETIDW_SETUP_)
+=1 1775 3
++#if defined(_RASPI_) && !defined(_NETIDW_SETUP_)
++                ncacn_ip_tcp=rpcltc3.dll
++                ncadg_ip_udp=rpcdgc3.dll
++                ncacn_nb_tcp=rpcltc5.dll
++            SecurityService
++                DefaultProvider = security.dll
++                10 = security.dll
++                DefaultAuthLevel = REG_DWORD 0x00000000
++        //
++        // The network products of the Raspberry Pi network install (the network
++        // block of SYSTEM.INI). The network control panel stores their bindings when
++        // the developer first run starts NCPABIND.INF (registry.ini).
++        //
++        Bcmeth
++            CurrentVersion
++                ServiceName = Bcmeth
++                RefCount = REG_DWORD 0x00000001
++                SoftwareType = driver
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = Raspberry Pi Ethernet Adapter Driver
++                Description = Raspberry Pi Ethernet Adapter Driver
+=1 876 1
++                NetRules
++                    InfName = OEMNADBC.INF
++                    type = bcmethSys ndisDriver bcmethDriver
++                    use = driver
++                    bindform = "BcmethSys" yes no container
++                    class = REG_MULTI_SZ "bcmethDriver basic"
++                    bindable = REG_MULTI_SZ "bcmethDriver bcmethAdapter non exclusive 100"
++                    InfOption = BCMETH
++        Browser
++            CurrentVersion
++                ServiceName = Browser
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = service
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = Computer Browser
++                Description = Microsoft Network Browser Service
+=1 876 1
++                NetRules
++                    InfName = OEMNSVWK.INF
++                    InfOption = BROWSER
++        LanmanServer
++            CurrentVersion
++                ServiceName = LanmanServer
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = service
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = Server
++                Description = Microsoft Windows Server Service
+=1 876 1
++                NetRules
++                    InfName = OEMNSVSV.INF
++                    type = srv lmNetService lanmanServer
++                    class = REG_MULTI_SZ "lanmanServer lmNetService"
++                    use = service yes yes
++                    bindform = "LanmanServer" yes yes container
++                    InfOption = SRV
++        LanmanWorkstation
++            CurrentVersion
++                ServiceName = LanmanWorkstation
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = service
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = Workstation
++                Description = Microsoft Windows Workstation Service
+=1 876 1
++                NetRules
++                    InfName = OEMNSVWK.INF
++                    type = wksta lmNetService lanmanWorkstation
++                    class = REG_MULTI_SZ "lanmanWorkstation lmNetService"
++                    use = service yes yes
++                    bindform = "LanmanWorkstation" yes yes container
++                    InfOption = WKSTA
++        Ncpa
++            CurrentVersion
++                NtlanmanInfName = REG_EXPAND_SZ NTLANMAN.INF
++                NcpaShelInfName = REG_EXPAND_SZ NCPASHEL.INF
++                RawRules = REG_MULTI_SZ "(devClass ndisDriver basic no)"  \
++                                        "(devClass ndisTransport basic no)"  \
++                                        "(devClass netBiosTransport ndisTransport no)"  \
++                                        "(devClass lmNetService basic no)"  \
++                                        "(bindable ndisTransport ndisDriver non non 100)"  \
++                                        "(bindable lmNetService netBiosTransport non non 100)"
++                IDW = REG_DWORD 0x00000001
++                ReviewPrograms = REG_MULTI_SZ "NBINFO.INF"
++        NetBIOS
++            CurrentVersion
++                ServiceName = NetBIOS
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = service
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = NetBIOS Interface
++                Description = Microsoft NetBIOS Transport Interface
+=1 876 1
++                NetRules
++                    InfName = OEMNSVNB.INF
++                    type = netbios lmNetService
++                    use = service yes yes
++                    bindform = "Netbios" yes yes container
++                    InfOption = NETBIOS
++        NetBT
++            CurrentVersion
++                ServiceName = NetBT
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = transport
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Hidden = REG_DWORD 0x00000001
++                Title = WINS Client(TCP/IP)
++                Description = NetBT System Driver
+=1 876 1
++                NetRules
++                    InfName = OEMNXPTC.INF
++                    type = netbt netBiosTransport netbtTransport
++                    use = transport yes yes
++                    bindform = "NetBT" yes yes simple
++                    class = REG_MULTI_SZ "netbtTransport netBiosTransport"
++                    InfOption = NETBT
++        RPCLOCATOR
++            CurrentVersion
++                ServiceName = RPCLOCATOR
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = service
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = RPC Configuration
++                Description = Remote Procedure Call Configuration
+=1 876 1
++                NetRules
++                    InfName = OEMNSVRP.INF
++                    InfOption = RPCLOCATE
++        Tcpip
++            CurrentVersion
++                ServiceName = Tcpip
++                RefCount = REG_DWORD 0x00000000
++                SoftwareType = transport
++                MajorVersion = REG_DWORD 0x00000003
++                MinorVersion = REG_DWORD 0x00000005
++                Title = TCP/IP Protocol
++                Description = TCP/IP Protocol Driver
++                Review = REG_DWORD 0x00000001
+=1 876 1
++                NetRules
++                    InfName = OEMNXPTC.INF
++                    type = tcpip tcpipTransport
++                    use = transport yes yes
++                    bindform = "Tcpip" yes yes container
++                    bindable = REG_MULTI_SZ "tcpipService tcpipTransport non exclusive 100"  \
++                                            "tcpipTransport ndisDriver non non 100"
++                    class = REG_MULTI_SZ "tcpipTransport basic"  \
++                                         "tcpipService basic yes"
++                    InfOption = TC
++#endif // defined(_RASPI_) && !defined(_NETIDW_SETUP_)
+=1 1778 134

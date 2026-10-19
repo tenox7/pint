@@ -110,13 +110,22 @@ ntcc $DIR/newarray.obj /work/RASPI/arcfw/crt/cxx/newarray.cxx && ntlib $DIR/newa
 # In the order of makefile.def: LINKLIBS, the TARGETLIB of a DLL (crtdll.lib with
 # USE_CRTDLL, ntdll.lib), TARGETLIBS. A library is the one make-lib.sh made for the
 # directory named, else that of its name: a library or an import library.
-LIBS=""; seen=""
+LIBS=""; seen=""; RESLIBS=""
 set -f
 for l in $(macro LINKLIBS) $([ -z "$(macro USE_CRTDLL)" ] || echo crtdll.lib) $([ $NAME = ntdll ] || echo ntdll.lib) $(macro TARGETLIBS); do
+  case $l in *.[Rr][Ee][Ss]) RESLIBS="$RESLIBS $l"; continue ;; esac
   b=$(basename "$(echo "$l" | tr "\\\\" /)" | tr A-Z a-z); b=${b%.lib}
   case " $seen " in *" $b "*) continue ;; esac; seen="$seen $b"
   a=$(bash libpath.sh $D "$l"); [ -n "$a" ] || a=$U/$b.lib
   [ -f $a ] || { echo "   missing library $b (build it first)"; exit 1; }
+  LIBS="$LIBS $a"
+done
+# The objects the makefile.inc adds (OBJECTS = $(OBJECTS) ...\obj\$(TARGET_DIRECTORY)\x.obj):
+# those make-lib.sh made for that directory.
+MKI=$(ls $D | grep -ix makefile.inc) && \
+for l in $(tr -d "\r" < $D/$MKI | grep -iE "^[[:space:]]*OBJECTS[[:space:]]*=[[:space:]]*\\\$\(OBJECTS\)" | sed -E "s/^[^)]*\)//; s/\\\$\(TARGET_DIRECTORY\)/*/g"); do
+  a=$(bash libpath.sh $D "$l")
+  [ -n "$a" ] || { echo "   missing object $l (build it first)"; exit 1; }
   LIBS="$LIBS $a"
 done
 set +f
@@ -130,6 +139,17 @@ ENTRY=$(macro DLLENTRY | tr -d " ")
 E=-noentry; [ -z "$ENTRY" ] || E=-entry:$ENTRY
 RC=$(bash srclist.sh $COMP $ROOT rc 2>/dev/null | head -1)
 RES=""; [ -z "$RC" ] || RES=$(bash rc.sh $D $RC $DEFS $INCS) || exit 1
+# The resource files the libraries name: one another component made (..\xlate\obj\*\x.res,
+# make-lib.sh) as it is, one of the component (obj\*\x.res) from its x.rc.
+set -f
+for l in $RESLIBS; do
+  a=$(bash libpath.sh $D "$l")
+  case $a in "") ;; */dir/${D#/work/}/*) ;; *) RES="$RES $a"; continue ;; esac
+  r=$(basename "$(echo "$l" | tr "\\\\" /)")
+  n=$(ls $D | grep -ix "${r%.*}.rc") || { echo "   no ${r%.*}.rc for $l"; exit 1; }
+  [ "$D/$n" = "$RC" ] || RES="$RES $(bash rc.sh $D $D/$n $DEFS $INCS)" || exit 1
+done
+set +f
 F=$(echo $NAME.$EXT | tr a-z A-Z)
 link -nologo -machine:arm -release -force:multiple -dll $E -base:$BASE -subsystem:console -nodefaultlib \
      -debug -pdb:$O/$NAME.pdb -map:$O/$NAME.map -def:$DIR/$NAME.def -implib:$DIR/$NAME.lib -out:$DIR/$F \

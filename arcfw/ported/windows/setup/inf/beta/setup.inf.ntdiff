@@ -1,0 +1,16 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/SETUP.INF
+=1 1 46
++    ProcessorID_CortexA7  = Cortex_A7
++    ProcessorID_CortexA53 = Cortex_A53
+=1 47 9
++    PlatformID_Arm = Arm
+=1 56 68
++[VarsArm]
++DefaultVideo   = ""
+=1 123 148
++    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA7)
++        ifstr(i) $(STF_PLATFORM) != $(PlatformID_Arm)
+=1 238 5
++    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA53)
++        ifstr(i) $(STF_PLATFORM) != $(PlatformID_Arm)
+=1 266 858

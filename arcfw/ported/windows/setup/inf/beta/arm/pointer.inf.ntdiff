@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/MIPS/POINTER.INF
+=1 1 19
++    "USB MOUSE"    = usb
+=1 22 11
++    bcmusb = !SERVICE_KERNEL_DRIVER, "Keyboard Port", !SERVICE_ERROR_NORMAL, 1, "%SystemRoot%\System32\IoLogMsg.dll;%SystemRoot%\System32\drivers\bcmusb.sys" , 7
+=1 35 416
++                ifstr(i) $(CurrentPortEntry) != bcmusb
+=1 452 114

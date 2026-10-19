@@ -17,10 +17,11 @@ drv FASTFAT; drv FSREC; drv NPFS; drv MAILSLOT
 drv VIDEO/PORT; bcm bcmvideo
 drv DD/KBDCLASS; drv DD/MOUCLASS; bcm bcmusb
 drv DD/NULL; drv DD/BEEP
-# networking: the NDIS wrapper, the Ethernet miniport of the board (a function of bcmusb),
-# the TDI wrapper and TCP/IP with NetBIOS over TCP/IP, the NetBIOS interface, Windows
-# Sockets (afd), and the redirector, server, browser and multiple UNC provider of LAN Manager
+# networking: the NDIS wrapper, the netcard detection driver of setup, the Ethernet miniport of
+# the board (a function of bcmusb), the TDI wrapper and TCP/IP with NetBIOS over TCP/IP, the
+# NetBIOS interface, Windows Sockets (afd), and the redirector, server, browser and multiple UNC
+# provider of LAN Manager
 lib() { cstep lib $N $1 -- $K/make-lib.sh $1; }
-drv NDIS/WRAPPER; bcm bcmeth
+drv NDIS/WRAPPER; drv NDIS/DETECT/DRIVER; bcm bcmeth
 drv TDI/WRAPPER; lib TDI/TCPIP/IP; drv TDI/TCPIP/TCP; lib NBT/NBT; drv NBT/NT; drv NETBIOS; drv AFD
 lib SMBTRSUP; lib BOWSER; drv MUP/DAYTONA; drv RDR/DAYTONA; drv SRV/DAYTONA

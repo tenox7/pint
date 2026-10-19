@@ -17,15 +17,18 @@
 +#define BCMEMMC 1
 +#define BCMVIDEO 1
 +#define BCMUSB 1
++#if !defined(_NETIDW_SETUP_)
++#define RASPINET 1
++#endif // !defined(_NETIDW_SETUP_)
 =1 116 3
 +#define CDFS 1
 +#endif // _HIVE_RASPI_
 =1 173 17
 +    defined(MITSUMI) || defined(BCMEMMC)
 =1 191 821
-+#if defined(NETWORK) || defined(RASPI)
++#if defined(NETWORK) || defined(RASPINET)
 =1 1013 3
-+#if defined(RASPI)
++#if defined(RASPINET)
 +            ServiceProvider
 +                Order
 +                    ExcludedProviders = REG_MULTI_SZ ""
@@ -38,285 +41,636 @@
 =1 1227 1
 +#elif defined(_RETAIL_SETUP_)
 =1 1210 39
-+#if defined(RASPI)
++#if defined(RASPINET)
 +            //
-+            // The network of the Raspberry Pi, as the network setup of NT 3.5 (the
-+            // network control panel and the INFs of its options) configures it: the
-+            // Ethernet controller of the board (the Bcmeth miniport, adapter Bcmeth1),
-+            // TCP/IP with DHCP and NetBIOS over TCP/IP, the NetBIOS interface, Windows
-+            // Sockets, and the workstation, server, browser, messenger, alerter and net
-+            // logon services. The linkage is the one the binding of the control panel
-+            // computes, without its Route values, which only the control panel reads.
-+            // The workgroup and the account domain of a developer install come from
-+            // registry.ini.
++            // The network of the Raspberry Pi as the network setup of NT 3.5 installs
++            // it: NTLANMAN.INF with OEMNADBC.INF for the Ethernet controller of the board
++            // (the Bcmeth miniport, adapter Bcmeth1), OEMNXPTC.INF for TCP/IP with DHCP
++            // and NetBIOS over TCP/IP, and the services of LAN Manager, NetBIOS and RPC,
++            // bound as the network control panel binds them. It is the registry of a
++            // developer network install (setup /i NTIDWNET.INF on the ARMNETIDW hives)
++            // without what DHCP writes while it runs, and without the Route values of
++            // the bindings (with the LanaNum and EnumExport values NBINFO.INF keeps for
++            // its routes): their strings hold quotes, which REGINI cannot write. The
++            // network control panel stores the bindings again with them when the
++            // developer first run starts NCPABIND.INF (registry.ini). The workgroup and
++            // the account domain of a developer install come from registry.ini.
 +            //
++
++            Afd
++                Type = REG_DWORD 0x00000001
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\afd.sys
++                DisplayName = AFD Networking Support Environment
++                DependOnGroup = REG_MULTI_SZ 
++                Linkage
++                    Disabled
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000000  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            Alerter
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
+=1 3300 1
++                DisplayName = Alerter
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation" 
++                DependOnGroup = REG_MULTI_SZ 
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                    AlertNames = REG_MULTI_SZ 
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000000  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
 +
 +            Bcmeth
-=1 2802 3
-+                Group = NDIS
++                Type = REG_DWORD 0x00000001
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
 +                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\bcmeth.sys
-+                DisplayName = REG_SZ Raspberry Pi Ethernet Adapter Driver
-+                Parameters
++                DisplayName = Raspberry Pi Ethernet Adapter Driver
++                Group = NDIS
 +                Linkage
-+                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
-+                    Export = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1" 
++                    Export = REG_MULTI_SZ "\Device\Bcmeth1" 
 +                    Disabled
++                        Bind = REG_MULTI_SZ 
++                        Export = REG_MULTI_SZ 
++                        Route = REG_MULTI_SZ 
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00040002  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00040002  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00040002  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
 +
 +            Bcmeth1
-=1 3034 3
++                Type = REG_DWORD 0x00000004
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                Linkage
++                    Disabled
 +                Parameters
-+                    MediaType = REG_DWORD 1
-+                    BusType = REG_DWORD 0
-+                    BusNumber = REG_DWORD 0
+=1 3042 1
++                    BusType = REG_DWORD 0x00000000
+=1 3039 1
++                    AdapterType = REG_DWORD 0x00000002
 +                    Tcpip
-+                        EnableDHCP = REG_DWORD 1
-+                        UseZeroBroadcast = REG_DWORD 0
-+                        LLInterface = REG_SZ
-+                        IPAddress = REG_MULTI_SZ "0.0.0.0"
-+                        SubnetMask = REG_MULTI_SZ "0.0.0.0"
-+                        DefaultGateway = REG_MULTI_SZ ""
++                        EnableDHCP = REG_DWORD 0x00000001
++                        UseZeroBroadcast = REG_DWORD 0x00000000
++                        LLInterface = 
++                        IPAddress = REG_MULTI_SZ "0.0.0.0" 
++                        DefaultGateway = REG_MULTI_SZ 
++                        SubnetMask = REG_MULTI_SZ "0.0.0.0" 
++            Browser
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
+=1 3300 1
++                DisplayName = Computer Browser
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation"  \
++                                               "LanmanServer"  \
++                                               "LmHosts" 
++                DependOnGroup = REG_MULTI_SZ 
++                ObjectName = LocalSystem
 +                Linkage
 +                    Disabled
-+
-+            Tcpip
-=1 2802 3
-=1 3294 1
-+                DisplayName = REG_SZ TCP/IP Service
-=1 3481 1
-+                Parameters
-+                    DataBasePath = REG_EXPAND_SZ %SystemRoot%\System32\drivers\etc
-+                    Domain = REG_SZ
-+                    Hostname = REG_SZ raspi
-+                    NameServer = REG_SZ
-+                    ForwardBroadcasts = REG_DWORD 0
-+                    IPEnableRouter = REG_DWORD 0
-+                    SearchList = REG_SZ
-+                    Winsock
-+                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\System32\wshtcpip.dll
-+                        MaxSockAddrLength = REG_DWORD 16
-+                        MinSockAddrLength = REG_DWORD 16
-+                        Mapping = REG_BINARY 128 \
-+                            0x0000000A 0x00000003 \
-+                            0x00000002 0x00000001 0x00000006 \
-+                            0x00000002 0x00000001 0x00000000 \
-+                            0x00000002 0x00000000 0x00000006 \
-+                            0x00000000 0x00000000 0x00000006 \
-+                            0x00000000 0x00000001 0x00000006 \
-+                            0x00000002 0x00000002 0x00000011 \
-+                            0x00000002 0x00000002 0x00000000 \
-+                            0x00000002 0x00000000 0x00000011 \
-+                            0x00000000 0x00000000 0x00000011 \
-+                            0x00000000 0x00000002 0x00000011
-+                Linkage
-+                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
-+                    Export = REG_MULTI_SZ "\Device\Tcpip\Bcmeth1"
-+                    Disabled
-+                ServiceProvider
-+                    Class = REG_DWORD 8
-+                    DnsPriority = REG_DWORD 2000
-+                    HostsPriority = REG_DWORD 500
-+                    LocalPriority = REG_DWORD 499
-+                    NetbtPriority = REG_DWORD 2001
-+                    ProviderPath = REG_EXPAND_SZ %SystemRoot%\System32\wsock32.dll
-+                    Name = REG_SZ TCP/IP
-+
-+            NetBT
-=1 2802 3
-+                Group = TDI
-+                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbt.sys
-+                DisplayName = REG_SZ WINS Client(TCP/IP)
-+                DependOnService = REG_MULTI_SZ "Tcpip"
-=1 3481 1
-+                Parameters
-+                    NbProvider = REG_SZ _tcp
-+                    NameServerPort = REG_DWORD 137
-+                    EnableLMHOSTS = REG_DWORD 1
-+                    EnableProxy = REG_DWORD 0
-+                    EnableDNS = REG_DWORD 0
-+                    CacheTimeout = REG_DWORD 600000
-+                    BcastNameQueryCount = REG_DWORD 3
-+                    BcastQueryTimeout = REG_DWORD 750
-+                    NameSrvQueryCount = REG_DWORD 3
-+                    NameSrvQueryTimeout = REG_DWORD 1500
-+                    Size/Small/Medium/Large = REG_DWORD 1
-+                    SessionKeepAlive = REG_DWORD 3600000
-+                    ScopeID = REG_SZ
-+                    // \Device\, as a string a line can end with (RCPP joins the line after
-+                    // a final backslash): TCP/IP has \Device\Tcp and \Device\Udp
-+                    TransportBindName = REG_MULTI_SZ "\Device\"
-+                Linkage
-+                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
-+                    Export = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
-+                    OtherDependencies = REG_MULTI_SZ "Tcpip"
-+                    Disabled
-+                Adapters
-+                    Bcmeth1
+=1 1305 3
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000000  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
 +
 +            DHCP
-=1 1254 3
-+                Group = TDI
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
 =1 3300 1
-=1 1217 1
-+                DisplayName = REG_SZ DHCP Client
-+                DependOnService = REG_MULTI_SZ "Tcpip" "Afd" "NetBT"
++                DisplayName = DHCP Client
++                Group = TDI
++                DependOnService = REG_MULTI_SZ "Tcpip"  \
++                                               "Afd"  \
++                                               "NetBT" 
++                DependOnGroup = REG_MULTI_SZ 
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
 +                Parameters
 +                    Options
 +                        3
-+                            RegLocation = REG_SZ System\CurrentControlSet\Services\?\Parameters\Tcpip\DhcpDefaultGateway
-+                            KeyType = REG_DWORD 7
-+                        6
-+                            RegLocation = REG_SZ System\CurrentControlSet\Services\Tcpip\Parameters\DhcpNameServer
-+                            KeyType = REG_DWORD 1
++                            RegLocation = System\CurrentControlSet\Services\?\Parameters\Tcpip\DhcpDefaultGateway
++                            KeyType = REG_DWORD 0x00000007
 +                        44
-+                            RegLocation = REG_SZ System\CurrentControlSet\Services\NetBT\Adapters\?\DhcpNameServer
-+                            KeyType = REG_DWORD 1
++                            RegLocation = System\CurrentControlSet\Services\NetBT\Adapters\?\DhcpNameServer
++                            KeyType = REG_DWORD 0x00000001
 +                        46
-+                            RegLocation = REG_SZ System\CurrentControlSet\Services\NetBT\Parameters\DhcpNodeType
-+                            KeyType = REG_DWORD 4
++                            RegLocation = System\CurrentControlSet\Services\NetBT\Parameters\DhcpNodeType
++                            KeyType = REG_DWORD 0x00000004
 +                        47
-+                            RegLocation = REG_SZ System\CurrentControlSet\Services\NetBT\Parameters\DhcpScopeID
-+                            KeyType = REG_DWORD 1
-+                Linkage
-+                    Disabled
-=1 3559 4
-=1 1215 1
-+                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\afd.sys
-+                DisplayName = REG_SZ AFD Networking Support Environment
-+                Parameters
-+                Linkage
-+                    Disabled
++                            RegLocation = System\CurrentControlSet\Services\NetBT\Parameters\DhcpScopeID
++                            KeyType = REG_DWORD 0x00000001
++                        6
++                            RegLocation = System\CurrentControlSet\Services\Tcpip\Parameters\DhcpNameServer
++                            KeyType = REG_DWORD 0x00000001
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x001400d0  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000201  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000201  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000201  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
 +
-+            Winsock
-=1 3034 3
-+                Parameters
-+                    Transports = REG_MULTI_SZ "Tcpip" "NetBIOS"
++            LanmanServer
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
+=1 3300 1
++                DisplayName = Server
++                ObjectName = LocalSystem
++                DependOnService = REG_MULTI_SZ 
++                DependOnGroup = REG_MULTI_SZ "TDI" 
++                AutotunedParameters
 +                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1" 
++                    Export = REG_MULTI_SZ "\Device\LanmanServer\NetBT_Bcmeth1" 
 +                    Disabled
++                        Bind = REG_MULTI_SZ 
++                        Export = REG_MULTI_SZ 
++                        Route = REG_MULTI_SZ 
++                Parameters
++                    NullSessionPipes = REG_MULTI_SZ "COMNAP"  \
++                                                    "COMNODE"  \
++                                                    "SQL\QUERY"  \
++                                                    "SPOOLSS" 
++                    NullSessionShares = REG_MULTI_SZ "COMCFG"  \
++                                                     "DFS$" 
++                    Size = REG_DWORD 0x00000001
++                    Lmannounce = REG_DWORD 0x00000000
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00730074  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00630076  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00630076  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00630076  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
 +
-+            NetBIOS
-=1 3523 2
-=1 1215 1
-+                Group = NetBIOSGroup
-+                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbios.sys
-+                DisplayName = REG_SZ NetBIOS Interface
-=1 3514 1
-+                Parameters
-+                    Winsock
-+                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\System32\wshnetbs.dll
-+                        MaxSockAddrLength = REG_DWORD 20
-+                        MinSockAddrLength = REG_DWORD 20
-+                        Mapping = REG_BINARY 32 \
-+                            0x00000002 0x00000003 \
-+                            0x00000011 0x00000005 0x00000000 \
-+                            0x00000011 0x00000002 0x00000000
-+                Linkage
-+                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
-+                    Export = REG_MULTI_SZ "\Device\Netbios\NetBT_Bcmeth1"
-+                    LanaMap = REG_BINARY 2 0x00000001
-+                    Disabled
-=1 3547 5
-+                Parameters
-+                    LanaNum1 = REG_DWORD 0
-+                    EnumExport1 = REG_DWORD 1
-+                    MaxLana = REG_DWORD 0
-+                Linkage
-+                    Disabled
-+
-=1 1253 4
++                Shares
++                    Security
++            LanmanWorkstation
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
+=1 3300 1
++                DisplayName = Workstation
 +                Group = NetworkProvider
-=1 1257 2
-+                DisplayName = REG_SZ Workstation
-=1 1260 1
-=1 3514 1
-+                Parameters
++                ObjectName = LocalSystem
++                DependOnService = REG_MULTI_SZ "Mup" 
++                DependOnGroup = REG_MULTI_SZ "TDI" 
 +                Linkage
-+                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
-+                    Export = REG_MULTI_SZ "\Device\LanmanWorkstation\NetBT_Bcmeth1"
-+                    OtherDependencies = REG_MULTI_SZ "Mup"
++                    OtherDependencies = REG_MULTI_SZ "Mup" 
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1" 
++                    Export = REG_MULTI_SZ "\Device\LanmanWorkstation\NetBT_Bcmeth1" 
 +                    Disabled
-+                NetworkProvider
-+                    Devicename = REG_SZ \device\LanmanRedirector
-=1 1264 1
-+                    Name = REG_SZ Microsoft Windows Network
-=1 3521 4
-=1 1215 1
-+                Group = Network
-+                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\rdr.sys
-+                DisplayName = REG_SZ Rdr
++                        Bind = REG_MULTI_SZ 
++                        Export = REG_MULTI_SZ 
++                        Route = REG_MULTI_SZ 
++                networkprovider
+=1 1263 3
 +                Parameters
-+                Linkage
-+                    Disabled
-=1 3515 3
-=1 1269 2
-+                Group = Network
-+                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\mup.sys
-+                DisplayName = REG_SZ Mup
-+                Parameters
-+                Linkage
-+                    Disabled
-=1 1297 3
-=1 1255 4
-+                DisplayName = REG_SZ Computer Browser
-=1 1303 1
-+                Parameters
-+                    MaintainServerList = REG_SZ Auto
-+                    IsDomainMaster = REG_SZ FALSE
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00145310  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000000  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            LmHosts
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
+=1 3300 1
++                DisplayName = TCP/IP NetBIOS Helper
++                DependOnService = REG_MULTI_SZ 
++                DependOnGroup = REG_MULTI_SZ "NetworkProvider" 
++                ObjectName = LocalSystem
 +                Linkage
 +                    Disabled
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x006e0065  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00050002  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00050002  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00050002  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
 +
 +            Messenger
-=1 1254 5
-+                DisplayName = REG_SZ Messenger
-+                DependOnService = REG_MULTI_SZ "LanmanWorkstation" "NetBIOS"
-+                Parameters
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000002
++                ErrorControl = REG_DWORD 0x00000001
+=1 3300 1
++                DisplayName = Messenger
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation"  \
++                                               "Netbios" 
++                DependOnGroup = REG_MULTI_SZ 
++                ObjectName = LocalSystem
 +                Linkage
 +                    Disabled
-=1 1334 6
-=1 1217 1
-+                DisplayName = REG_SZ Alerter
-=1 1290 1
 +                Parameters
-+                    AlertNames = REG_MULTI_SZ ""
-+                Linkage
-+                    Disabled
-=1 1280 3
-=1 1269 2
-+                Group = RemoteValidation
-+                ImagePath = REG_EXPAND_SZ %SystemRoot%\system32\lsass.exe
-=1 1217 1
-+                DisplayName = REG_SZ Net Logon
-=1 1290 1
-+                Parameters
-+                    Update = REG_SZ no
-=1 1294 1
-+                    DBFlag = REG_SZ 0
-+                Linkage
-+                    Disabled
-=1 1266 3
-=1 1255 4
-+                DisplayName = REG_SZ Server
-=1 3514 1
-+                Parameters
-+                    NullSessionPipes = REG_MULTI_SZ "COMNAP" "COMNODE" "SQL\QUERY" "SPOOLSS"
-+                    NullSessionShares = REG_MULTI_SZ "COMCFG" "DFS$"
-+                    Size = REG_DWORD 1
-+                    Lmannounce = REG_DWORD 0
-=1 1275 2
-+                    Security
-+                Linkage
-+                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
-+                    Export = REG_MULTI_SZ "\Device\LanmanServer\NetBT_Bcmeth1"
-+                    Disabled
-=1 3508 3
-=1 1269 2
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00730079  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00650074  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00650074  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00650074  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            Mup
++                Type = REG_DWORD 0x00000002
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\mup.sys
++                DisplayName = Mup
 +                Group = Network
-+                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\srv.sys
-+                DisplayName = REG_SZ Srv
-+                Parameters
 +                Linkage
 +                    Disabled
-+#endif // defined(RASPI)
-=1 1248 241
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0xef000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00040003  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00040003  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00040003  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            NetBIOS
++                Type = REG_DWORD 0x00000002
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbios.sys
++                DisplayName = NetBIOS Interface
++                Group = NetBIOSGroup
++                DependOnService = REG_MULTI_SZ 
++                DependOnGroup = REG_MULTI_SZ "TDI" 
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1" 
++                    Export = REG_MULTI_SZ "\Device\Netbios\NetBT_Bcmeth1" 
++                    LanaMap = REG_BINARY 0x00000002
++                        0x00740001  
++
++                    Disabled
++                        Bind = REG_MULTI_SZ 
++                        Export = REG_MULTI_SZ 
++                        Route = REG_MULTI_SZ 
++                Parameters
++                    Winsock
++                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\system32\wshnetbs.dll
++                        MaxSockAddrLength = REG_DWORD 0x00000014
++                        MinSockAddrLength = REG_DWORD 0x00000014
++                        Mapping = REG_BINARY 0x00000020
++                            0x00000002  0x00000003  0x00000011  0x00000005  0x00000000  0x00000011  0x00000002  0x00000000  
++
++                Security
++                    Security = REG_BINARY 0x000000cc
++                        0x80140001  0x000000b4  0x000000c0  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x00800002  0x00000005  0x00180300  
++                        0x0002008d  0x00000101  0x01000000  0x00000000  0x00000000  0x00180300  0x000f01ff  0x00000201  
++                        0x05000000  0x00000020  0x00000220  0x00180300  0x0002008f  0x00000201  0x05000000  0x00000020  
++                        0x00000223  0x00180300  0x0000009d  0x00000101  0x05000000  0x00000004  0x00000223  0x00180300  
++                        0x0000009d  0x00000201  0x05000000  0x00000020  0x00000221  0x00000101  0x05000000  0x00000012  
++                        0x00000101  0x05000000  0x00000012  
++
++            NetBIOSInformation
++                Type = REG_DWORD 0x00000004
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                Linkage
++                    Disabled
++                Parameters
++                    MaxLana = REG_DWORD 0x00000000
++            NetBT
++                Type = REG_DWORD 0x00000001
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbt.sys
++                DisplayName = WINS Client(TCP/IP)
++                Group = TDI
++                DependOnService = REG_MULTI_SZ "Tcpip" 
++                DependOnGroup = REG_MULTI_SZ "NDIS" 
++                Adapters
++                    Bcmeth1
++                Linkage
++                    OtherDependencies = REG_MULTI_SZ "Tcpip" 
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1" 
++                    Export = REG_MULTI_SZ "\Device\NetBT_Bcmeth1" 
++                    Disabled
++                        Bind = REG_MULTI_SZ 
++                        Export = REG_MULTI_SZ 
++                        Route = REG_MULTI_SZ 
++                Parameters
++                    NbProvider = _tcp
++                    NameServerPort = REG_DWORD 0x00000089
++                    EnableLMHOSTS = REG_DWORD 0x00000001
++                    EnableProxy = REG_DWORD 0x00000000
++                    EnableDNS = REG_DWORD 0x00000000
++                    CacheTimeout = REG_DWORD 0x000927c0
++                    BcastNameQueryCount = REG_DWORD 0x00000003
++                    BcastQueryTimeout = REG_DWORD 0x000002ee
++                    NameSrvQueryCount = REG_DWORD 0x00000003
++                    NameSrvQueryTimeout = REG_DWORD 0x000005dc
++                    Size/Small/Medium/Large = REG_DWORD 0x00000001
++                    SessionKeepAlive = REG_DWORD 0x0036ee80
++                    ScopeID = 
++                    TransportBindName = \Device\ // (the comment keeps RCPP from joining the next line)
++                Performance
++                    Library = Perfctrs.dll
++                    Open = OpenNbtPerformanceData
++                    Collect = CollectNbtPerformanceData
++                    Close = CloseNbtPerformanceData
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x001400b0  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x001400a8  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x001400a8  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x001400a8  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            Netlogon
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\lsass.exe
++                DisplayName = Net Logon
++                Group = RemoteValidation
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation"  \
++                                               "LmHosts" 
++                DependOnGroup = REG_MULTI_SZ 
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
+=1 1292 3
++                    DBFlag = 0
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000000  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            NtLmSsp
++                Type = REG_DWORD 0x00000020
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\SERVICES.EXE
++                DisplayName = NT LM Security Support Provider
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000cc
++                        0x80140001  0x000000b4  0x000000c0  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x00800002  0x00000005  0x00180300  
++                        0x0002008d  0x00000101  0x01000000  0x00000000  0x00000000  0x00180300  0x000f01ff  0x00000201  
++                        0x05000000  0x00000020  0x00000220  0x00180300  0x0002008f  0x00000201  0x05000000  0x00000020  
++                        0x00000223  0x00180300  0x0000009d  0x00000101  0x05000000  0x00000004  0x00000223  0x00180300  
++                        0x0000009d  0x00000201  0x05000000  0x00000020  0x00000221  0x00000101  0x05000000  0x00000012  
++                        0x00000101  0x05000000  0x00000012  
++
++            Rdr
++                Type = REG_DWORD 0x00000002
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\rdr.sys
++                DisplayName = Rdr
++                Group = Network
++                Linkage
++                    Disabled
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00040003  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00040003  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00040003  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            Replicator
++                Type = REG_DWORD 0x00000010
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\lmrepl.exe
++                DisplayName = Directory Replicator
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation"  \
++                                               "LanmanServer" 
++                DependOnGroup = REG_MULTI_SZ 
++                ObjectName = LocalSystem
++                Exports
++                Imports
++                Linkage
++                    Disabled
++                Parameters
++                    Replicate = REG_DWORD 0x00000002
++                    ImportPath = REG_EXPAND_SZ %SystemRoot%\System32\Repl\Import
++                    ExportPath = REG_EXPAND_SZ %SystemRoot%\System32\Repl\Export
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00630063  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x0075006f  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x0075006f  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x0075006f  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            RPCLOCATOR
++                Type = REG_DWORD 0x00000010
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\LOCATOR.EXE
++                DisplayName = Remote Procedure Call (RPC) Locator
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                    ExpirationAge = REG_DWORD 0x00000e10
++                Security
++                    Security = REG_BINARY 0x000000cc
++                        0x80140001  0x000000b4  0x000000c0  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x00800002  0x00000005  0x00180300  
++                        0x0002008d  0x00000101  0x01000000  0x00000000  0x00000000  0x00180300  0x000f01ff  0x00000201  
++                        0x05000000  0x00000020  0x00000220  0x00180300  0x0002008f  0x00000201  0x05000000  0x00000020  
++                        0x00000223  0x00180300  0x0000009d  0x00000101  0x05000000  0x00000004  0x00000223  0x00180300  
++                        0x0000009d  0x00000201  0x05000000  0x00000020  0x00000221  0x00000101  0x05000000  0x00000012  
++                        0x00000101  0x05000000  0x00000012  
++
++            RPCSS
++                Type = REG_DWORD 0x00000010
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\RPCSS.EXE
++                DisplayName = Remote Procedure Call (RPC) Service
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000cc
++                        0x80140001  0x000000b4  0x000000c0  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x00800002  0x00000005  0x00180300  
++                        0x0002008d  0x00000101  0x01000000  0x00000000  0x00000000  0x00180300  0x000f01ff  0x00000201  
++                        0x05000000  0x00000020  0x00000220  0x00180300  0x0002008f  0x00000201  0x05000000  0x00000020  
++                        0x00000223  0x00180300  0x0000009d  0x00000101  0x05000000  0x00000004  0x00000223  0x00180300  
++                        0x0000009d  0x00000201  0x05000000  0x00000020  0x00000221  0x00000101  0x05000000  0x00000012  
++                        0x00000101  0x05000000  0x00000012  
++
++            Srv
++                Type = REG_DWORD 0x00000002
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\srv.sys
++                DisplayName = Srv
++                Group = Network
++                Linkage
++                    Disabled
++                Parameters
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00730074  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00630076  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00630076  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00630076  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++            Tcpip
++                Type = REG_DWORD 0x00000001
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
+=1 3294 1
++                DisplayName = TCP/IP Service
++                DependOnService = REG_MULTI_SZ 
++                DependOnGroup = REG_MULTI_SZ "NDIS" 
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1" 
++                    Export = REG_MULTI_SZ "\Device\Tcpip\Bcmeth1" 
++                    Disabled
++                        Bind = REG_MULTI_SZ 
++                        Export = REG_MULTI_SZ 
++                        Route = REG_MULTI_SZ 
++                Parameters
++                    DataBasePath = REG_EXPAND_SZ %SystemRoot%\System32\drivers\etc
++                    Domain = 
++                    Hostname = raspi
++                    NameServer = 
++                    ForwardBroadcasts = REG_DWORD 0x00000000
++                    IPEnableRouter = REG_DWORD 0x00000000
++                    SearchList = 
++                    Winsock
++                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\System32\wshtcpip.dll
++                        MaxSockAddrLength = REG_DWORD 0x00000010
++                        MinSockAddrLength = REG_DWORD 0x00000010
++                        Mapping = REG_BINARY 0x00000080
++                            0x0000000a  0x00000003  0x00000002  0x00000001  0x00000006  0x00000002  0x00000001  0x00000000  
++                            0x00000002  0x00000000  0x00000006  0x00000000  0x00000000  0x00000006  0x00000000  0x00000001  
++                            0x00000006  0x00000002  0x00000002  0x00000011  0x00000002  0x00000002  0x00000000  0x00000002  
++                            0x00000000  0x00000011  0x00000000  0x00000000  0x00000011  0x00000000  0x00000002  0x00000011  
++
++                Performance
++                    Library = Perfctrs.dll
++                    Open = OpenTcpIpPerformanceData
++                    Collect = CollectTcpIpPerformanceData
++                    Close = CloseTcpIpPerformanceData
++                Security
++                    Security = REG_BINARY 0x000000d8
++                        0x80140001  0x000000c0  0x000000cc  0x00000014  0x00000034  0x00200002  0x00000001  0x00188002  
++                        0x000f01ff  0x00000101  0x01000000  0x00000000  0x00000220  0x008c0002  0x00000005  0x00180000  
++                        0x0002018d  0x00000101  0x01000000  0x00000000  0x00000000  0x001c0000  0x000201fd  0x00000201  
++                        0x05000000  0x00000020  0x00000223  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  
++                        0x00000020  0x00000220  0x00000000  0x001c0000  0x000f01ff  0x00000201  0x05000000  0x00000020  
++                        0x00000225  0x00000000  0x00180000  0x000201fd  0x00000101  0x05000000  0x00000012  0x00000225  
++                        0x00000101  0x05000000  0x00000012  0x00000101  0x05000000  0x00000012  
++
++                ServiceProvider
++                    Class = REG_DWORD 0x00000008
++                    DnsPriority = REG_DWORD 0x000007d0
++                    HostsPriority = REG_DWORD 0x000001f4
++                    LocalPriority = REG_DWORD 0x000001f3
++                    ProviderPath = REG_EXPAND_SZ %SystemRoot%\System32\wsock32.dll
++                    NetbtPriority = REG_DWORD 0x000007d1
++                    Name = TCP/IP
++            WinSock
++                Type = REG_DWORD 0x00000004
++                Start = REG_DWORD 0x00000003
++                ErrorControl = REG_DWORD 0x00000001
++                Linkage
++                    Disabled
++                Parameters
++                    Transports = REG_MULTI_SZ "Tcpip"  \
++                                              "NetBIOS" 
++
++#endif // defined(RASPINET)
+=1 1248 207
++#if defined(RASPINET)
++                  Network Control Panel
++                    EventMessageFile = REG_EXPAND_SZ %SystemRoot%\System32\NCPA.CPL
+=1 1457 1
++                  Replicator
+=1 1494 2
++#endif // defined(RASPINET)
+=1 1455 31
++#if defined(RASPINET)
++                  LmHosts
+=1 1503 2
++#endif // defined(RASPINET)
+=1 1486 3
 +#if defined(RASPI)
 =1 1490 6
 +                  Bcmeth
@@ -374,11 +728,7 @@
 =1 2475 2
 =1 2696 3
 +#endif // defined(BCMUSB)
-=1 2765 33
-+#if !defined(RASPI)
-=1 2798 9
-+#endif // !defined(RASPI)
-+
+=1 2765 43
 +#if defined(BCMVIDEO)
 =1 2808 4
 +            Bcmvideo
@@ -393,4 +743,8 @@
 =1 3193 40
 +#endif // !defined(RASPI)
 =1 3233 243
-=1 3486 115
+=1 3486 113
++#if defined(RASPINET)
++        NetcardDlls = REG_MULTI_SZ "MSNCDET.DLL"
++#endif // defined(RASPINET)
+=1 3599 2

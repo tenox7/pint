@@ -1,0 +1,11 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/UPDATE.INF
+=1 1 198
++    ProcessorID_CortexA7  = Cortex_A7
++    ProcessorID_CortexA53 = Cortex_A53
+=1 199 27
++[FreeSpaceArm]
+=1 222 1
+=1 225 43
++    else-ifstr(i) $(!STF_PLATFORM) == Arm
++        set STF_PRNPLATFORM = "w32arm"
+=1 268 837

@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/LANGUAGE.INF
+=1 1 684
++    PlatformID_Arm = Arm
+=1 685 7

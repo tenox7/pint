@@ -1,0 +1,112 @@
+#ntdiff PRIVATE/NET/DETECT/DLL/DETMIPS.C
+=1 1 6
++    detarm.c
+=1 8 3
++    This is the main file for the autodetection DLL for the bcmeth.sys
+=1 12 38
++UCHAR ArmFirstTime = 1;
+=1 51 7
++// ArmQueryCfgHandler() and ArmVerifyCfgHandler() as well!
+=1 59 6
++        L"BCMETH",
+=1 66 16
++// ArmQueryCfgHandler() and ArmVerifyCfgHandler() as well!
+=1 59 6
++        L"BCMETH",
+=1 90 13
++typedef struct _ARM_ADAPTER {
+=1 104 5
++} ARM_ADAPTER, *PARM_ADAPTER;
+=1 110 4
++ArmIdentifyHandler(
+=1 115 38
++    if (ArmFirstTime) {
++
++        ArmFirstTime = 0;
+=1 156 86
++//
++// The Ethernet controller of the board is present when the firmware found it and
++// described it in the configuration of the machine: a NetworkController of the
++// internal bus (Hardware\Description\System\MultifunctionAdapter\n\NetworkController).
++//
++
++static
++BOOLEAN
++ArmNetworkControllerPresent(
++    VOID
++    )
++{
++    UNICODE_STRING Name;
++    OBJECT_ATTRIBUTES Attributes;
++    HANDLE Adapters;
++    HANDLE Controller;
++    UCHAR Buffer[sizeof(KEY_BASIC_INFORMATION) + 32 * sizeof(WCHAR)];
++    PKEY_BASIC_INFORMATION Information = (PKEY_BASIC_INFORMATION)Buffer;
++    WCHAR Path[64];
++    ULONG Index;
++    ULONG Length;
++    BOOLEAN Present = FALSE;
++
++    RtlInitUnicodeString(&Name, L"\\Registry\\Machine\\Hardware\\Description\\System\\MultifunctionAdapter");
++    InitializeObjectAttributes(&Attributes, &Name, OBJ_CASE_INSENSITIVE, NULL, NULL);
++    if (!NT_SUCCESS(NtOpenKey(&Adapters, KEY_READ, &Attributes))) {
++        return(FALSE);
++    }
++
++    for (Index = 0; !Present; Index++) {
++
++        if (!NT_SUCCESS(NtEnumerateKey(Adapters,
++                                       Index,
++                                       KeyBasicInformation,
++                                       Information,
++                                       sizeof(Buffer) - sizeof(WCHAR),
++                                       &Length))) {
++            break;
++        }
++
++        Information->Name[Information->NameLength / sizeof(WCHAR)] = L'\0';
++        wsprintf(Path, L"%s\\NetworkController\\0", Information->Name);
++        RtlInitUnicodeString(&Name, Path);
++        InitializeObjectAttributes(&Attributes, &Name, OBJ_CASE_INSENSITIVE, Adapters, NULL);
++        if (NT_SUCCESS(NtOpenKey(&Controller, KEY_READ, &Attributes))) {
++            NtClose(Controller);
++            Present = TRUE;
++        }
++    }
++
++    NtClose(Adapters);
++    return(Present);
++}
+=1 110 4
++ArmFirstNextHandler(
+=1 245 49
++    if (fFirst && ArmNetworkControllerPresent()) {
+=1 295 19
++ArmOpenHandleHandler(
+=1 315 25
++    PARM_ADAPTER Handle;
+=1 341 18
++    Handle = (PARM_ADAPTER)DetectAllocateHeap(
++                                 sizeof(ARM_ADAPTER)
+=1 361 22
++ArmCreateHandleHandler(
+=1 384 31
++    PARM_ADAPTER Handle;
+=1 416 19
++            Handle = (PARM_ADAPTER)DetectAllocateHeap(
++                                         sizeof(ARM_ADAPTER)
+=1 437 29
++ArmCloseHandleHandler(
+=1 467 26
++ArmQueryCfgHandler(
+=1 494 27
++    PARM_ADAPTER Adapter = (PARM_ADAPTER)(pvHandle);
+=1 522 23
++ArmVerifyCfgHandler(
+=1 546 29
++ArmQueryMaskHandler(
+=1 576 86
++ArmParamRangeHandler(
+=1 663 38
++ArmQueryParameterNameHandler(
+=1 702 32

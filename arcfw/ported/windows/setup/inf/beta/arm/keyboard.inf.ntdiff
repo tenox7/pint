@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/MIPS/KEYBOARD.INF
+=1 1 22
++    STANDARD           = bcmusb , kbdclass
+=1 24 30
++    bcmusb = !SERVICE_KERNEL_DRIVER, "Keyboard Port",  !SERVICE_ERROR_NORMAL, 1, "%SystemRoot%\System32\IoLogMsg.dll;%SystemRoot%\System32\drivers\bcmusb.sys" , 7
+=1 55 409
++                ifstr(i) $(CurrentPortEntry) != bcmusb
+=1 465 116

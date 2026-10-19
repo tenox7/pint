@@ -1,0 +1,33 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/LOCALINF/LOCAL.C
+=1 1 21
++typedef enum _filetype { ALPHA_ONLY, MIPS_ONLY, I386_ONLY, ARM_ONLY, ALL } FILETYPE;
+=1 23 7
++    char filenameARM_ONLY [ 100 ];
+=1 30 5
++    FILE * fOutARM_ONLY = NULL;
+=1 35 12
++            sprintf( filenameARM_ONLY, "%s\\arm\\%s", directory, filename);
+=1 47 12
++            else if ( !stricmp( "arm", ftype ))
++            {
++                filetype = ARM_ONLY;
+=1 58 7
++            if ( fOutARM_ONLY )
++                fclose( fOutARM_ONLY );
+=1 65 39
++            if ((filetype == ARM_ONLY )||(filetype == ALL))
++            {
++                fOutARM_ONLY = fopen( filenameARM_ONLY, "a" );
++                if ( !fOutARM_ONLY )
++                {
++                    fprintf( stderr, "open file:%s fail.\n", filenameARM_ONLY );
+=1 101 29
++            if ( filetype == ARM_ONLY || filetype == ALL)
++            {
++                if ( fOutARM_ONLY )
++                {
++                    fputs( chLine, fOutARM_ONLY );
+=1 128 5
++    if ( fOutARM_ONLY )
++        fclose( fOutARM_ONLY );
+=1 133 42

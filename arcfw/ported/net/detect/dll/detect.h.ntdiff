@@ -1,0 +1,26 @@
+#ntdiff PRIVATE/NET/DETECT/DLL/DETECT.H
+=1 1 1217
++// Arm Detection routines
++//
++
++extern LONG ArmIdentifyHandler(
+=1 369 5
++extern LONG ArmFirstNextHandler(
+=1 375 8
++extern LONG ArmOpenHandleHandler(
+=1 94 4
++extern LONG ArmCreateHandleHandler(
+=1 104 6
++extern LONG ArmCloseHandleHandler(
+=1 116 3
++extern LONG ArmQueryCfgHandler(
+=1 125 5
++extern LONG ArmVerifyCfgHandler(
+=1 136 4
++extern LONG ArmQueryMaskHandler(
+=1 146 5
++extern LONG ArmParamRangeHandler(
+=1 417 6
++extern LONG ArmQueryParameterNameHandler(
+=1 491 7
+=1 1218 131

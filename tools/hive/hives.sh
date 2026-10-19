@@ -86,6 +86,7 @@ for V in $VARIANTS; do
     RETAIL)  OPT="-D_GENERAL_PURPOSE_ -D_RETAIL_SETUP_";;
     NETIDW)  OPT="-D_GENERAL_PURPOSE_ -D_NETIDW_SETUP_";;
     ARM)     OPT="-D_GENERAL_PURPOSE_ -D_RASPI_";;
+    ARMNETIDW) OPT="-D_GENERAL_PURPOSE_ -D_RASPI_ -D_NETIDW_SETUP_";;
     VALIDATE) continue;;
     *) echo "unknown variant $V"; exit 1;;
     esac

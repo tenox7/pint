@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/VIDEO.INF
+=1 1 70
++    bcmvideo  = bcmvideo , !SERVICE_KERNEL_DRIVER, Video, !SERVICE_ERROR_IGNORE, {framebuf}                    , 0, "%SystemRoot%\System32\IoLogMsg.dll"                                         , 7, 1, {}         , noconfig
+=1 71 1119

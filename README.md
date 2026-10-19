@@ -54,7 +54,8 @@ with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot 
 Networking works: TCP/IP with DHCP and NetBIOS over TCP/IP, so NT maps shares of Windows and Samba servers (File Manager
 or `net use`), shares its own folders (`net share`), and has ping, ipconfig and hostname. It uses the onboard Ethernet
 (LAN9514 on the Pi 2/3B, LAN7800 on the 3B+), in QEMU a USB Ethernet adapter
-(`NONET=1 build/run.sh`: none).
+(`NONET=1 build/run.sh`: none). Control Panel > Network configures it: TCP/IP (DHCP or a static address, DNS, WINS),
+bindings, computer name and workgroup.
 
 ## Roadmap
 

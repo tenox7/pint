@@ -1,0 +1,22 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/ENG_DEV.TXT
+=1 1 2212
++#####video.inf arm
+=1 2 17
++    "BCM2835 VideoCore"                   = bcmvideo
+=1 36 16
++    "BCM2835 VideoCore"                   = "Raspberry Pi Frame Buffer"
+=1 137 25
++#####keyboard.inf arm
+=1 505 35
++#####pointer.inf arm
+=1 541 17
++    usb  = "USB Mouse"
+=1 560 15
++    usb      = bcmusb   , mouclass
+=1 577 21
++#####scsi.inf arm
+=1 638 17
++    "BCMEMMC"    = "Raspberry Pi SD Card Controller"
+=1 561 14
++    "BCMEMMC"    = bcmemmc
+=1 1963 20

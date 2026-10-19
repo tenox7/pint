@@ -1,0 +1,11 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/PARTIAL.INF
+=1 1 951
++[MainItemsWinntArm]
+=1 911 7
+=1 948 46
++[MainItemsLanmanNTArm]
+=1 911 7
+=1 990 46
++[MainItemsServerNTArm]
+=1 911 7
+=1 1032 47

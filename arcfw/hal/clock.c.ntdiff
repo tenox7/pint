@@ -87,6 +87,19 @@
 +    }
 +
 +    HAL_REG(HAL_ST_C3) = Compare;
++
++    //
++    // The counter may pass the compare before it is set (the processor held
++    // between the read and the write): then no match is pending, and the next
++    // compare is set from the counter again.
++    //
++
++    while (((LONG)(HAL_REG(HAL_ST_CLO) - Compare) > 0) &&
++           ((HAL_REG(HAL_ST_CS) & (1 << HAL_CLOCK_IRQ)) == 0)) {
++        Compare = HAL_REG(HAL_ST_CLO) + HalpIntervalCount;
++        HAL_REG(HAL_ST_C3) = Compare;
++    }
++
 +    KeUpdateSystemTime(TrapFrame, TimeIncrement);
 +}
 +

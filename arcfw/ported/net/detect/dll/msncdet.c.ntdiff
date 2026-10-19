@@ -1,0 +1,16 @@
+#ntdiff PRIVATE/NET/DETECT/DLL/MSNCDET.C
+=1 1 71
++#ifdef _M_ARM
++
++        {
++            ArmIdentifyHandler,
++            ArmFirstNextHandler,
++            ArmOpenHandleHandler,
++            ArmCreateHandleHandler,
++            ArmCloseHandleHandler,
++            ArmQueryCfgHandler,
++            ArmVerifyCfgHandler,
++            ArmQueryMaskHandler,
++            ArmParamRangeHandler,
++            ArmQueryParameterNameHandler,
+=1 66 3346

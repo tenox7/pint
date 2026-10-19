@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/PRINTER.INF
+=1 1 1224
++    else-ifstr(i) $(STF_PLATFORM) == $(PlatformID_Arm)
++        set STF_PRNPLATFORM = "w32arm"
++        set STF_PRNENVIRONM = "Windows NT ARM"
+=1 1225 105
++    PlatformID_Arm    = Arm
+=1 1330 15

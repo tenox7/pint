@@ -1,0 +1,6 @@
+LIBRARY LMHSVC
+
+DESCRIPTION 'LmHosts Service DLL'
+
+EXPORTS
+    ServiceEntry

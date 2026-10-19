@@ -1,0 +1,7 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/MIPS/LMPERMS.TXT
+=1 1 11
++.\system32\spool\prtprocs\w32arm 15,4,2,9,6,17
++.\system32\spool\prtprocs\w32arm\winprint 15,4,2,9,6,17
+=1 14 2
++.\system32\spool\drivers\w32arm 15,4,2,9,6,17
+=1 17 13

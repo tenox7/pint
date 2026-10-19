@@ -1,7 +1,7 @@
 #ntdiff PUBLIC/OAK/BIN/REGISTRY.INI
 =1 1 2
 =1 4 8
-+// The Raspberry Pi 2: no network adapters, no paging file.                 //
++// The Raspberry Pi: the network is in the hives, no paging file.           //
 =1 14 3
 =1 30 2
 +;  The ID the machine uses for its internal domain (WinNt product).
@@ -36,3 +36,9 @@
 +;
 +Domain
 +    WORKGROUP
+=1 255 3
++;  Commands for the start of winlogon.cmd: the network control panel stores the
++;  bindings of the network in the hives, with the Route values REGINI cannot write.
++;
++InsertScript
++    setup /f /i ncpabind.inf

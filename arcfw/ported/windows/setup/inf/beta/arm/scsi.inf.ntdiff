@@ -1,0 +1,4 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/MIPS/SCSI.INF
+=1 1 24
++    bcmemmc  = !SERVICE_KERNEL_DRIVER, "SCSI Miniport", !SERVICE_ERROR_NORMAL,  1, %SystemRoot%\System32\IoLogMsg.dll , 7
+=1 53 473

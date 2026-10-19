@@ -1,0 +1,18 @@
+#ntdiff PRIVATE/SDKTOOLS/IMAGEHLP/WALK.H
+=1 1 30
++#undef _ARM_
+=1 31 122
+=1 33 2
++// arm
+=1 36 2
++#elif defined(TARGET_ARM)
++
++#pragma message( "Compiling for target = arm" )
++
++#define _ARM_ 1
+=1 47 15
+=1 63 3
+=1 144 5
++#ifndef _M_ARM
++#undef _ARM_
+=1 151 13

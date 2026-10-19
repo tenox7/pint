@@ -1,0 +1,8 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/MONITOR.INF
+=1 1 153
++    else-ifstr(i) $(STF_PLATFORM) == $(PlatformID_Arm)
++        set STF_PRNPLATFORM = "w32arm"
++        set STF_PRNENVIRONM = "Windows NT ARM"
+=1 154 72
++    PlatformID_Arm    = Arm
+=1 226 6

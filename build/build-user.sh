@@ -134,12 +134,17 @@ done
 lib $P SDKTOOLS/PERFMON; exe $P SDKTOOLS/PERFMON perfmon
 
 # networking: Windows Sockets (wsock32, its NetBIOS and TCP/IP helpers, the STREAMS library winstrm),
-# the ICMP echo API and ping, the DHCP client, the LAN Manager services (server, workstation,
-# browser, messenger, alerter, netlogon), the transaction server and the net command
+# the ICMP echo API and ping, the LmHosts service (the DNS name resolution of NetBIOS over TCP/IP),
+# the DHCP client, the LAN Manager services (server, workstation, browser, messenger, alerter,
+# netlogon), the transaction server and the net command
 for c in SOCKREG LIBUEMUL SOCKUTIL; do lib $P NET/SOCKETS/$c; done
 for c in WINSOCK WSHNETBS WINSTRM; do dll $P NET/SOCKETS/$c; done
 X=/work/RASPI/arcfw/net
-dll $X wshtcpip; dll $X icmp; for p in ping ipconfig hostname; do exe $X $p $p; done
+dll $X wshtcpip; dll $X icmp; dll $X lmhsvc; for p in ping ipconfig hostname; do exe $X $p $p; done
+# the RPC transports over TCP/IP, UDP and NetBIOS, and the NT LM security support provider
+# (security.dll, and its service, ntlmssps.dll)
+for c in CLNTTCP SVRTCP CLNTNB SVRNB DGUDPC DGUDPS; do dll $P RPC/RUNTIME/TRANS/WIN32/$c; done
+lib $P NET/SVCDLLS/NTLMSSP/COMMON; dll $P NET/SVCDLLS/NTLMSSP/CLIENT; dll $P NET/SVCDLLS/NTLMSSP/SERVER
 D=NET/SOCKETS/TCPCMD/DHCP
 lib $P $D/LIB; lib $P $D/CLIENT/DHCP; dll $P $D/CLIENT/NEWNT
 for c in SRVSVC/SERVER WKSSVC/SERVER/DAYTONA BROWSER/SERVER MSGSVC/SERVER ALRSVC LOGONSRV/SERVER; do dll $P NET/SVCDLLS/$c; done
@@ -185,5 +190,19 @@ done
 lib $P MVDM/VDMUTILS/PIFEDIT; exe $P MVDM/VDMUTILS/PIFEDIT pifedit
 lib $P UTILS/NTBACKUP/SRC; exe $P UTILS/NTBACKUP/SRC ntbackup
 dll $W SETUP/MORICONS
+
+# Setup: the image help library (the checksums setup verifies, the stack walk of the debuggers),
+# the setup DLL the INF scripts call and the INF interpreter, setup.exe
+dll $P SDKTOOLS/IMAGEHLP; dll $W SETUP/SETUPDLL
+lib $W SETUP/SRC; exe $W SETUP/SRC setup
+
+# netcard detection for the network setup: the library over the detection driver (netdtect.dll)
+# and the detection of the netcards Microsoft ships (msncdet.dll, with the Raspberry Pi Ethernet)
+dll $N NDIS/DETECT/DLL; dll $P NET/DETECT/DLL
+
+# the Network control panel (ncpa.cpl: the bindings of its Small Prolog rules, the dialogs that run
+# the network INFs through setup.exe) and the TCP/IP configuration it and the INFs call (tcpcfg.dll)
+for c in PCH XLATE SP C NCPA; do lib $P NET/UI/NCPA/$c; done; dll $P NET/UI/NCPA/BIN
+for c in XLATE SRC; do lib $P NET/UI/NCPA/TCPIP/$c; done; dll $P NET/UI/NCPA/TCPIP/BIN
 
 exe /work/RASPI/arcfw/apps hello hello

@@ -1,0 +1,17 @@
+#ntdiff PRIVATE/WINDOWS/SETUP/INF/BETA/MSTOOLS.INF
+=1 1 48
++    ProcessorID_CortexA7  = Cortex_A7
++    ProcessorID_CortexA53 = Cortex_A53
+=1 49 8
++    PlatformID_Arm = Arm
+=1 57 120
++[VarsArm]
+=1 154 103
++    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA7)
++        set STF_PLATFORM = $(PlatformID_Arm)
++    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA53)
++        set STF_PLATFORM = $(PlatformID_Arm)
+=1 257 397
++    ifstr(i) $(!STF_PLATFORM) == $(!PlatformID_Arm)
++        set CpuEnvVar = {Cpu, 0, $(!REG_VT_SZ), ARM}
+=1 653 465
