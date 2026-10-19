@@ -605,6 +605,26 @@ BcmethFreeAdapter(
     NdisFreeMemory(Adapter, sizeof(BCMETH_ADAPTER), 0);
 }
 
+//
+// Log why the adapter did not start: the step (1 the firmware describes no
+// controller, 2 none among the USB functions, 3 no station address, 4 the
+// resources, 5 the start of the controller, its pipes or interrupt), the
+// status, the controller and its device, and its last register access.
+//
+
+static VOID
+BcmethLogFailure(
+    IN PBCMETH_ADAPTER Adapter,
+    IN ULONG Step,
+    IN NDIS_STATUS Status
+    )
+{
+    NdisWriteErrorLogEntry(Adapter->MiniportAdapterHandle,
+                           Step <= 2 ? NDIS_ERROR_CODE_ADAPTER_NOT_FOUND : NDIS_ERROR_CODE_HARDWARE_FAILURE, 7,
+                           Step, Status, Adapter->Chip, Adapter->Device, Adapter->LastRegister, Adapter->LastValue,
+                           Adapter->LastResult);
+}
+
 static NDIS_STATUS
 BcmethInitialize(
     OUT PNDIS_STATUS OpenErrorStatus,
@@ -703,18 +723,21 @@ Return Value:
 
     NdisCloseConfiguration(ConfigurationHandle);
     if (!BcmethReadHardware(MultifunctionAdapter, Controller, &Hardware)) {
+        BcmethLogFailure(Adapter, 1, NDIS_STATUS_ADAPTER_NOT_FOUND);
         BcmethFreeAdapter(Adapter);
         return NDIS_STATUS_ADAPTER_NOT_FOUND;
     }
 
     Status = ChipFind(Adapter);
     if (Status != NDIS_STATUS_SUCCESS) {
+        BcmethLogFailure(Adapter, 2, Status);
         BcmethFreeAdapter(Adapter);
         return Status;
     }
 
     if (Adapter->Chip != CHIP_CDC) {
         if (!Hardware.AddressValid) {
+            BcmethLogFailure(Adapter, 3, NDIS_STATUS_ADAPTER_NOT_FOUND);
             BcmethFreeAdapter(Adapter);
             return NDIS_STATUS_ADAPTER_NOT_FOUND;
         }
@@ -729,6 +752,7 @@ Return Value:
     NdisMSetAttributes(MiniportAdapterHandle, (NDIS_HANDLE)Adapter, TRUE, NdisInterfaceInternal);
     Status = NdisMAllocateMapRegisters(MiniportAdapterHandle, 0, TRUE, 1, TRANSMIT_SLOT_SIZE);
     if (Status != NDIS_STATUS_SUCCESS) {
+        BcmethLogFailure(Adapter, 4, Status);
         BcmethFreeAdapter(Adapter);
         return Status;
     }
@@ -741,6 +765,7 @@ Return Value:
     NdisAllocateMemory((PVOID *)&Adapter->TransmitFrame, TRANSMIT_FRAME_SIZE, 0, HighestAcceptableMax);
     if (Adapter->ReceiveBuffer == NULL || Adapter->TransmitBuffer == NULL || Adapter->FrameBuffer == NULL ||
         Adapter->TransmitFrame == NULL) {
+        BcmethLogFailure(Adapter, 4, NDIS_STATUS_RESOURCES);
         NdisMFreeMapRegisters(MiniportAdapterHandle);
         BcmethFreeAdapter(Adapter);
         return NDIS_STATUS_RESOURCES;
@@ -769,6 +794,7 @@ Return Value:
     }
 
     if (Status != NDIS_STATUS_SUCCESS) {
+        BcmethLogFailure(Adapter, 5, Status);
         if (Adapter->ReceivePipe.Channel != 0) {
             UsbFunctionClosePipe(&Adapter->ReceivePipe);
         }

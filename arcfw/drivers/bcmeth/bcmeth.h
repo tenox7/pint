@@ -166,6 +166,16 @@ typedef struct _BCMETH_ADAPTER {
     ULONG ReceiveError;
     ULONG ReceiveNoBuffer;
     ULONG ReceiveCrcError;
+
+    //
+    // The last register access of the controller (its index, the value read
+    // or written and the result of the transfer), which the error log entry
+    // of an adapter that failed to start names.
+    //
+
+    ULONG LastRegister;
+    ULONG LastValue;
+    LONG LastResult;
 } BCMETH_ADAPTER, *PBCMETH_ADAPTER;
 
 //

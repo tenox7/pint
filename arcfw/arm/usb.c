@@ -63,7 +63,8 @@ UsbClock(
 //
 // The Ethernet controller among the devices: the board's (the function of
 // its LAN9514 or LAN7515), or a CDC Ethernet device, described in the
-// configuration tree for the network driver.
+// configuration tree for the network driver, once it is ready (that of
+// the LAN7515 comes up after the keyboards).
 //
 
 static VOID
@@ -220,6 +221,7 @@ Return Value:
 
     if (FwGetMicroseconds() - UsbScanTime >= SCAN_INTERVAL_MS * 1000) {
         UsbHostScan(&UsbHost);
+        UsbFindNetworkController();
         UsbScanTime = FwGetMicroseconds();
     }
 

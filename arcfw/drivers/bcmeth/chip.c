@@ -225,7 +225,10 @@ ReadRegister(
 {
     ULONG Data = 0;
 
-    if (UsbFunctionControl(Adapter->Device, 0xC0, VENDOR_READ_REGISTER, 0, Index, &Data, 4) != 4) {
+    Adapter->LastRegister = Index;
+    Adapter->LastResult = UsbFunctionControl(Adapter->Device, 0xC0, VENDOR_READ_REGISTER, 0, Index, &Data, 4);
+    Adapter->LastValue = Data;
+    if (Adapter->LastResult != 4) {
         return FALSE;
     }
 
@@ -240,7 +243,10 @@ WriteRegister(
     IN ULONG Value
     )
 {
-    return UsbFunctionControl(Adapter->Device, 0x40, VENDOR_WRITE_REGISTER, 0, Index, &Value, 4) == 4;
+    Adapter->LastRegister = Index;
+    Adapter->LastValue = Value;
+    Adapter->LastResult = UsbFunctionControl(Adapter->Device, 0x40, VENDOR_WRITE_REGISTER, 0, Index, &Value, 4);
+    return Adapter->LastResult == 4;
 }
 
 static BOOLEAN
