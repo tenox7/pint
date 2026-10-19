@@ -5,7 +5,8 @@
 # (mkfarm.sh), as do the components it farmed; any other directory is farmed
 # under /tmp/f/dirs (its text files: headers and the other files sources include),
 # with the files the build generated for it (/tmp/f/gen), the port's versions of its
-# files (arcfw/ported/<directory>) and the message headers of its makefile.inc (mcinc.sh).
+# files (arcfw/ported/<directory> or apps/<directory>, portdir.sh) and the message headers
+# of its makefile.inc (mcinc.sh).
 # Usage: incdirs.sh componentdir "INCLUDES value"
 K=$(cd "$(dirname "$0")" && pwd)
 # Microsoft C takes the sources as they are but for the ARM gates. RC (on Wine, which
@@ -22,11 +23,11 @@ farm() {
     mkdir -p "$2" && : > "$2/.farmed"
     # the message headers its makefile.inc makes, as the NT build made them first
     bash $K/mcinc.sh "$1" >&2
-    # and the port's versions of its files (arcfw/ported/<directory>), which a quoted
+    # and the port's versions of its files (portdir.sh), which a quoted
     # include of a header beside them finds there too; its other files (the bitmaps and
     # icons of resource scripts) and directories (NET UI's xlate\string) are links, so
     # that RC needs the farmed directory alone (RC keeps its include path in 520 bytes)
-    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/* /work/RASPI/arcfw/ported/$(echo ${1#/work/PRIVATE/} | tr A-Z a-z)/*; do
+    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/* $(bash $K/portdir.sh "$1")/*; do
         n="$2/$(basename "$f" | tr A-Z a-z)"
         case $f in *.ntdiff|*/[Ss][Yy][Ss]) continue ;; esac
         if [ -d "$f" ]; then

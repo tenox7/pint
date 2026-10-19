@@ -1,24 +1,28 @@
 #!/usr/bin/perl
 # inputs.pl RASPI ROOT COMPONENT [link]: the inputs of the build step of a component (stamp.sh). One of the port
 # (ROOT under /work/RASPI) is its directory; one of the NT tree is the port's versions of its sources and of its
-# parent's (arcfw/ported) and its ARM sources (arcfw/kernel/<component>.arm and the files it lists). With link, also
+# parent's (arcfw/ported, or apps for the applications: portdir.sh) and its ARM sources (arcfw/kernel/<component>.arm
+# or the sources.arm of its port directory, and the files it lists). With link, also
 # the libraries it links, as the linker finds them: those of its SOURCES and the system and C run-time ones, of obj
 # (kernel mode) or obj/um.
 use strict; use warnings;
 my ($r, $root, $comp, $link) = @ARGV;
 sub host { return $_[0] =~ s{^/work/RASPI/}{$r/}r =~ s{^/work/}{$r/../}r; }
+sub port { my $p = shift; my ($t) = split m{/}, $p; return grep({ $_ eq ($t // "") } qw(sdktools)) ? "$r/apps/$p" : "$r/arcfw/ported/$p"; }
 my $dir = host("$root/$comp");
 if ($root =~ m{^/work/RASPI/}) {
     print "$dir\n";
 } else {
     my $rel = lc "$root/$comp" =~ s{^/work/PRIVATE/}{}r;
-    print "$r/arcfw/ported/$rel\n";
+    print port($rel), "\n";
     (my $parent = $rel) =~ s{/[^/]+$}{};
-    print "$_\n" for grep { -f } glob "$r/arcfw/ported/$parent/*";
+    print "$_\n" for grep { -f } glob port($parent) . "/*";
     my $arm = "$r/arcfw/kernel/" . lc($comp =~ tr{/}{_}r) . ".arm";
+    $arm = port($rel) . "/sources.arm" unless -f $arm;
+    (my $ad = $arm) =~ s{/[^/]+$}{};
     if (open(my $a, '<', $arm)) {
         print "$arm\n";
-        while (<$a>) { next if /^#/; my ($f) = split; print m{^/} ? host($f) : "$r/arcfw/kernel/$f", "\n" if $f; }
+        while (<$a>) { next if /^#/; my ($f) = split; print m{^/} ? host($f) : "$ad/$f", "\n" if $f; }
     }
     # the exports and system service stubs of ntdll (make-dll.sh, gensrv.sh)
     print "$r/arcfw/kernel/dll/armdef.src\n$r/arcfw/kernel/ke/services.stb\n$r/arcfw/kernel/ke/table.stb\n" if $comp eq "DLL/DAYTONA";

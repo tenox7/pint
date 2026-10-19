@@ -30,7 +30,8 @@ w=/tmp/f/gen/$(rel $d); mkdir -p $w /tmp/f/gen/$(rel $s) /tmp/rc
 copy=/tmp/f/gen/$(rel $s)/$(basename $rc | tr A-Z a-z)
 cp $rc $copy
 res=/tmp/rc/$(basename "${rc%.*}" | tr A-Z a-z).res
-# each farmed directory followed by its source directory, and the component directory,
+# each farmed directory followed by its source directory and its message table scripts
+# (mcinc.sh: rlmsgtbl.rc of RLTOOLS\COMMON), and the component directory,
 # where NT ran RC (msvideo.rc of the generated files names ..\mciwnd\strings.rc); when
 # that is longer than RC keeps, the farmed directories alone (they link the other files
 # of their source directories, incdirs.sh)
@@ -38,7 +39,8 @@ incs() {
     for p in $s /tmp/f/gen/$(rel $s) /tmp/f/mc/$(rel $s | tr A-Z a-z) /tmp/f/mc/$(rel $d | tr A-Z a-z); do echo "$p"; done
     for a in "$@"; do
         case $a in
-        -I/tmp/f/dirs/*) echo "${a#-I}"; [ -z "$TWINS" ] || echo "${a#-I/tmp/f/dirs}" ;;
+        -I/tmp/f/dirs/*) echo "${a#-I}"; [ -z "$TWINS" ] || echo "${a#-I/tmp/f/dirs}"
+                         m=/tmp/f/mc/$(rel ${a#-I/tmp/f/dirs} | tr A-Z a-z); [ ! -d $m ] || echo $m ;;
         -I*) realpath -m "${a#-I}" ;;
         esac
     done

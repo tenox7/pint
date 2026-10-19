@@ -63,6 +63,11 @@ or `net use`), shares its own folders (`net share`), and has ping, ipconfig and 
 bindings, computer name and workgroup. Its Add Software > TCP/IP Protocol installs the FTP Server and the Simple TCP/IP
 Services.
 
+## SDK tools
+
+The tools of the NT source's `PRIVATE\SDKTOOLS` that build for ARM are in `\SDKTOOLS` (`build/build-sdktools.sh`), not on
+the PATH.
+
 ## Roadmap
 
 - SMP: use all four cores (NT runs on one now).

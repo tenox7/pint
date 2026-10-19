@@ -81,6 +81,8 @@ function include(f,    line) {
     dirs[++nest] = dirof(f)
     while ((getline line < f) > 0) take(line)
     close(f)
+    # (a definition continued to the end of the file ends there: RSHELL\SERVER UMLIBS)
+    if (cont != "") { line = cont; cont = ""; take(line) }
     nest--
 }
 # Directives are taken where they stand, also inside a definition continued over

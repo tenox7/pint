@@ -1,0 +1,18 @@
+#ntdiff PRIVATE/SDKTOOLS/IMAGEHLP/BINPLACE.C
+=1 1 91
++#ifdef _ARM_
++CLASS_TABLE ArmSpecificClassTable[] = {
++    {"hal","system32"},
++    {"printer","system32\\spool\\drivers\\w32arm"},
++    {"prtprocs","system32\\spool\\prtprocs\\w32arm"},
++    {NULL,NULL}
++    };
++#endif // _ARM_
+=1 91 52
++#ifdef _ARM_
++    PlaceRootName = getenv( "_NTARMTREE" );
++#endif // _ARM_
+=1 142 195
++#elif defined(_ARM_)
++                        ClassTablePointer = &ArmSpecificClassTable[0];
+=1 337 105

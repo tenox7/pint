@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build an NT user mode DLL from its component's SOURCES (TARGETTYPE DYNLINK) as
 # makefile.def does, with Microsoft C for ARM: compile its sources and its ARM
-# sources (arcfw/kernel/<component>.arm), link the LINKLIBS and the import
-# libraries and libraries of TARGETLIBS (obj/um/<name>.lib) at its COFFBASE.TXT
-# base, entry DLLENTRY. ntdll's exports are NTDLLDEF.SRC + dll/armdef.src +
+# sources (arcfw/kernel/<component>.arm or the sources.arm of its port directory,
+# portdir.sh), link the LINKLIBS and the import libraries and libraries of
+# TARGETLIBS (obj/um/<name>.lib) at its COFFBASE.TXT base, entry DLLENTRY. ntdll's exports are NTDLLDEF.SRC + dll/armdef.src +
 # GENSRV's ntdll.xtr, preprocessed as its MAKEFILE.INC does; another DLL's come
 # from its <name>.def or <name>.src, and it imports ntdll, as makefile.def links
 # every DLL. The import library is obj/um/<name>.lib; with PRIVATE exports there
@@ -11,6 +11,7 @@
 #
 # Usage:  cd RASPI/arcfw/kernel && ./make-dll.sh DLL/DAYTONA         # ntdll
 #         INSTALL=1 ./make-dll.sh DLL/DAYTONA                         # also install
+#         INSTALL=1 DEST=SDKTOOLS ROOT=/work/PRIVATE ./make-dll.sh SDKTOOLS/PSAPI # install into \SDKTOOLS
 #         ROOT=/work/PRIVATE ./make-dll.sh CSR/SERVER                 # csrsrv
 #         IMPLIB=1 ROOT=/work/PRIVATE/WINDOWS ./make-dll.sh USER/CLIENT # the import library alone
 set -uo pipefail
@@ -18,7 +19,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-dll.sh COMPONENT}
 
-docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e IMPLIB="${IMPLIB:-0}" \
+docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" -e IMPLIB="${IMPLIB:-0}" \
     -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -36,7 +37,7 @@ DEFPATH=$(macro DLLDEF | tr -d " " | tr "\\\\" / | sed "s/\$(TARGET_DIRECTORY)/a
 # else the version of the port, else that of the tree, else one the component made
 # beside its sources (netui0.def).
 deffile() {
-  local l=$(echo $DEF | tr A-Z a-z) p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z) g=/tmp/f/gen/${D#/work/PRIVATE/} f
+  local l=$(echo $DEF | tr A-Z a-z) p=$(bash portdir.sh $D) g=/tmp/f/gen/${D#/work/PRIVATE/} f
   case $DEFPATH in [Oo][Bb][Jj]/*) [ -f $g/$l ] && { echo $g/$l; return; } ;; esac
   [ -f $p/$l ] && { echo $p/$l; return; }
   f=$(ls $D | grep -ix "$DEF") && { echo $D/$f; return; }
@@ -52,7 +53,7 @@ LIBCDEFS=""
 [ -z "$(macro USE_LIBCMT)" ] || LIBCDEFS="-D_MT=1"
 [ -z "$(macro USE_CRTDLL)" ] || LIBCDEFS="-D_DLL=1 -D_MT=1"
 DEFS="$NTDEFINES $LIBCDEFS $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g") $(macro NET_C_DEFINES)"
-INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
+INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
 
 if [ $NAME = ntdll ]; then
   bash gensrv.sh /tmp/gen > /dev/null || exit 1
@@ -92,8 +93,8 @@ srcinc() { local s=$(realpath $(dirname $1)); [ "$s" = "$(realpath $D)" ] && ret
 srcs=$(bash srclist.sh $COMP $ROOT "(c|cxx|cpp)")
 # the directories of the relative includes of the sources, last
 INCS="$INCS $(bash relinc.sh $INCS $srcs)"
-arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm
-for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
+arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm; [ -f $arm ] || arm=$(bash portdir.sh $D)/sources.arm
+for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$(dirname $arm)/&|" ); do
   b=$(basename "${f%.*}" | tr A-Z a-z)
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I$O/gen $INCS ;;
@@ -103,6 +104,10 @@ for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
 done
 echo "   $n compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
+# the objects as those of its directory, which another image links (..\imagehlp\obj\*\map.obj
+# of psapi.dll); an object of an assembler source by the name of its source (chksum.obj)
+mkdir -p $U/dir/${D#/work/} && cp $DIR/obj/*.obj $U/dir/${D#/work/}/
+for o in $DIR/obj/*_asm.obj; do [ -f "$o" ] && [ ! -f ${o%_asm.obj}.obj ] && cp $o $U/dir/${D#/work/}/$(basename ${o%_asm.obj}).obj; done
 # the array new and delete of the C++ of today (MSVC 2.0 had none), for the C++ of
 # the DLL and its libraries
 ntcc $DIR/newarray.obj /work/RASPI/arcfw/crt/cxx/newarray.cxx && ntlib $DIR/newarray.lib $DIR/newarray.obj || exit 1
@@ -164,7 +169,7 @@ T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
 case $T in /work/PUBLIC/*) ;; *) mkdir -p $U/dir/${T#/work/} && cp $DIR/$NAME.lib $U/dir/${T#/work/}/ ;; esac
 [ "$EXT" != dll ] || ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
 privlib
-OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/WINNT/System32
+OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/$DEST && mkdir -p $OUT
 cp $DIR/$F $OUT/$F
 echo "   wrote $OUT/$F"
 '

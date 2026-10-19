@@ -63,15 +63,16 @@ for c in CONV TRAN; do build /work/PRIVATE/FP32/$c || ok=0; done
 # The DLL library leaves out the startup of the client images: CRT32\MAKEFILE
 # lists its startup objects, and dllstuff gives it only crtlib (the DLL entry).
 # crtdll.lib takes txtmode, ncommode and tlssup from LIBCMT (CRTLIB\MAKEFILE):
-# the _fmode and _commode of the image, which crtexe hands to the DLL.
+# the _fmode and _commode of the image, which crtexe hands to the DLL, and dllsupp its
+# _fltused (DLLSUPP.ASM of x86).
 case $TYPE in
 DLL) [ -f $OUT/libcmt.lib ] || { echo "   build MT first: crtdll.lib takes txtmode, ncommode, tlssup from libcmt.lib"; exit 1; }
      mkdir -p /tmp/mt && (cd /tmp/mt && for m in txtmode ncommode tlssup; do
          lib -nologo -extract:$(lib -nologo -list $OUT/libcmt.lib | tr -d "\r" | grep -i "[\\\\/]$m.obj$") -out:$m.obj $OUT/libcmt.lib > /dev/null || exit 1; done) || exit 1
-     ntas $DIR/dllstuff/cinitexe.obj $A/dllstuff/arm/cinitexe.asm || exit 1
-     ntlib $OUT/crtdlls.lib $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe}.obj $DIR/startup/dllmain.obj \
+     ntas $DIR/dllstuff/cinitexe.obj $A/dllstuff/arm/cinitexe.asm && ntas $DIR/dllstuff/dllsupp.obj $A/dllstuff/arm/dllsupp.asm || exit 1
+     ntlib $OUT/crtdlls.lib $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe,dllsupp}.obj $DIR/startup/dllmain.obj \
          /tmp/mt/{txtmode,ncommode,tlssup}.obj || exit 1
-     rm -f $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe}.obj $DIR/startup/{crt0,wincrt0,dllcrt0,dllmain,tlssup}.obj
+     rm -f $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe,dllsupp}.obj $DIR/startup/{crt0,wincrt0,dllcrt0,dllmain,tlssup}.obj
      echo "   wrote obj/um/crtdlls.lib" ;;
 ST)  for o in binmode commode setargv; do mv $DIR/linkopts/$o.obj $OUT/$o.obj; done ;;
 esac

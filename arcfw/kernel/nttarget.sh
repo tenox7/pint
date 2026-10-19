@@ -27,7 +27,7 @@ locate() {
     local f r n g
     f=$(echo "$1" | tr '\\' /)
     r=$(resolve "$(dirname "$f")") || return 1
-    for g in /work/RASPI/arcfw/ported/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z) $r $(gen $r) /tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z); do
+    for g in $(bash $K/portdir.sh $r) $r $(gen $r) /tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z); do
         n=$(ls "$g" 2>/dev/null | grep -ix "$(basename "$f")" | head -1)
         [ -z "$n" ] || { echo "$g/$n"; return; }
     done
@@ -172,7 +172,7 @@ nmk_rcpp() {
 }
 m=$(resolve makefile.inc) || exit 0
 # the makefile.inc with the files it includes (the port's versions of them first)
-ported() { local p=/work/RASPI/arcfw/ported/$(echo ${1#/work/PRIVATE/} | tr A-Z a-z); [ -f $p ] && echo $p || echo $1; }
+ported() { local p=$(bash $K/portdir.sh $1); [ -f $p ] && echo $p || echo $1; }
 flatten() {
     local line f
     while IFS= read -r line || [ -n "$line" ]; do

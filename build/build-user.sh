@@ -139,7 +139,7 @@ lib $P SDKTOOLS/PERFMON; exe $P SDKTOOLS/PERFMON perfmon
 # netlogon), the transaction server and the net command
 for c in SOCKREG LIBUEMUL SOCKUTIL; do lib $P NET/SOCKETS/$c; done
 for c in WINSOCK WSHNETBS WINSTRM; do dll $P NET/SOCKETS/$c; done
-X=/work/RASPI/arcfw/net
+X=/work/RASPI/apps/net
 dll $X wshtcpip; dll $X icmp; dll $X lmhsvc; for p in ping ipconfig hostname; do exe $X $p $p; done
 # the RPC transports over TCP/IP, UDP and NetBIOS, and the NT LM security support provider
 # (security.dll, and its service, ntlmssps.dll)
@@ -212,4 +212,4 @@ D=NET/SOCKETS/TCPCMD/FTPSVC
 dll $P $D/CLIENT; dll $P $D/SERVER; dll $P $D/FTPCTRS; dll $P NET/UI/FTPMGR/CPL; dll $P NET/UI/FTPMGR/FTPSMX
 dll $P NET/SOCKETS/TCPSVCS/SIMPTCP; exe $P NET/SOCKETS/TCPSVCS/TCPSVCS tcpsvcs
 
-exe /work/RASPI/arcfw/apps hello hello
+exe /work/RASPI/apps hello hello

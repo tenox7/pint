@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build the NT header farm under $1 (default /tmp/f). NT 3.5 headers (and the
-# .ver and .dlg files resource scripts include) are
+# .ver and .dlg files resource scripts include, the .dbg status names of the debug
+# tools: ntstatus.dbg) are
 # upper/mixed-case with DOS line ends and RISC-only arch gates; copy them flat
 # and lower-case, strip ^Z/CR, add _ARM_ to the RISC gates and normalize the
 # #include names. Then adds what the build generates: the headers and sources of
@@ -23,7 +24,7 @@ filt() { tr -d '\032\r' < "$1" | sed -E -f "$K/riscgate.sed" -f "$K/msvcgate.sed
 farm() {
     local s
     mkdir -p "$2"
-    for f in "$1"/*.[Hh] "$1"/*.[Vv][Ee][Rr] "$1"/*.[Dd][Ll][Gg]; do
+    for f in "$1"/*.[Hh] "$1"/*.[Vv][Ee][Rr] "$1"/*.[Dd][Ll][Gg] "$1"/*.[Dd][Bb][Gg]; do
         [ -e "$f" ] || continue
         filt "$f" > "$2/$(basename "$f" | tr A-Z a-z)"
     done

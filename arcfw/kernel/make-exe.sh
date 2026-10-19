@@ -10,13 +10,14 @@
 #
 # Usage:  cd RASPI/arcfw/kernel && ROOT=/work/PRIVATE ./make-exe.sh SM/SERVER smss
 #         INSTALL=1 ...                                           # also install
+#         INSTALL=1 DEST=SDKTOOLS ...                             # install into \SDKTOOLS
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-exe.sh COMPONENT PROGRAM}
 PROG=${2:?usage: make-exe.sh COMPONENT PROGRAM}
 
-docker run --rm -e COMP="$COMP" -e PROG="$PROG" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" \
+docker run --rm -e COMP="$COMP" -e PROG="$PROG" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" \
     -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -35,7 +36,7 @@ CRT=libc; LIBCDEFS=""
 [ -z "$(macro USE_LIBCMT)" ] || { CRT=libcmt; LIBCDEFS="-D_MT=1"; }
 [ -z "$(macro USE_CRTDLL)" ] || { CRT=crtdll; LIBCDEFS="-D_DLL=1 -D_MT=1"; }
 DEFS="$NTDEFINES $LIBCDEFS $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g") $(macro NET_C_DEFINES)"
-INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
+INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
 UMTYPE=$(macro UMTYPE | tr -d " ")
 ENTRY=mainCRTStartup; [ "$(macro UMENTRY | tr -d " ")" = winmain ] && ENTRY=WinMainCRTStartup
 case ${UMTYPE:-nt} in
@@ -47,13 +48,15 @@ console) SUB=console; TYPELIBS="$CRT advapi32 kernel32" ;;
 esac
 
 echo ">> compiling $COMP $PROG.exe (${UMTYPE:-nt})"
-# A PROGRAM is its SOURCES; another program is its source (C or C++): the version of the port,
-# else the one in the component directory or its parent, and the objects of an
-# UMAPPL_NOLIB are the SOURCES its UMLIBS names (obj\*\name.obj).
+# A PROGRAM is its SOURCES (and the source of its UMAPPL that they do not name: pch.c);
+# another program is its source (C or C++): the version of the port, else the one in the
+# component directory or its parent, and the objects of an UMAPPL_NOLIB are the SOURCES its
+# UMLIBS names (obj\*\name.obj).
 TTYPE=$(macro TARGETTYPE | tr -d " ")
 prog=; srcs=
-if [ "$TTYPE" != PROGRAM ]; then
-  p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)
+umappl() { case " $(macro UMAPPL | tr "*" " ") " in *" $PROG "*) ! macro SOURCES | tr " " "\n" | tr "\\\\" / | grep -qiE "(^|/)$PROG\.(c|cxx|cpp)$" ;; *) false ;; esac; }
+if [ "$TTYPE" != PROGRAM ] || umappl; then
+  p=$(bash portdir.sh $D)
   for x in c cxx cpp; do
     [ -f $p/$PROG.$x ] && { prog=$p/$PROG.$x; break; }
     for d in $D $D/..; do n=$(ls $d | grep -ix "$PROG.$x") && { prog=$d/$n; break 2; }; done
@@ -71,18 +74,22 @@ o=$DIR/lobj; [ "$TTYPE" = PROGRAM ] && o=$DIR/obj
 for f in $prog; do comp $DIR/obj $f || exit 1; done
 for f in $srcs; do comp $o $f || exit 1; done
 
-# The UMLIBS, the libraries of the UMTYPE and the TARGETLIBS of a PROGRAM, in the
-# order of makefile.def (srvmgr links crtdll.lib after libc.lib). A
-# library or object is the one make-lib.sh made for the directory named, else
-# an object of the program, else that of its name: a library, an import
-# library or an object of the C run-time.
+# The objects of UMRES and UMOBJS, the UMLIBS, the libraries of the UMTYPE, the TARGETLIBS
+# of a PROGRAM and the LINKLIBS, in the order of makefile.def (srvmgr links crtdll.lib after
+# libc.lib). A library or object is the one make-lib.sh made for the directory named, else
+# an object of the program, else that of its name: a library, an import library or an
+# object of the C run-time. The library of a component whose SOURCES are resources only
+# (cntfs.lib) has nothing in it.
+OWN=$(macro TARGETNAME | tr -d " " | tr A-Z a-z).lib
+NSRC=$(macro SOURCES | tr " " "\n" | grep -ciE "\.(c|cxx|cpp)$")
 LIBS=""; seen=""
 set -f
-for l in $(macro UMLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$") $TYPELIBS $([ "$TTYPE" != PROGRAM ] || macro TARGETLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$"); do
+for l in $(echo "$(macro UMRES) $(macro UMOBJS)" | tr " " "\n" | grep -iE "\.obj$") $(macro UMLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$") $TYPELIBS \
+         $([ "$TTYPE" != PROGRAM ] || macro TARGETLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$") $(macro LINKLIBS | tr " " "\n" | grep -iE "\.(lib|obj)$"); do
   b=$(basename "$(echo "$l" | tr "\\\\" /)" | tr A-Z a-z); case $b in *.obj) ;; *) b=${b%.lib}.lib ;; esac
   a=$(bash libpath.sh $D "$l"); [ -n "$a" ] || { [ -f $DIR/lobj/$b ] && a=$DIR/lobj/$b; } || a=$U/$b
   case " $seen " in *" $a "*) continue ;; esac; seen="$seen $a"
-  [ -f $a ] || { echo "   missing $b (build it first)"; exit 1; }
+  [ -f $a ] || { [ $b = $OWN ] && [ $NSRC = 0 ] && continue; echo "   missing $b (build it first)"; exit 1; }
   LIBS="$LIBS $a"
 done
 set +f
@@ -93,18 +100,22 @@ STACK=$(echo "$(macro LINKER_FLAGS) $(amacro MIPS_LNKFLAGS)" | grep -oiE "stack:
 # the MS-DOS stub, in the component directory
 STUB=$(macro LINKER_FLAGS | grep -oiE "stub:[^ ]+" | tail -1 | cut -d: -f2)
 [ -z "$STUB" ] || STUB=$D/$(ls $D | grep -ix "$STUB")
-# the resource scripts of the SOURCES and those of the resource files the libraries
-# name (obj\*\name.res), in the component directory; a resource file another component
-# made (..\xlate\obj\*\eventvwr.res, make-lib.sh) is linked as it is
+# the resource scripts of the SOURCES and those of the resource files UMRES (that
+# of the program, $(@R).res: bind.res) and the libraries name (obj\*\name.res; the
+# TARGETLIBS of a PROGRAM, those of another program are of its DLL: imagehlp.res), in the
+# component directory; a resource file another component made (..\xlate\obj\*\eventvwr.res,
+# make-lib.sh) is linked as it is
 RCS=$(bash srclist.sh $COMP $ROOT rc 2>/dev/null | tr "\n" " ")
 RES=""
 set -f
-for l in $(echo "$(macro UMLIBS) $(macro TARGETLIBS)" | tr " " "\n" | grep -iE "\.res$"); do
+for l in $(echo "$(macro UMRES | sed "s/\$(@R)/$PROG/g") $(macro UMLIBS) $([ "$TTYPE" != PROGRAM ] || macro TARGETLIBS)" | tr " " "\n" | grep -iE "\.res$"); do
   r=$(basename "$(echo "$l" | tr "\\\\" /)")
   a=$(bash libpath.sh $D "$l")
   case $a in "") ;; */dir/${D#/work/}/*) ;; *) RES="$RES $a"; continue ;; esac
   n=$(ls $D | grep -ix "${r%.*}.rc") || continue
-  case " $RCS " in *"/$n "*) ;; *) RCS="$RCS $D/$n" ;; esac
+  # (once: the port version of a script of the SOURCES, winmsd.rc, is that of WINMSD.RC)
+  case " $(echo $RCS | tr A-Z a-z) " in *"/$(echo $n | tr A-Z a-z) "*) continue ;; esac
+  p=$(bash portdir.sh $D)/$(echo $n | tr A-Z a-z); [ -f $p ] && RCS="$RCS $p" || RCS="$RCS $D/$n"
 done
 set +f
 # A script another one includes goes in with that one only (the linker of 1994 kept
@@ -123,7 +134,7 @@ link -nologo -machine:arm -release -force:multiple -subsystem:$SUB -entry:$ENTRY
      -debug -pdb:$O/$PROG.pdb -map:$O/$PROG.map -out:$DIR/$F $DIR/obj/*.obj $LIBS $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
 bash /work/RASPI/tools/host.sh pe2img -version 3.50 $DIR/$F || exit 1
-OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/WINNT/System32
+OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/$DEST && mkdir -p $OUT
 cp $DIR/$F $OUT/$F
 echo "   wrote $OUT/$F"
 '

@@ -16,7 +16,9 @@ for a; do
     *) srcs+=("$a") ;;
     esac
 done
-rel() { tr -d '\r' < "$1" | sed -nE 's/^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](\.\.?[\\/][^">]*)[\\/][^\\/">]+[">].*/\1/p' | sort -u; }
+# (also a parent directory alone, "..\global.h", and the directories of the tree that includes
+# name from its root: "/nt/private/inc/srvfsctl.h")
+rel() { tr -d '\r' < "$1" | sed -nE 's/^[[:space:]]*#[[:space:]]*include[[:space:]]*["<](\.\.?|\.\.?[\\/][^">]*|[\\/][Nn][Tt][\\/][^">]*)[\\/][^\\/">]+[">].*/\1/p' | tr / '\\' | sort -u; }
 dirs=$(for s in "${srcs[@]}"; do dirname "$s"; done | sort -u)
 {
 for f in "${srcs[@]}" $(for d in $dirs; do ls "$d"/*.[Hh] 2>/dev/null; done); do

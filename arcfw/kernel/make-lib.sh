@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # Build an NT LIBRARY component from its SOURCES (TARGETNAME, C_DEFINES, INCLUDES,
 # SOURCES) with Microsoft C for ARM, as build.exe does, plus its ARM sources listed
-# in arcfw/kernel/<component>.arm (a line per source; the ARM_SOURCES NT's SOURCES
-# would carry). Output obj/<targetname>.lib, user mode libraries in obj/um.
+# in arcfw/kernel/<component>.arm or the sources.arm of its port directory (portdir.sh)
+# (a line per source, relative to the list; the ARM_SOURCES NT's SOURCES would carry).
+# Output obj/<targetname>.lib, user mode libraries in obj/um.
 #
 # Usage:  cd RASPI/arcfw/kernel && ./make-lib.sh RTL/BOOT        # -> obj/bldrrtl.lib
 #         ROOT=/work/PRIVATE ./make-lib.sh URTL         # a component outside PRIVATE/NTOS
+#         LOCAL=1 ROOT=/work/PRIVATE ./make-lib.sh SDKTOOLS/SLMNEW/UTIL   # a library of TARGETPATH obj
+#                       only in obj/um/dir/<component>, where build.exe left it (not obj/um/util.lib)
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-lib.sh COMPONENT}
 
-docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
+docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e LOCAL="${LOCAL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
     -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -37,11 +40,11 @@ LIBCDEFS=""
 [ -z "$(macro USE_LIBCMT)" ] || LIBCDEFS="-D_MT=1"
 [ -z "$(macro USE_CRTDLL)" ] || LIBCDEFS="-D_DLL=1 -D_MT=1"
 DEFS="$NTDEFINES $LIBCDEFS $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g") $(macro NET_C_DEFINES)"
-INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 
 echo ">> compiling $COMP ($NAME.lib)"
 srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx|cpp)$" | tr "\\\\" / | while read -r s; do
-  d=$(cd $D && cd $(dirname $s) && pwd); b=$(basename $s | tr A-Z a-z); p=/work/RASPI/arcfw/ported/$(echo ${d#/work/PRIVATE/} | tr A-Z a-z)/$b
+  d=$(cd $D && cd $(dirname $s) && pwd); b=$(basename $s | tr A-Z a-z); p=$(bash portdir.sh $d)/$b
   { [ -f $p ] && echo $p; } || { n=$(ls $d | grep -ix $b) && echo $d/$n; } ||
   { n=$(ls $d/.. | grep -ix $b) && echo $d/../$n; } || echo /tmp/f/gen/${d#/work/PRIVATE/}/$b; done)
 # the farmed directory of a source of the tree outside the component (..\x.c),
@@ -49,9 +52,9 @@ srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx|cpp)$" | tr "\\\\" / | w
 srcinc() { local s=$(realpath $(dirname $1)); [ "$s" = "$(realpath $D)" ] && return; case $s in /work/PRIVATE/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
 # and the directories of the relative includes of the sources, last
 INCS="$INCS $(bash relinc.sh $INCS $srcs)"
-arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm
+arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm; [ -f $arm ] || arm=$(bash portdir.sh $D)/sources.arm
 n=0; nr=0; fail=0
-for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
+for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$(dirname $arm)/&|" ); do
   b=$(basename "${f%.*}" | tr A-Z a-z)
   [ -f $f ] || { fail=$((fail+1)); echo "   no source $f"; continue; }
   case $f in
@@ -63,7 +66,7 @@ done
 # the resources of its resource scripts (obj\*\<name>.res), which the image of another
 # component links (..\xlate\obj\*\acledit.res of NET UI)
 for r in $(macro SOURCES | tr " " "\n" | grep -iE "\.rc$" | tr "\\\\" /); do
-  p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$(basename $r | tr A-Z a-z)
+  p=$(bash portdir.sh $D)/$(basename $r | tr A-Z a-z)
   [ -f $p ] || p=$D/$(ls $D | grep -ix "$(basename $r)") || continue
   res=$(bash rc.sh $D $p $DEFS $INCS) && mkdir -p $OUT/dir/${D#/work/} && cp $res $OUT/dir/${D#/work/}/ && nr=$((nr+1)) || fail=$((fail+1))
 done
@@ -71,14 +74,16 @@ echo "   $((n+nr)) compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
 # (a library of no sources is made of libraries by its makefile.inc: uimisc.lib of NET UI)
 if [ $n -gt 0 ]; then
-  ntlib $OUT/$NAME.lib $DIR/obj/*.obj || exit 1
+  # (LOCAL=1: a library of TARGETPATH obj only as that of its directory)
+  T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
+  L=$OUT; [ "$LOCAL" = 1 ] && [ "$T" = $D ] && L=$OUT/dir/${D#/work/}
+  mkdir -p $OUT/dir/${D#/work/} && ntlib $L/$NAME.lib $DIR/obj/*.obj || exit 1
   # and as the library and objects of its directory (libpath.sh), where two
   # components share a name or a program links an object of another, and as the
   # library of its TARGETPATH (..\bin)
-  mkdir -p $OUT/dir/${D#/work/} && cp $OUT/$NAME.lib $DIR/obj/*.obj $OUT/dir/${D#/work/}/
-  T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
-  case $T in /work/PUBLIC/*|$D) ;; *) mkdir -p $OUT/dir/${T#/work/} && cp $OUT/$NAME.lib $OUT/dir/${T#/work/}/ ;; esac
+  cp $DIR/obj/*.obj $OUT/dir/${D#/work/}/ && { [ $L != $OUT ] || cp $L/$NAME.lib $OUT/dir/${D#/work/}/; }
+  case $T in /work/PUBLIC/*|$D) ;; *) mkdir -p $OUT/dir/${T#/work/} && cp $L/$NAME.lib $OUT/dir/${T#/work/}/ ;; esac
 fi
 bash nttarget.sh $D post $OUT || exit 1
-[ $n -eq 0 ] || echo "   wrote ${OUT#/work/RASPI/}/$NAME.lib"
+[ $n -eq 0 ] || echo "   wrote ${L#/work/RASPI/}/$NAME.lib"
 '

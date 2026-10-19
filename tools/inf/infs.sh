@@ -127,5 +127,5 @@ for f in $( { tr -d "\r" < $W/PUBLIC/SDK/LIB/PLACEFIL.TXT | awk 'tolower($2) == 
     sed "s/\r*\$/\r/" $N/$f > $B/out && { cmp -s $B/out $D/${f^^} || cp $B/out $D/${f^^}; } && n=$((n+1))
 done
 # the INF of the developer first run that stores the network bindings (registry.ini)
-sed "s/\r*\$/\r/" $R/arcfw/net/ncpabind/ncpabind.inf > $B/out && { cmp -s $B/out $D/NCPABIND.INF || cp $B/out $D/NCPABIND.INF; } && n=$((n+1))
+sed "s/\r*\$/\r/" $R/apps/net/ncpabind/ncpabind.inf > $B/out && { cmp -s $B/out $D/NCPABIND.INF || cp $B/out $D/NCPABIND.INF; } && n=$((n+1))
 echo "   $n INFs in sdcard/root/WINNT/System32"
