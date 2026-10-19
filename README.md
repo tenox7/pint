@@ -29,6 +29,11 @@ installed once into `../msvc` beside the NT source; sources and outputs stay on 
 `build-update.sh` runs only the steps whose files changed (`obj/stamp`) and copies what they made into the existing
 system disk, keeping what NT wrote on it; the disk is made anew when the registry hives change.
 
+    build/portable-qemu-image.sh  # obj/pint-qemu.tar.gz: the system disk, firmware and QEMU for macOS, Linux, Windows
+
+Run it on a Mac with Homebrew `qemu` and `dylibbundler`; `IMG=disk.img` packs another disk, `FORCE=1` rebuilds the
+bundled QEMU.
+
 ## Run
 
     build/run.sh                  # console on serial in this terminal (Ctrl-A X quits)
