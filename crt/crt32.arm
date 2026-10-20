@@ -1,7 +1,7 @@
 # The ARM_SOURCES of the CRT32 and FP32 components (their MIPS_SOURCES for ARM:
 # the portable C of what MIPS has in assembler) and the initializer objects
 # CRT32\MAKEFILE takes from each machine directory. A line: COMPONENT SOURCE, a
-# source of the component or one under arcfw/crt.
+# source of the component or one under crt/.
 STRING memccpy.c
 STRING memchr.c
 STRING memicmp.c

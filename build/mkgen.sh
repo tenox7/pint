@@ -8,16 +8,16 @@
 set -u
 F=/tmp/f
 W=${NTROOT:-/work}
-K=$W/RASPI/arcfw/kernel
+K=$W/RASPI/kernel B=$W/RASPI/build
 G=$W/RASPI/obj/gen/farm
 HOST="bash $W/RASPI/tools/host.sh"
 for t in mc hextract hsplit wcshdr zwapi listmung; do
     [ -f $W/RASPI/obj/host/$(echo $t | tr a-z A-Z).EXE ] || { echo "mkgen: no obj/host/$t.exe (tools/make-tools.sh)" >&2; exit 1; }
 done
 rm -rf $G $F
-MKGEN=1 bash $K/mkfarm.sh $F
+MKGEN=1 bash $B/mkfarm.sh $F
 U=$W/PRIVATE/WINDOWS/USER
-UI=$(bash $K/incdirs.sh $U/INC "" | sed 's/^ -I//')
+UI=$(bash $B/incdirs.sh $U/INC "" | sed 's/^ -I//')
 touch /tmp/mkgen.stamp
 
 # Message files: the mc recipes of the makefil0 pass. Headers go where the build
@@ -62,7 +62,7 @@ done
 
 # The headers NT generates from tagged sections of its headers with hextract, made as
 # WINDOWS\MAKEFIL0 (winnt.h) and NTOS\MAKEFIL0 (the driver and HAL headers) make them;
-# the ported makefiles in arcfw/ported add ARM. Inputs resolve as the kernel's include
+# the ported makefiles in ported/ add ARM. Inputs resolve as the kernel's include
 # path does. hextract takes / as a switch character, so paths are farm-relative.
 # The Windows headers are made from their .w sources by hsplit (the public and
 # private parts) and wcshdr (the A/W name forms).
@@ -112,7 +112,7 @@ nmk_hextract() {
     $HOST hextract "${a[@]}"
 }
 nmk() {
-    NMK_TARGET="$2" awk -f $K/nmk.awk $W/RASPI/arcfw/ported/$1/makefil0 > /tmp/nmk.sh
+    NMK_TARGET="$2" awk -f $B/nmk.awk $W/RASPI/ported/$1/makefil0 > /tmp/nmk.sh
     (cd $F && NMK_INC=$3 && . /tmp/nmk.sh) || echo "mkgen: $2 failed" >&2
 }
 nmk windows '$(SDKINC)\winnt.h' winc
@@ -164,7 +164,7 @@ for t in 'inc\msvideo.h' 'inc\msviddrv.h' 'inc\mciavi.h' 'inc\drawdib.h' 'inc\co
          'mciavi32\mciavi.rc' 'video\msvideo.rc' 'mciavi32\mciavi.rcv' 'video\msvideo.rcv' 'mciavi32\cnfgdlg.dlg' \
          'drawdib\lockbm.c' 'inc\icm.rc' 'inc\dith775.h' 'inc\aviiface.h' 'inc\avifile.h' 'inc\avicap.h' \
          'inc\profile.h' 'inc\mciwnd.h' 'inc\preview.h' 'inc\ivideo32.h' '$(SDKINC)\vfw.h' '$(SDKINC)\mciavi.h'; do
-    NMK_TARGET="$t" awk -f $K/nmk.awk $M/makefil0 > /tmp/nmk.sh
+    NMK_TARGET="$t" awk -f $B/nmk.awk $M/makefil0 > /tmp/nmk.sh
     (cd $M && NMK_MIRROR=1 && . /tmp/nmk.sh) || { echo "mkgen: avi $t failed" >&2; continue; }
     f=$(echo "$t" | tr '\\' /)
     case $f in
@@ -187,7 +187,7 @@ listmung() {
     local l t
     l=/tmp/listmung/$(basename $1); t=/tmp/listmung/$(basename $2)
     tr -d '\032\r' < $U/$1 > $l; tr -d '\032\r' < $U/$2 > $t
-    (cd /tmp/listmung && $HOST listmung $(basename $l) $(basename $t)) | tr -d '\r' | sed -E -f $K/riscgate.sed -f $K/incfix.sed > $3
+    (cd /tmp/listmung && $HOST listmung $(basename $l) $(basename $t)) | tr -d '\r' | sed -E -f $B/riscgate.sed -f $B/incfix.sed > $3
 }
 mkdir -p $F/gen/WINDOWS/USER/SERVER $F/gen/WINDOWS/USER/CLIENT
 listmung INC/CF.LST INC/CSUSER.TPL $UI/csuser.h

@@ -1,6 +1,6 @@
 //
 // arcdos_compat.h - the ADK ARC/vendor/libc surface arcdos.c needs, hand-written
-// for the ARM loader port. arcdos.c (arcfw/ported/arcdos.c) is compiled against
+// for the ARM loader port. arcdos.c (arcfw/arcdos/arcdos.c) is compiled against
 // THIS header alone - never the loader's NT headers (arcfw/inc/) - because the
 // ADK names (Open/Read/Print, OPEN_MODE OpenReadOnly...) collide with the NT ones
 // (ArcOpen macros, OPEN_MODE ArcOpenReadOnly...). The two are layout/value

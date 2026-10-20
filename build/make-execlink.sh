@@ -3,23 +3,23 @@
 # portable KE and executive (each component's UP/SOURCES list), INIT and the LSA
 # kernel library, linked from KiSystemStartup with the exports of NTOSKRNL.SRC and
 # the ARM additions (armdef.src). The kernel imports the HAL from hal.dll
-# (arcfw/hal, make-hal.sh). INSTALL=1 writes NTOSKRNL.EXE.
+# (hal/make-hal.sh). INSTALL=1 writes NTOSKRNL.EXE.
 #
-# Usage:  cd RASPI/arcfw/kernel && ./make-execlink.sh           # build only
+# Usage:  cd RASPI/build && ./make-execlink.sh                  # build only
 #         INSTALL=1 ./make-execlink.sh                          # also install
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 [ -f "$NT35/RASPI/obj/gen/error.h" ] || { echo "make-execlink: build the tools first (tools/make-tools.sh)"; exit 1; }
 [ -f "$NT35/RASPI/obj/gen/ksarm.h" ] && [ -f "$NT35/RASPI/obj/libcntpr.lib" ] || { echo "make-execlink: build ksarm.h and the C run-time first (make-ksarm.sh, ../crt/make-crt.sh)"; exit 1; }
 
-docker run --rm -e CJ="${CJ:-4}" -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
+docker run --rm -e CJ="${CJ:-4}" -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/kernel \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
-. ./msvc.sh
+. /work/RASPI/build/msvc.sh
 O=/work/RASPI/obj
 SUBSYS="KE RTL EX OB PS MM IO SE CONFIG LPC CACHE FSRTL RAW DBGK KD VDM INIT"
-bash mkfarm.sh /tmp/f
+bash $B/mkfarm.sh /tmp/f
 ALLSUB=""; for S in $SUBSYS; do ALLSUB="$ALLSUB -I/tmp/f/$(echo $S | tr A-Z a-z)"; done
 COMMON="-Iinc -Imm -I/tmp/f/ovr $ALLSUB -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 KINCS="-Iinc -I/tmp/f/ovr -I/tmp/f/ke -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
@@ -28,7 +28,7 @@ DEFS="$NTDEFINES -D_NTSYSTEM_"
 # The C_DEFINES of the SOURCES of a component (RTL\UP adds NTOS_KERNEL_RUNTIME).
 cdefs() {
   local s=/work/PRIVATE/NTOS/$1/UP/SOURCES; [ -f $s ] || s=/work/PRIVATE/NTOS/$1/SOURCES
-  bash srcmacro.sh $s C_DEFINES | sed -E "s/[\$][(][A-Za-z0-9_]+[)]//g"
+  bash $B/srcmacro.sh $s C_DEFINES | sed -E "s/[\$][(][A-Za-z0-9_]+[)]//g"
 }
 MODE="-kernel"
 DIR=/tmp/elink; rm -rf $DIR; mkdir -p $DIR/arch $DIR/exec $DIR/src $DIR/gen
@@ -36,7 +36,7 @@ fail=0
 
 # -------- 1. the ARM kernel layer: assembly, C, the system service table and stubs --------
 echo ">> compiling the ARM kernel layer"
-bash gensrv.sh $DIR/gen > /dev/null || { echo "  GENSRV FAIL"; exit 1; }
+bash $B/gensrv.sh $DIR/gen > /dev/null || { echo "  GENSRV FAIL"; exit 1; }
 for s in ke/*.asm ex/*.asm $DIR/gen/sysstubs.asm $DIR/gen/systable.asm; do
   par ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS -I$O/gen $KINCS
 done
@@ -79,9 +79,9 @@ lsa_c() { local f=$1 b=$(basename "${1%.[Cc]}" | tr A-Z a-z); ntsrc $f $DIR/src/
 for S in $SUBSYS; do
   s=$(echo $S | tr A-Z a-z)
   CD=$(cdefs $S)
-  for f in $(bash srclist.sh $S); do par exec_c $f; done
+  for f in $(bash $B/srclist.sh $S); do par exec_c $f; done
 done
-for f in $(bash srclist.sh CLIENT/KERNEL /work/PRIVATE/LSA); do par lsa_c $f; done
+for f in $(bash $B/srclist.sh CLIENT/KERNEL /work/PRIVATE/LSA); do par lsa_c $f; done
 pwait; n=$PAROK; fail=$((fail+PARFAIL))
 echo "   $n executive objects, $fail failed"
 [ $fail -eq 0 ] || exit 1
@@ -92,10 +92,10 @@ ntlib $DIR/exec.lib $DIR/exec/*.obj || exit 1
 # the HAL import library from hal.src, as LIB -def makes it.
 cat /work/PRIVATE/NTOS/INIT/NTOSKRNL.SRC armdef.src | tr -d "\032\r" > $DIR/ntoskrnl.src
 cl -nologo -EP -D_ARM_ $DIR/ntoskrnl.src > $DIR/ntoskrnl.def 2>/dev/null
-tr -d "\032\r" < /work/RASPI/arcfw/hal/hal.src > $DIR/hal.src
+tr -d "\032\r" < /work/RASPI/hal/hal.src > $DIR/hal.src
 cl -nologo -EP -D_ARM_ $DIR/hal.src > $DIR/hal.def 2>/dev/null
 lib -nologo -machine:arm -def:$DIR/hal.def -name:hal.dll -out:$DIR/hal.lib > $DIR/hal.err 2>&1 || { cat $DIR/hal.err; exit 1; }
-RES=$(bash rc.sh /work/PRIVATE/NTOS/INIT /work/PRIVATE/NTOS/INIT/NTOSKRNL.RC $DEFS $KINCS) || exit 1
+RES=$(bash $B/rc.sh /work/PRIVATE/NTOS/INIT /work/PRIVATE/NTOS/INIT/NTOSKRNL.RC $DEFS $KINCS) || exit 1
 echo ">> linking"
 link -nologo -machine:arm -release -driver -subsystem:native -entry:KiSystemStartup -base:0x81000000 -nodefaultlib \
      -debug -pdb:$O/ntoskrnl.pdb -map:$O/ntoskrnl.map -def:$DIR/ntoskrnl.def -out:$DIR/ntoskrnl.exe \

@@ -5,16 +5,16 @@
 # (lib/arm/crtdll.arm), with the resources of crtdll.rc. Its import library, with
 # the startup objects of its client images (obj/um/crtdlls.lib), is obj/um/crtdll.lib.
 #
-# Usage:  cd RASPI/arcfw/crt && ./make-crtdll.sh       INSTALL=1 to install
+# Usage:  cd RASPI/crt && ./make-crtdll.sh             INSTALL=1 to install
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 
-docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
+docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
-A=/work/RASPI/arcfw/crt
+A=/work/RASPI/crt
 O=/work/RASPI/obj
 U=$O/um
 L=/work/PRIVATE/CRTLIB
@@ -22,7 +22,7 @@ SUBSYS=" " bash mkfarm.sh /tmp/f
 DIR=/tmp/crtdll; rm -rf $DIR; mkdir -p $DIR
 [ -f $U/kernel32.lib ] || { echo "   build the kernel32 import library first"; exit 1; }
 
-cat $L/LIB/CRTDLL.DEF $A/lib/arm/crtdll.arm | tr -d "\032\r" | sed -f $K/deffix.sed > $DIR/crtdll.def
+cat $L/LIB/CRTDLL.DEF $A/lib/arm/crtdll.arm | tr -d "\032\r" | sed -f $B/deffix.sed > $DIR/crtdll.def
 lib -nologo -machine:arm -def:$DIR/crtdll.def -out:$DIR/crtdll.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
 RES=$(bash rc.sh $L $L/CRTDLL.RC -D_ARM_ -DWIN32=100 -D_WIN32_=1 -DNT_UP=1 -DDBG=0 -DDEVL=1 -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt) || exit 1
 echo ">> linking crtdll.dll"

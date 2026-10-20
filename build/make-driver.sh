@@ -7,19 +7,19 @@
 # EXPORT_DRIVER's exports come from <name>.src preprocessed as its MAKEFILE.INC
 # does; its import library is written to obj/<name>.lib for its clients.
 #
-# Usage:  cd RASPI/arcfw/kernel && ./make-driver.sh FASTFAT         # PRIVATE/NTOS/FASTFAT
+# Usage:  cd RASPI/build && ./make-driver.sh FASTFAT                # PRIVATE/NTOS/FASTFAT
 #         INSTALL=1 ./make-driver.sh DD/SCSIPORT                     # also install
-#         ROOT=/work/RASPI/arcfw/drivers ./make-driver.sh BCMEMMC    # a component outside PRIVATE/NTOS
+#         ROOT=/work/RASPI/drivers ./make-driver.sh BCMEMMC          # a component outside PRIVATE/NTOS
 # Needs obj/ntoskrnl.lib from make-execlink.sh and obj/hal.lib from make-hal.sh.
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 COMP=${1:?usage: make-driver.sh COMPONENT}
 [ -f "$NT35/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
 [ -f "$NT35/RASPI/obj/hal.lib" ] || { echo "run make-hal.sh first"; exit 1; }
 
 docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" \
-    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
@@ -36,7 +36,7 @@ fi
 # the port versions of its headers
 PH=
 mkdir -p /tmp/f/$c
-for h in /work/RASPI/arcfw/ported/$(echo ${SRC#/work/PRIVATE/} | tr A-Z a-z)/*.h; do
+for h in /work/RASPI/ported/$(echo ${SRC#/work/PRIVATE/} | tr A-Z a-z)/*.h; do
   [ -e "$h" ] && ntsrc "$h" /tmp/f/$c/$(basename "$h") && PH=1
 done
 DIR=/tmp/drv; rm -rf $DIR; mkdir -p $DIR/obj $DIR/src

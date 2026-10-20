@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # Build an NT LIBRARY component from its SOURCES (TARGETNAME, C_DEFINES, INCLUDES,
 # SOURCES) with Microsoft C for ARM, as build.exe does, plus its ARM sources listed
-# in arcfw/kernel/<component>.arm or the sources.arm of its port directory (portdir.sh)
+# in kernel/<component>.arm or the sources.arm of its port directory (portdir.sh)
 # (a line per source, relative to the list; the ARM_SOURCES NT's SOURCES would carry).
 # Output obj/<targetname>.lib, user mode libraries in obj/um.
 #
-# Usage:  cd RASPI/arcfw/kernel && ./make-lib.sh RTL/BOOT        # -> obj/bldrrtl.lib
+# Usage:  cd RASPI/build && ./make-lib.sh RTL/BOOT               # -> obj/bldrrtl.lib
 #         ROOT=/work/PRIVATE ./make-lib.sh URTL         # a component outside PRIVATE/NTOS
 #         LOCAL=1 ROOT=/work/PRIVATE ./make-lib.sh SDKTOOLS/SLMNEW/UTIL   # a library of TARGETPATH obj
 #                       only in obj/um/dir/<component>, where build.exe left it (not obj/um/util.lib)
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 COMP=${1:?usage: make-lib.sh COMPONENT}
 
 docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e LOCAL="${LOCAL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
-    -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+    -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 D=$ROOT/$COMP

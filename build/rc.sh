@@ -8,10 +8,10 @@
 # directory of the component and compiles a copy of the script in that of the
 # script (RC makes its temporary files beside it). RC takes / for a switch, so
 # paths go to it in DOS form, on drives of the long prefixes (p: the tree, d: its
-# farmed directories, f: the farm, k: arcfw/kernel): RC keeps its include path in
+# farmed directories, f: the farm, k: kernel): RC keeps its include path in
 # 520 bytes, as NT's \nt\ paths fit. Prints the name of the .res.
 [ -f /work/RASPI/obj/host/RC.EXE ] || { echo "rc.sh: no obj/host/RC.EXE (tools/make-tools.sh)" >&2; exit 1; }
-for m in p:/work/PRIVATE d:/tmp/f/dirs/work/PRIVATE f:/tmp/f k:/work/RASPI/arcfw/kernel; do
+for m in p:/work/PRIVATE d:/tmp/f/dirs/work/PRIVATE f:/tmp/f k:/work/RASPI/kernel; do
     [ -e /opt/wine32/dosdevices/${m%%:*}: ] || ln -s ${m#*:} /opt/wine32/dosdevices/${m%%:*}:
 done
 dos() {
@@ -19,7 +19,7 @@ dos() {
     /tmp/f/dirs/work/PRIVATE/*) echo "d:${1#/tmp/f/dirs/work/PRIVATE}" ;;
     /tmp/f/*) echo "f:${1#/tmp/f}" ;;
     /work/PRIVATE/*) echo "p:${1#/work/PRIVATE}" ;;
-    /work/RASPI/arcfw/kernel/*) echo "k:${1#/work/RASPI/arcfw/kernel}" ;;
+    /work/RASPI/kernel/*) echo "k:${1#/work/RASPI/kernel}" ;;
     *) echo "Z:$1" ;;
     esac | tr / '\\'
 }

@@ -26,7 +26,7 @@ Abstract:
 #include "fwp.h"
 #include <stdio.h>
 #include <string.h>
-#include "../drivers/bcmusb/usbhost.h"
+#include "../../drivers/bcmusb/usbhost.h"
 #include "bcmethhw.h"
 
 #define USB_BASE                (PERIPHERAL_BASE + 0x980000)

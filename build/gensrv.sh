@@ -9,7 +9,7 @@
 set -e
 O=$1
 W=${NTROOT:-/work}
-K=$W/RASPI/arcfw/kernel
+K=$W/RASPI/kernel
 G=/tmp/gensrv
 rm -rf $G && mkdir -p $G/arm
 tr -d '\032\r' < $W/PRIVATE/NTOS/KE/SERVICES.TAB > $G/services.tab

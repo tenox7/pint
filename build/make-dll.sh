@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build an NT user mode DLL from its component's SOURCES (TARGETTYPE DYNLINK) as
 # makefile.def does, with Microsoft C for ARM: compile its sources and its ARM
-# sources (arcfw/kernel/<component>.arm or the sources.arm of its port directory,
+# sources (kernel/<component>.arm or the sources.arm of its port directory,
 # portdir.sh), link the LINKLIBS and the import libraries and libraries of
 # TARGETLIBS (obj/um/<name>.lib) at its COFFBASE.TXT base, entry DLLENTRY. ntdll's exports are NTDLLDEF.SRC + dll/armdef.src +
 # GENSRV's ntdll.xtr, preprocessed as its MAKEFILE.INC does; another DLL's come
@@ -9,18 +9,18 @@
 # every DLL. The import library is obj/um/<name>.lib; with PRIVATE exports there
 # is also obj/um/<name>p.lib, which has all of them.
 #
-# Usage:  cd RASPI/arcfw/kernel && ./make-dll.sh DLL/DAYTONA         # ntdll
+# Usage:  cd RASPI/build && ./make-dll.sh DLL/DAYTONA                # ntdll
 #         INSTALL=1 ./make-dll.sh DLL/DAYTONA                         # also install
 #         INSTALL=1 DEST=SDKTOOLS ROOT=/work/PRIVATE ./make-dll.sh SDKTOOLS/PSAPI # install into \SDKTOOLS
 #         ROOT=/work/PRIVATE ./make-dll.sh CSR/SERVER                 # csrsrv
 #         IMPLIB=1 ROOT=/work/PRIVATE/WINDOWS ./make-dll.sh USER/CLIENT # the import library alone
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 COMP=${1:?usage: make-dll.sh COMPONENT}
 
 docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" -e IMPLIB="${IMPLIB:-0}" \
-    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
@@ -57,7 +57,7 @@ INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro
 
 if [ $NAME = ntdll ]; then
   bash gensrv.sh /tmp/gen > /dev/null || exit 1
-  cat /work/PRIVATE/NTOS/DLL/NTDLLDEF.SRC dll/armdef.src /tmp/gen/ntdll.xtr > $DIR/ntdll.in
+  cat /work/PRIVATE/NTOS/DLL/NTDLLDEF.SRC $K/dll/armdef.src /tmp/gen/ntdll.xtr > $DIR/ntdll.in
   ntsrc $DIR/ntdll.in $DIR/$NAME.src
   cl -nologo -EP -D_ARM_ -DDBG=0 -DDEVL=1 $DIR/$NAME.src 2>/dev/null | sed -f deffix.sed > $DIR/$NAME.def
 elif f=$(deffile); then
@@ -113,7 +113,7 @@ mkdir -p $U/dir/${D#/work/} && cp $DIR/obj/*.obj $U/dir/${D#/work/}/
 for o in $DIR/obj/*_asm.obj; do [ -f "$o" ] && [ ! -f ${o%_asm.obj}.obj ] && cp $o $U/dir/${D#/work/}/$(basename ${o%_asm.obj}).obj; done
 # the array new and delete of the C++ of today (MSVC 2.0 had none), for the C++ of
 # the DLL and its libraries
-ntcc $DIR/newarray.obj /work/RASPI/arcfw/crt/cxx/newarray.cxx && ntlib $DIR/newarray.lib $DIR/newarray.obj || exit 1
+ntcc $DIR/newarray.obj /work/RASPI/crt/cxx/newarray.cxx && ntlib $DIR/newarray.lib $DIR/newarray.obj || exit 1
 
 # In the order of makefile.def: LINKLIBS, the TARGETLIB of a DLL (crtdll.lib with
 # USE_CRTDLL, ntdll.lib), TARGETLIBS. A library is the one make-lib.sh made for the
@@ -139,8 +139,8 @@ done
 set +f
 
 # DLLBASE: an address, or @coffbase.txt,KEY; the TARGETNAME by default
-KEY=$NAME; BASE=""; B=$(macro DLLBASE | tr -d " ")
-case $B in @*,*) KEY=$(echo ${B##*,} | tr A-Z a-z) ;; 0x*|[0-9]*) BASE=$B ;; esac
+KEY=$NAME; BASE=""; DB=$(macro DLLBASE | tr -d " ")
+case $DB in @*,*) KEY=$(echo ${DB##*,} | tr A-Z a-z) ;; 0x*|[0-9]*) BASE=$DB ;; esac
 [ -n "$BASE" ] || BASE=$(tr -d "\r" < /work/PUBLIC/SDK/LIB/COFFBASE.TXT | awk -v n=$KEY "tolower(\$1) == n {print \$2; exit}")
 [ -n "$BASE" ] || { echo "   $KEY has no COFFBASE.TXT entry"; exit 1; }
 ENTRY=$(macro DLLENTRY | tr -d " ")

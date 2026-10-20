@@ -8,17 +8,17 @@
 # (UMENTRY winmain) or mainCRTStartup - advapi32 and kernel32, windows also gdi32 and
 # user32.
 #
-# Usage:  cd RASPI/arcfw/kernel && ROOT=/work/PRIVATE ./make-exe.sh SM/SERVER smss
+# Usage:  cd RASPI/build && ROOT=/work/PRIVATE ./make-exe.sh SM/SERVER smss
 #         INSTALL=1 ...                                           # also install
 #         INSTALL=1 DEST=SDKTOOLS ...                             # install into \SDKTOOLS
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 COMP=${1:?usage: make-exe.sh COMPONENT PROGRAM}
 PROG=${2:?usage: make-exe.sh COMPONENT PROGRAM}
 
 docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e PROG="$PROG" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" \
-    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+    -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj

@@ -9,11 +9,11 @@
 # Usage:  build/build-drivers.sh
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
-N=/work/PRIVATE/NTOS B=/work/RASPI/arcfw/drivers
-drv() { INSTALL=1 cstep drv $N $1 link -- $K/make-driver.sh $1; }
-bcm() { INSTALL=1 ROOT=$B cstep drv $B $1 link -- $K/make-driver.sh $1; }
+N=/work/PRIVATE/NTOS D=/work/RASPI/drivers
+drv() { INSTALL=1 cstep drv $N $1 link -- $B/make-driver.sh $1; }
+bcm() { INSTALL=1 ROOT=$D cstep drv $D $1 link -- $B/make-driver.sh $1; }
 
-lib() { cstep lib $N $1 -- $K/make-lib.sh $1; }
+lib() { cstep lib $N $1 -- $B/make-lib.sh $1; }
 storage() { drv DD/SCSIPORT; lib DD/CLASS; drv DD/SCSIDISK; bcm bcmemmc; drv DD/NTFT; }
 video() { drv VIDEO/PORT; bcm bcmvideo; }
 input() { drv DD/KBDCLASS; drv DD/MOUCLASS; bcm bcmusb; }

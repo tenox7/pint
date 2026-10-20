@@ -18,11 +18,11 @@ export DEST=SDKTOOLS
 lib() { local c=$1; shift; if [ $PHASE = libs ]; then job lib/$c libstep $c; else exe $c "$@"; fi; }
 dll() { local c=$1; shift; if [ $PHASE = libs ]; then job dll/$c dllstep $c; else exe $c "$@"; fi; }
 exe() { local c=$1; shift; [ $PHASE = exes ] && [ $# -gt 0 ] || return 0; job exe/$c exesteps $c "$@"; }
-libstep() { LOCAL=1 ROOT=$P cstep lib $P $S/$1 -- $K/make-lib.sh $S/$1; }
-dllstep() { INSTALL=1 ROOT=$P cstep dll $P $S/$1 link -- $K/make-dll.sh $S/$1; }
+libstep() { LOCAL=1 ROOT=$P cstep lib $P $S/$1 -- $B/make-lib.sh $S/$1; }
+dllstep() { INSTALL=1 ROOT=$P cstep dll $P $S/$1 link -- $B/make-dll.sh $S/$1; }
 exesteps() {
     local c=$1 p; shift
-    for p; do INSTALL=1 ROOT=$P step exe/$S/$c/$p $(perl $R/build/inputs.pl $R $P $S/$c link) -- $K/make-exe.sh $S/$c $p; done
+    for p; do INSTALL=1 ROOT=$P step exe/$S/$c/$p $(perl $R/build/inputs.pl $R $P $S/$c link) -- $B/make-exe.sh $S/$c $p; done
 }
 # The commands of SLM: copies of execslm.exe, which runs slm.exe with its name (SLM\MAKEFILE.INC).
 slmcmds() {

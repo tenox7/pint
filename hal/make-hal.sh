@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # Build HAL.DLL, the Raspberry Pi 2 HAL (TARGETTYPE HAL), with Microsoft C for ARM:
-# arcfw/hal and the shared NTHALS\DRIVESUP.C, linked with the ntoskrnl import
+# hal/ and the shared NTHALS\DRIVESUP.C, linked with the ntoskrnl import
 # library and the kernel C run-time, exporting hal.src.
 #
-# Usage:  cd RASPI/arcfw/hal && ./make-hal.sh           # -> obj/HAL.DLL
+# Usage:  cd RASPI/hal && ./make-hal.sh                 # -> obj/HAL.DLL
 #         INSTALL=1 ./make-hal.sh                       # -> sdcard/root/os/nt/HAL.DLL (system partition)
 # Needs obj/ntoskrnl.lib (make-execlink.sh) and obj/libcntpr.lib (../crt/make-crt.sh).
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 [ -f "$NT35/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
 
-docker run --rm -e CJ="${CJ:-4}" -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/hal \
+docker run --rm -e CJ="${CJ:-4}" -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/hal \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
-. /work/RASPI/arcfw/kernel/msvc.sh
+. /work/RASPI/build/msvc.sh
 O=/work/RASPI/obj
-SUBSYS=" " bash $K/mkfarm.sh /tmp/f
+SUBSYS=" " bash $B/mkfarm.sh /tmp/f
 DIR=/tmp/hal; rm -rf $DIR; mkdir -p $DIR/obj $DIR/src
 DEFS="$NTDEFINES"
-INCS="-I/work/RASPI/arcfw/hal -I/tmp/f/ovr -I/tmp/f/priv -I$K/inc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt -I$O/gen"
+INCS="-I/work/RASPI/hal -I/tmp/f/ovr -I/tmp/f/priv -I$K/inc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt -I$O/gen"
 
 echo ">> compiling the HAL"
 n=0; fail=0

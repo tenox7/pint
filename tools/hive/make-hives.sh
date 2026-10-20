@@ -14,5 +14,5 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/host/RCPP.EXE" ] || { echo "make-hives: build the tools first (tools/make-tools.sh)"; exit 1; }
 
-docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 \
+docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 \
     /work/RASPI/tools/hive/hives.sh ${*:-ARM}

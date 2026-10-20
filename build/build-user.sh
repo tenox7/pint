@@ -10,13 +10,13 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
 N=/work/PRIVATE/NTOS P=/work/PRIVATE W=/work/PRIVATE/WINDOWS
-lib() { ROOT=$1 cstep lib $1 $2 -- $K/make-lib.sh $2; }
-dll() { INSTALL=1 ROOT=$1 cstep dll $1 $2 link -- $K/make-dll.sh $2; }
-exe() { INSTALL=1 ROOT=$1 cstep exe $1 $2 link -- $K/make-exe.sh $2 $3; }
-implib() { [ -f $R/obj/um/$3.lib ] || IMPLIB=1 ROOT=$1 $K/make-dll.sh $2; }
+lib() { ROOT=$1 cstep lib $1 $2 -- $B/make-lib.sh $2; }
+dll() { INSTALL=1 ROOT=$1 cstep dll $1 $2 link -- $B/make-dll.sh $2; }
+exe() { INSTALL=1 ROOT=$1 cstep exe $1 $2 link -- $B/make-exe.sh $2 $3; }
+implib() { [ -f $R/obj/um/$3.lib ] || IMPLIB=1 ROOT=$1 $B/make-dll.sh $2; }
 # pair ROOT COMPONENT:PROGRAM: the library of a program and the program
 pair() { lib $1 ${2%%:*}; exe $1 ${2%%:*} ${2#*:}; }
-umcrt() ( cd $R/arcfw/crt && UM=1 ./make-crt.sh && ./make-crt32.sh ST && ./make-crt32.sh MT && ./make-crt32.sh DLL && INSTALL=1 ./make-crtdll.sh )
+umcrt() ( cd $R/crt && UM=1 ./make-crt.sh && ./make-crt32.sh ST && ./make-crt32.sh MT && ./make-crt32.sh DLL && INSTALL=1 ./make-crtdll.sh )
 
 implib $W BASE/CLIENT/DAYTONA kernel32
 step crt-um $CRT $R/obj/um/kernel32.lib -- umcrt

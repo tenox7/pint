@@ -5,34 +5,34 @@
 # Usage: hives.sh VARIANT...
 VARIANTS="$*"
 set -eu
-. /work/RASPI/arcfw/kernel/msvc.sh
+. /work/RASPI/build/msvc.sh
 W=/work
 T=$W/RASPI/tools/hive
 H=$W/RASPI/obj/host
 U=$W/RASPI/obj/um
-B=/tmp/hb
-rm -rf $B; mkdir -p $B/obj
-bash $K/mkfarm.sh /tmp/f > /dev/null
+HB=/tmp/hb
+rm -rf $HB; mkdir -p $HB/obj
+bash $B/mkfarm.sh /tmp/f > /dev/null
 host() { bash $W/RASPI/tools/host.sh "$@"; }
 
 # The ARM headers, with the TEB of the build machine: Windows on ARM keeps it in
 # TPIDRURW, NT on the Pi in TPIDRURO.
-mkdir -p $B/inc && cp $K/inc/*.h $B/inc/
-sed "s/_MoveFromCoprocessor(15, 0, 13, 0, 3)/_MoveFromCoprocessor(15, 0, 13, 0, 2)/" $K/inc/ntarm.h > $B/inc/ntarm.h
+mkdir -p $HB/inc && cp $K/inc/*.h $HB/inc/
+sed "s/_MoveFromCoprocessor(15, 0, 13, 0, 3)/_MoveFromCoprocessor(15, 0, 13, 0, 2)/" $K/inc/ntarm.h > $HB/inc/ntarm.h
 DEFS="$NTDEFINES -D_NTSYSTEM_"
-NTINC="-I$B/inc -I/tmp/f/ovr -I/tmp/f/config -I/tmp/f/se -I/tmp/f/rtl -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
-UI=$(bash $K/incdirs.sh $W/PRIVATE/NTOS/CONFIG/UTILS "")
-RI=$(bash $K/incdirs.sh $W/PRIVATE/SDKTOOLS/REGINI "")
+NTINC="-I$HB/inc -I/tmp/f/ovr -I/tmp/f/config -I/tmp/f/se -I/tmp/f/rtl -I/tmp/f/priv -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+UI=$(bash $B/incdirs.sh $W/PRIVATE/NTOS/CONFIG/UTILS "")
+RI=$(bash $B/incdirs.sh $W/PRIVATE/SDKTOOLS/REGINI "")
 # cc OBJECT SOURCE OPTION...: CONFIG\UTILS predates the CM of 3.5 (utils.pl)
 cc() {
     local o=$1 s=$2; shift 2
-    ntsrc $s $B/obj/$o.c
-    case $s in */CONFIG/UTILS/*) perl $T/utils.pl < $B/obj/$o.c > $B/obj/$o.u && mv $B/obj/$o.u $B/obj/$o.c ;; esac
-    ntcc $B/obj/$o.obj $B/obj/$o.c $DEFS "$@"
+    ntsrc $s $HB/obj/$o.c
+    case $s in */CONFIG/UTILS/*) perl $T/utils.pl < $HB/obj/$o.c > $HB/obj/$o.u && mv $HB/obj/$o.u $HB/obj/$o.c ;; esac
+    ntcc $HB/obj/$o.obj $HB/obj/$o.c $DEFS "$@"
 }
 
 echo ">> uconfig (CONFIG for user mode)"
-for s in $(bash $K/srclist.sh CONFIG); do
+for s in $(bash $B/srclist.sh CONFIG); do
     b=$(basename $s .C)
     case $b in NTAPI) continue;; esac
     cc cm_$b $s $NTINC
@@ -50,8 +50,8 @@ cc hostnt $T/hostnt.c -I$T $NTINC
 cc ntreg $T/ntreg.c -I$T $UI $NTINC
 
 echo ">> link"
-ntlib $B/uconfig.lib $B/obj/cm_*.obj
-ntlib $B/rtl.lib $B/obj/rtl_*.obj $B/obj/dll_*.obj $B/obj/ke_*.obj
+ntlib $HB/uconfig.lib $HB/obj/cm_*.obj
+ntlib $HB/rtl.lib $HB/obj/rtl_*.obj $HB/obj/dll_*.obj $HB/obj/ke_*.obj
 BASE=$(tr -d "\r" < $W/PUBLIC/SDK/LIB/COFFBASE.TXT | awk "tolower(\$1) == \"usermode\" {print \$2; exit}")
 # The tools' own definitions come first, as the objects of the program. Of the objects
 # of uconfig and the RTL they take, functions they do not call reach kernel services
@@ -62,20 +62,20 @@ KERNEL="SeTokenType SeCreateClientSecurity ObfDereferenceObject ExAcquireFastMut
 lnk() {
     local out=$1 s; shift
     link -nologo -machine:arm -release -brepro -force -subsystem:console -entry:mainCRTStartup -base:$BASE -nodefaultlib \
-         -out:$B/$out.EXE "$@" $B/obj/ut_EDITHIVE.obj $B/obj/ut_CMWRAPER.obj $B/obj/hostnt.obj $B/uconfig.lib $B/rtl.lib \
-         $U/libc.lib $U/ntdll.lib $U/kernel32.lib $U/advapi32.lib > $B/$out.err 2>&1
-    for s in $(tr -d "\r" < $B/$out.err | sed -n "s/.*unresolved external symbol \([A-Za-z_0-9]*\).*/\1/p" | sort -u); do
+         -out:$HB/$out.EXE "$@" $HB/obj/ut_EDITHIVE.obj $HB/obj/ut_CMWRAPER.obj $HB/obj/hostnt.obj $HB/uconfig.lib $HB/rtl.lib \
+         $U/libc.lib $U/ntdll.lib $U/kernel32.lib $U/advapi32.lib > $HB/$out.err 2>&1
+    for s in $(tr -d "\r" < $HB/$out.err | sed -n "s/.*unresolved external symbol \([A-Za-z_0-9]*\).*/\1/p" | sort -u); do
         case " $(echo $KERNEL) " in *" $s "*) ;; *) echo "   LINK FAIL $out: $s"; return 1 ;; esac
     done
-    if tr -d "\r" < $B/$out.err | grep "fatal error" | grep -qv LNK1120; then
-        echo "   LINK FAIL $out:"; tr -d "\r" < $B/$out.err | grep "fatal error"; return 1
+    if tr -d "\r" < $HB/$out.err | grep "fatal error" | grep -qv LNK1120; then
+        echo "   LINK FAIL $out:"; tr -d "\r" < $HB/$out.err | grep "fatal error"; return 1
     fi
     # the steps after take obj/host as an input: replace the program only when it changed
-    cmp -s $B/$out.EXE $H/$out.EXE || cp $B/$out.EXE $H/$out.EXE
+    cmp -s $HB/$out.EXE $H/$out.EXE || cp $HB/$out.EXE $H/$out.EXE
     echo "   obj/host/$out.EXE"
 }
-lnk HIVEDMP $B/obj/ut_HIVEDMP.obj $B/obj/ut_REGUTIL.obj
-lnk REGINI $B/obj/rg_REGINI.obj $B/obj/rg_REGUTIL.obj $B/obj/rg_REGACL.obj $B/obj/ntreg.obj
+lnk HIVEDMP $HB/obj/ut_HIVEDMP.obj $HB/obj/ut_REGUTIL.obj
+lnk REGINI $HB/obj/rg_REGINI.obj $HB/obj/rg_REGUTIL.obj $HB/obj/rg_REGACL.obj $HB/obj/ntreg.obj
 
 export NTNLS='Z:\work\PRIVATE\WINDOWS\WINNLS\DATA'
 G=$W/RASPI/obj/gen/hives
@@ -95,7 +95,7 @@ for V in $VARIANTS; do
     if [ $V = ARM ]; then rm -f $G/SYSTEM $G/SOFTWARE $G/DEFAULT; fi
     for h in "SYSTEM System system" "SOFTWARE Software software" "DEFAULT .Default default"; do
         set -- $h
-        (cd $D && host rcpp -R -P -I $W/RASPI/arcfw/ported/oak -f $W/RASPI/arcfw/ported/oak/$3.ini $OPT -g $1.PP > /dev/null) || echo "   rcpp $1 rc=$?"
+        (cd $D && host rcpp -R -P -I $W/RASPI/ported/oak -f $W/RASPI/ported/oak/$3.ini $OPT -g $1.PP > /dev/null) || echo "   rcpp $1 rc=$?"
         (cd $D && host regini -h $1 $2 $1.PP | tr -d "\r" > $1.REG 2>&1) || echo "   regini $1 rc=$?"
         (cd $D && dump $1 > $1.DMP 2>&1) || echo "   hivedmp $1 rc=$?"
         echo "   $1: $(stat -c %s $D/$1) bytes, $(grep -c "" $D/$1.DMP) dump lines, $(grep -c "^REGINI" $D/$1.REG) REGINI errors"

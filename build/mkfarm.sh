@@ -12,14 +12,14 @@
 set -u
 F=${1:-/tmp/f}
 W=${NTROOT:-/work}
-K=$W/RASPI/arcfw/kernel
+K=$W/RASPI/kernel B=$W/RASPI/build
 G=$W/RASPI/obj/gen/farm
 SUBSYS=${SUBSYS:-KE RTL EX OB PS MM IO SE CONFIG LPC CACHE FSRTL RAW DBGK KD VDM INIT}
 
 # the header pass, when its inputs of the ARM port (the arch headers, the ported
 # makefiles, the filters, the tools) are newer than its output
-if [ -z "${MKGEN:-}" ] && { [ ! -f $G/.stamp ] || [ -n "$(find $K/inc $W/RASPI/arcfw/inc $W/RASPI/arcfw/ported/ntos/makefil0 $W/RASPI/arcfw/ported/windows/makefil0 $K/*.sed $K/nmk.awk $K/mkgen.sh $(for t in mc hextract hsplit wcshdr zwapi listmung; do echo $W/RASPI/obj/host/$(echo $t | tr a-z A-Z).EXE; done) -newer $G/.stamp -print -quit 2>/dev/null)" ]; }; then
-    bash $K/mkgen.sh >&2 || exit 1
+if [ -z "${MKGEN:-}" ] && { [ ! -f $G/.stamp ] || [ -n "$(find $K/inc $W/RASPI/arcfw/inc $W/RASPI/ported/ntos/makefil0 $W/RASPI/ported/windows/makefil0 $B/*.sed $B/nmk.awk $B/mkgen.sh $(for t in mc hextract hsplit wcshdr zwapi listmung; do echo $W/RASPI/obj/host/$(echo $t | tr a-z A-Z).EXE; done) -newer $G/.stamp -print -quit 2>/dev/null)" ]; }; then
+    bash $B/mkgen.sh >&2 || exit 1
 fi
 
 # What the builds of other components generated for the ones that include it (gensave.sh).
@@ -29,12 +29,12 @@ tree() {
 }
 
 T=$W/RASPI/obj/farm/$(echo "$SUBSYS" | md5sum | cut -c1-12).tar
-if [ -z "${MKGEN:-}" ] && [ -f $T ] && [ -z "$(find $K/*.sed $K/mkfarm.sh $W/RASPI/arcfw/inc $G/.stamp $W/RASPI/obj/gen/midl $W/RASPI/obj/gen/error.h -newer $T -print -quit 2>/dev/null)" ]; then
+if [ -z "${MKGEN:-}" ] && [ -f $T ] && [ -z "$(find $B/*.sed $B/mkfarm.sh $W/RASPI/arcfw/inc $G/.stamp $W/RASPI/obj/gen/midl $W/RASPI/obj/gen/error.h -newer $T -print -quit 2>/dev/null)" ]; then
     mkdir -p $F && tar -xf $T -C $F && tree
     exit 0
 fi
 
-filt() { tr -d '\032\r' < "$1" | sed -E -f "$K/riscgate.sed" -f "$K/msvcgate.sed" -f "$K/incfix.sed" | sed -f "$K/armport.sed" -f "$K/msc2.sed"; }
+filt() { tr -d '\032\r' < "$1" | sed -E -f "$B/riscgate.sed" -f "$B/msvcgate.sed" -f "$B/incfix.sed" | sed -f "$B/armport.sed" -f "$B/msc2.sed"; }
 farm() {
     local s
     mkdir -p "$2"
@@ -69,7 +69,7 @@ mkdir -p $F/ovr
 for h in $W/RASPI/arcfw/inc/*.h; do filt "$h" > $F/ovr/$(basename $h); done
 # GDI's EFLOAT (engine.hxx includes math\<machine>\efloat.hxx): that of ARM is the
 # IEEE single precision class of the RISC machines, MATH\MIPS\EFLOAT.HXX.
-tr -d '\032\r' < $W/PRIVATE/WINDOWS/GDI/MATH/MIPS/EFLOAT.HXX | sed -E -f "$K/riscgate.sed" -f "$K/incfix.sed" > $F/ovr/efloat.hxx
+tr -d '\032\r' < $W/PRIVATE/WINDOWS/GDI/MATH/MIPS/EFLOAT.HXX | sed -E -f "$B/riscgate.sed" -f "$B/incfix.sed" > $F/ovr/efloat.hxx
 
 # mm/mi.h pulls the per-arch MM header; add the ARM one ahead of the i386 gate.
 [ -f $F/mm/mi.h ] && sed -i '/^#ifdef i386/i #ifdef _ARM_\n#include <miarm.h>\n#endif' $F/mm/mi.h

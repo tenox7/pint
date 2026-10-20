@@ -6,7 +6,7 @@
 # target that have recipes first. Files land in /tmp/f/gen/<directory>, where the
 # builds find generated files; a library obj\<machine>\<name>.lib is <out>/<name>.lib.
 # Usage: nttarget.sh componentdir pre|post [out]
-K=$(cd "$(dirname "$0")" && pwd)
+B=$(cd "$(dirname "$0")" && pwd)
 D=$1 PHASE=$2 OUT=${3:-/work/RASPI/obj/um}
 resolve() {
     local p=${2:-$D} c n f=$1
@@ -27,7 +27,7 @@ locate() {
     local f r n g
     f=$(echo "$1" | tr '\\' /)
     r=$(resolve "$(dirname "$f")") || return 1
-    for g in $(bash $K/portdir.sh $r) $r $(gen $r) /tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z); do
+    for g in $(bash $B/portdir.sh $r) $r $(gen $r) /tmp/f/mc/$(echo ${r#/work/PRIVATE/} | tr A-Z a-z); do
         n=$(ls "$g" 2>/dev/null | grep -ix "$(basename "$f")" | head -1)
         [ -z "$n" ] || { echo "$g/$n"; return; }
     done
@@ -44,7 +44,7 @@ nmk_copy() {
 outlib() { echo $OUT/$(basename "$1" .lib | tr A-Z a-z).lib; }
 # a library a recipe names (..\buffer\obj\arm\buffer.lib): the one made for that directory
 # (libpath.sh), else that of its name
-inlib() { local l; l=$(bash $K/libpath.sh $D "$(echo "$1" | sed -E 's#(^|/)obj/arm/#\1obj/*/#')"); echo ${l:-$(outlib "$1")}; }
+inlib() { local l; l=$(bash $B/libpath.sh $D "$(echo "$1" | sed -E 's#(^|/)obj/arm/#\1obj/*/#')"); echo ${l:-$(outlib "$1")}; }
 # a library of libraries, given to lib in reverse order as ntlib (msvc.sh) does; one of a
 # directory (obj\arm\uimisc.lib) is also the library of that directory (libpath.sh)
 nmk_lib() {
@@ -172,7 +172,7 @@ nmk_rcpp() {
 }
 m=$(resolve makefile.inc) || exit 0
 # the makefile.inc with the files it includes (the port's versions of them first)
-ported() { local p=$(bash $K/portdir.sh $1); [ -f $p ] && echo $p || echo $1; }
+ported() { local p=$(bash $B/portdir.sh $1); [ -f $p ] && echo $p || echo $1; }
 flatten() {
     local line f
     while IFS= read -r line || [ -n "$line" ]; do
@@ -187,9 +187,9 @@ mk=/tmp/nttarget.mk
 flatten $m > $mk
 mkdir -p $(gen $D)
 set -f
-targets() { bash $K/srcmacro.sh $D/SOURCES $1 | tr " " "\n" | sed 's/\*/$(TARGET_DIRECTORY)/g'; }
+targets() { bash $B/srcmacro.sh $D/SOURCES $1 | tr " " "\n" | sed 's/\*/$(TARGET_DIRECTORY)/g'; }
 # the macros of the component (its makefile and SOURCES) and of the build of ARM
-macros="$(bash $K/srcmacro.sh $D/SOURCES '*')
+macros="$(bash $B/srcmacro.sh $D/SOURCES '*')
 TARGET_DIRECTORY=arm
 TARGET_CPP=cl
 386=0
@@ -209,13 +209,13 @@ target() {
     # up to date: in the tree, or made by the build already unless its recipe does more
     # than the mc and midl passes do (ulib: rtmsg.rc, mc's and ulib.rc in one)
     if locate "$t" >/dev/null; then
-        NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $K/nmk.awk $mk > /tmp/nttarget.sh
+        NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $B/nmk.awk $mk > /tmp/nttarget.sh
         grep -qv "^nmk_mc \|^nmk_midl \|^ *$" /tmp/nttarget.sh || return 0
     fi
-    for d in $(NMK_DEPS=1 NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $K/nmk.awk $mk); do
+    for d in $(NMK_DEPS=1 NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $B/nmk.awk $mk); do
         target "$d" || return 1
     done
-    NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $K/nmk.awk $mk > /tmp/nttarget.sh
+    NMK_MACROS="$macros" NMK_TARGET="$t" awk -f $B/nmk.awk $mk > /tmp/nttarget.sh
     ( set -e; . /tmp/nttarget.sh ) || { echo "nttarget: $t failed" >&2; return 1; }
 }
 case $PHASE in
@@ -225,4 +225,4 @@ esac
 for t in $T; do
     target "$t" || exit 1
 done
-bash $K/gensave.sh
+bash $B/gensave.sh

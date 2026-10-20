@@ -5,13 +5,13 @@
 # (GLOBAL) and what the tool, hive (REGINI), ksarm and MIDL steps made (GEN); those
 # steps take only what the steps before them made. FORCE=1 runs every step.
 R=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-K=$R/arcfw/kernel
+K=$R/kernel B=$R/build
 ST=$R/obj/stamp
 mkdir -p $ST
-GLOBAL="$K/inc $R/arcfw/inc $(ls $K/*.sh | grep -v /make-) $K/*.sed $K/*.awk $R/tools/ntdiff.pl $R/tools/host.sh"
+GLOBAL="$K/inc $R/arcfw/inc $(ls $B/*.sh | grep -vE "/(make-|build|stamp|run|portable)[^/]*$") $B/*.sed $B/*.awk $R/tools/ntdiff.pl $R/tools/host.sh"
 HOSTGEN="$R/obj/host $R/obj/gen/farm/.stamp $R/obj/gen/error.h"
 GEN="$HOSTGEN $R/obj/gen/ksarm.h $R/obj/gen/midl"
-CRT="$R/arcfw/crt $R/arcfw/ported/crt32 $R/arcfw/ported/crt32nt $R/arcfw/ported/fp32"
+CRT="$R/crt $R/ported/crt32 $R/ported/crt32nt $R/ported/fp32"
 
 # step NAME INPUT... -- COMMAND...: the command (its script an input too) when the
 # step is out of date

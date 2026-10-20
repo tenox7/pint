@@ -5,29 +5,29 @@
 # (mkfarm.sh), as do the components it farmed; any other directory is farmed
 # under /tmp/f/dirs (its text files: headers and the other files sources include),
 # with the files the build generated for it (/tmp/f/gen), the port's versions of its
-# files (arcfw/ported/<directory> or apps/<directory>, portdir.sh) and the message headers
+# files (ported/<directory> or apps/<directory>, portdir.sh) and the message headers
 # of its makefile.inc (mcinc.sh).
 # Usage: incdirs.sh componentdir "INCLUDES value"
-K=$(cd "$(dirname "$0")" && pwd)
+B=$(cd "$(dirname "$0")" && pwd)
 # Microsoft C takes the sources as they are but for the ARM gates. RC (on Wine, which
 # finds names as NT does) takes the include names of resource scripts as they are
 # (NET UI's <string\lmobj.str>).
 filt() {
-    local f=-f$K/incfix.sed
+    local f=-f$B/incfix.sed
     case $1 in *.[Rr][Cc]|*.[Rr][Cc]2|*.[Dd][Ll][Gg]|*.[Ss][Tt][Rr]) f= ;; esac
-    tr -d '\032\r' < "$1" | sed -E -f $K/riscgate.sed -f $K/msvcgate.sed $f | sed -f $K/armport.sed
+    tr -d '\032\r' < "$1" | sed -E -f $B/riscgate.sed -f $B/msvcgate.sed $f | sed -f $B/armport.sed
 }
 farm() {
     local s
     [ -e "$2/.farmed" ] && return
     mkdir -p "$2" && : > "$2/.farmed"
     # the message headers its makefile.inc makes, as the NT build made them first
-    bash $K/mcinc.sh "$1" >&2
+    bash $B/mcinc.sh "$1" >&2
     # and the port's versions of its files (portdir.sh), which a quoted
     # include of a header beside them finds there too; its other files (the bitmaps and
     # icons of resource scripts) and directories (NET UI's xlate\string) are links, so
     # that RC needs the farmed directory alone (RC keeps its include path in 520 bytes)
-    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/* $(bash $K/portdir.sh "$1")/*; do
+    for f in "$1"/* "/tmp/f/gen/${1#/work/PRIVATE/}"/* $(bash $B/portdir.sh "$1")/*; do
         n="$2/$(basename "$f" | tr A-Z a-z)"
         case $f in *.ntdiff|*/[Ss][Yy][Ss]) continue ;; esac
         if [ -d "$f" ]; then

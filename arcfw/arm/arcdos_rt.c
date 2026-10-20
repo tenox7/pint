@@ -1,5 +1,5 @@
 //
-// arcdos runtime bridge. arcdos.c (arcfw/ported/arcdos.c) is written against the
+// arcdos runtime bridge. arcdos.c (arcfw/arcdos/arcdos.c) is written against the
 // ADK ARC/vendor API - plain Open/Read/Write/Print/StallExecution/... - which the
 // real ADK backed with a precompiled, Alpha-only adk.lib. This file supplies that
 // API for the ARM loader by forwarding to the ARC firmware vector.

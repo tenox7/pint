@@ -9,26 +9,26 @@ set -euo pipefail
 # the port's versions of NT files from their edit scripts first, so that their times count
 docker run --rm -v "$R/..":/work --entrypoint perl tenox7/msvc-arm32 /work/RASPI/tools/ntdiff.pl apply /work /work/RASPI
 
-GEN= step tools $R/tools/pe2img.c $R/tools/midl/midlcpp.c $R/arcfw/ported/ntos/makefil0 $R/arcfw/ported/windows/makefil0 $CRT \
+GEN= step tools $R/tools/pe2img.c $R/tools/midl/midlcpp.c $R/ported/ntos/makefil0 $R/ported/windows/makefil0 $CRT \
     -- $R/tools/make-tools.sh
-GEN=$HOSTGEN step hives $R/tools/hive $R/arcfw/ported/oak -- $R/tools/hive/make-hives.sh
-GEN=$HOSTGEN step ksarm $K/ke/genarm.c -- $K/make-ksarm.sh
+GEN=$HOSTGEN step hives $R/tools/hive $R/ported/oak -- $R/tools/hive/make-hives.sh
+GEN=$HOSTGEN step ksarm $K/ke/genarm.c -- $B/make-ksarm.sh
 GEN=$HOSTGEN step midl $R/tools/midl -- $R/tools/midl/gen-midl.sh
-GEN=$HOSTGEN step nethdr $R/arcfw/ported/ntos/inc $R/arcfw/ported/inc -- $K/make-nethdr.sh
-step crt $CRT -- $R/arcfw/crt/make-crt.sh
-INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/arcfw/ported/ntos/rtl $R/arcfw/ported/ntos/makefil0 $R/arcfw/ported/ntos/diskreg \
-    $R/obj/libcntpr.lib -- $K/make-execlink.sh
-INSTALL=1 job hal step hal $R/arcfw/hal $R/obj/ntoskrnl.lib $R/obj/libcntpr.lib -- $R/arcfw/hal/make-hal.sh
-for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do job lib/$c cstep lib /work/PRIVATE/NTOS $c -- $K/make-lib.sh $c; done
+GEN=$HOSTGEN step nethdr $R/ported/ntos/inc $R/ported/inc -- $B/make-nethdr.sh
+step crt $CRT -- $R/crt/make-crt.sh
+INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/ported/ntos/rtl $R/ported/ntos/makefil0 $R/ported/ntos/diskreg \
+    $R/obj/libcntpr.lib -- $B/make-execlink.sh
+INSTALL=1 job hal step hal $R/hal $R/obj/ntoskrnl.lib $R/obj/libcntpr.lib -- $R/hal/make-hal.sh
+for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do job lib/$c cstep lib /work/PRIVATE/NTOS $c -- $B/make-lib.sh $c; done
 barrier
 INSTALL=1 step osloader $R/obj/bldr.lib $R/obj/boot.lib $R/obj/bconfig.lib $R/obj/bldrrtl.lib $R/obj/libcntpr.lib \
-    -- $K/make-osloader.sh
+    -- $B/make-osloader.sh
 $R/build/build-drivers.sh
 $R/build/build-user.sh
 $R/build/build-sdktools.sh
-GEN=$HOSTGEN job infs step infs $R/tools/inf $R/arcfw/ported/windows/setup/bom $R/arcfw/ported/windows/setup/inf $R/arcfw/ported/windows/setup/localinf \
+GEN=$HOSTGEN job infs step infs $R/tools/inf $R/ported/windows/setup/bom $R/ported/windows/setup/inf $R/ported/windows/setup/localinf \
     $R/apps/net/ncpabind -- $R/tools/inf/make-infs.sh
-job firmware step firmware $R/arcfw/arm $R/arcfw/drivers/bcmusb/usbhost.c $R/arcfw/drivers/bcmusb/usbhost.h $R/arcfw/drivers/bcmusb/xhci.c $R/arcfw/drivers/bcmusb/xhci.h $R/arcfw/drivers/bcmeth/bcmethhw.h $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
+job firmware step firmware $R/arcfw/arm $R/drivers/bcmusb/usbhost.c $R/drivers/bcmusb/usbhost.h $R/drivers/bcmusb/xhci.c $R/drivers/bcmusb/xhci.h $R/drivers/bcmeth/bcmethhw.h $R/arcfw/arcdos $R/tools/fon2fw.pl $R/obj/boot.lib \
     $R/obj/bldrrtl.lib $R/obj/libcntpr.lib -- $R/build/build.sh
 barrier
 $R/sdcard/make-sd-image.sh $([ -n "${FORCE:-}" ] || echo -u)

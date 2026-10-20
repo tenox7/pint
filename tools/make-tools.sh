@@ -3,7 +3,7 @@
 # image (tools/host.sh). The tools that make NT's headers (HEXTRACT, HSPLIT, WCSHDR,
 # ZWAPI, LISTMUNG, MC), pe2img and midlcpp come first, with the C run-time and
 # headers of the SDK of Microsoft C, as NT took them from the SDK of the machine it
-# was built on. Then the header pass (arcfw/kernel/mkgen.sh), ksarm.h, NT's C run-time
+# was built on. Then the header pass (build/mkgen.sh), ksarm.h, NT's C run-time
 # and the import libraries of kernel32, user32 and advapi32; then GENSRV, GENERR (and
 # rtl\error.h), RC, RCPP, MIDL with its parser tools, SOLIDPP, UIXPORT and MAPMSG, NT
 # console programs of NT's headers and static C run-time (RC is its front end and RCDLL
@@ -13,9 +13,9 @@
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../.. && pwd)"
-K=$NT35/RASPI/arcfw/kernel
+B=$NT35/RASPI/build
 
-docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -eu
 H=/work/RASPI/obj/host
 T=/tmp/tools
@@ -50,13 +50,13 @@ tool midlcpp /tmp/src
 bash mkfarm.sh /tmp/f > /dev/null
 '
 
-"$K/make-ksarm.sh"
-(cd ../arcfw/crt && ./make-crt32.sh ST && ./make-crt32.sh MT)
+"$B/make-ksarm.sh"
+(cd ../crt && ./make-crt32.sh ST && ./make-crt32.sh MT)
 for c in BASE/CLIENT/DAYTONA:kernel32 USER/CLIENT:user32 BASE/ADVAPI:advapi32; do
-    [ -f ../obj/um/${c#*:}.lib ] || IMPLIB=1 ROOT=/work/PRIVATE/WINDOWS "$K/make-dll.sh" ${c%:*}
+    [ -f ../obj/um/${c#*:}.lib ] || IMPLIB=1 ROOT=/work/PRIVATE/WINDOWS "$B/make-dll.sh" ${c%:*}
 done
 
-docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -eu
 . ./msvc.sh
 H=/work/RASPI/obj/host
@@ -164,9 +164,9 @@ for d in ANALYSIS CODEGEN EXPR SUPPORT FRONT; do
     ntc $G/$d $M/MIDL20/$d $(macro $M/MIDL20/$d C_DEFINES) -- $s
     objs="$objs $G/$d/*.obj"
 done
-ntcc $G/newarray.obj /work/RASPI/arcfw/crt/cxx/newarray.cxx
+ntcc $G/newarray.obj /work/RASPI/crt/cxx/newarray.cxx
 prog midl libc $objs $G/newarray.obj
 '
 
 # the import library of ntdll for the registry tools (its exports take GENSRV's list)
-[ -f ../obj/um/ntdll.lib ] || IMPLIB=1 "$K/make-dll.sh" DLL/DAYTONA
+[ -f ../obj/um/ntdll.lib ] || IMPLIB=1 "$B/make-dll.sh" DLL/DAYTONA

@@ -3,11 +3,11 @@
 # them, then the INFs of \ntcd\arm as INF\MAKEFILE.INC makes them (make_log, localize,
 # make_fil) and their install into System32.
 set -eu
-. /work/RASPI/arcfw/kernel/msvc.sh
-W=/work R=$W/RASPI S=$W/PRIVATE/WINDOWS/SETUP P=$R/arcfw/ported/windows/setup
-O=$R/obj/inf U=$R/obj/um B=/tmp/ib I=/tmp/ib/inf
-rm -rf $B; mkdir -p $B/obj $B/bom $O/host
-bash $K/mkfarm.sh /tmp/f > /dev/null
+. /work/RASPI/build/msvc.sh
+W=/work R=$W/RASPI S=$W/PRIVATE/WINDOWS/SETUP P=$R/ported/windows/setup
+O=$R/obj/inf U=$R/obj/um IB=/tmp/ib I=/tmp/ib/inf
+rm -rf $IB; mkdir -p $IB/obj $IB/bom $O/host
+bash $B/mkfarm.sh /tmp/f > /dev/null
 
 # setup PATH: a file of WINDOWS\SETUP (PATH in lower case): the port's version, else the tree's
 setup() {
@@ -18,29 +18,29 @@ setup() {
 }
 
 echo ">> tools"
-macro() { bash $K/srcmacro.sh $1/SOURCES $2 | sed "s/\$([A-Za-z_0-9]*)//g"; }
+macro() { bash $B/srcmacro.sh $1/SOURCES $2 | sed "s/\$([A-Za-z_0-9]*)//g"; }
 BASE=$(tr -d "\r" < $W/PUBLIC/SDK/LIB/COFFBASE.TXT | awk "tolower(\$1) == \"usermode\" {print \$2; exit}")
 # cc DIR SOURCE: compile as NT compiles the console programs of component DIR
 cc() {
     local b=$(basename "${2%.*}" | tr A-Z a-z)
-    ntsrc $2 $B/obj/$b.c && ntcc $B/obj/$b.obj $B/obj/$b.c $NTDEFINES $(macro $1 C_DEFINES) -I$K/inc -I/tmp/f/ovr \
-        $(bash $K/incdirs.sh $1 "$(macro $1 INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt
+    ntsrc $2 $IB/obj/$b.c && ntcc $IB/obj/$b.obj $IB/obj/$b.c $NTDEFINES $(macro $1 C_DEFINES) -I$K/inc -I/tmp/f/ovr \
+        $(bash $B/incdirs.sh $1 "$(macro $1 INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt
 }
 # prog NAME OBJECT...: obj/inf/host/NAME.EXE with NT C run-time, replaced only when it changed
 prog() {
     local n=$(echo $1 | tr a-z A-Z); shift
     link -nologo -machine:arm -release -brepro -force:multiple -subsystem:console -entry:mainCRTStartup -base:$BASE -nodefaultlib \
-         -out:$B/$n.EXE "$@" $U/libc.lib $U/advapi32.lib $U/kernel32.lib > $B/link.err 2>&1 \
-      || { grep -E "error|unresolved" $B/link.err | head -20; exit 1; }
-    cmp -s $B/$n.EXE $O/host/$n.EXE || cp $B/$n.EXE $O/host/$n.EXE
+         -out:$IB/$n.EXE "$@" $U/libc.lib $U/advapi32.lib $U/kernel32.lib > $IB/link.err 2>&1 \
+      || { grep -E "error|unresolved" $IB/link.err | head -20; exit 1; }
+    cmp -s $IB/$n.EXE $O/host/$n.EXE || cp $IB/$n.EXE $O/host/$n.EXE
 }
 cc $S/BOM/GENERAL $(setup bom/general/general.c)
 for t in size layout infs dosnet acllist; do
     cc $S/BOM/$(echo $t | tr a-z A-Z) $(setup bom/$t/$t.c)
-    prog $t $B/obj/$t.obj $B/obj/general.obj
+    prog $t $IB/obj/$t.obj $IB/obj/general.obj
 done
-cc $S/LOCALINF $(setup localinf/local.c); prog local $B/obj/local.obj
-cc $S/STRIPINF $(setup stripinf/stripinf.c); prog stripinf $B/obj/stripinf.obj
+cc $S/LOCALINF $(setup localinf/local.c); prog local $IB/obj/local.obj
+cc $S/STRIPINF $(setup stripinf/stripinf.c); prog stripinf $IB/obj/stripinf.obj
 mkdir -p /tmp/ir/RASPI/obj && ln -sfn $O/host /tmp/ir/RASPI/obj/host
 run() { NTROOT=/tmp/ir bash $R/tools/host.sh "$@"; }
 host() { bash $R/tools/host.sh "$@"; }
@@ -62,7 +62,7 @@ lower $S/INF $I
 mkdir -p $I/filelist/ntcd/{i386,mips,alpha,arm} $I/newinf/ntcd/arm
 
 echo ">> make_log"
-cd $B/bom
+cd $IB/bom
 tr -d "\r" < $(setup bom/bom.txt) > cdbom.txt
 for s in . "#S+ENG" "#F-*" "#P-FIN" "#L+ENG"; do run size cdlog.log cdbom.txt "$s" . z > /dev/null; done
 run layout cdlog.log cdbom.txt lay.txt ntcd 500000000 > /dev/null
@@ -122,10 +122,10 @@ echo ">> install"
 # the bill of materials puts there in a retail setup (the ARM adapter INF is one of these)
 D=$R/sdcard/root/WINNT/System32 n=0
 for f in $( { tr -d "\r" < $W/PUBLIC/SDK/LIB/PLACEFIL.TXT | awk 'tolower($2) == "system" && tolower($1) ~ /\.inf$/ {print tolower($1)}'
-              awk -F"\t" 'tolower($2) == "infs" && tolower($8) == "arm" && tolower($19) == ".\\system32" {print tolower($1)}' $B/bom/lay.txt; } | sort -u); do
+              awk -F"\t" 'tolower($2) == "infs" && tolower($8) == "arm" && tolower($19) == ".\\system32" {print tolower($1)}' $IB/bom/lay.txt; } | sort -u); do
     [ -f $N/$f ] || continue
-    sed "s/\r*\$/\r/" $N/$f > $B/out && { cmp -s $B/out $D/${f^^} || cp $B/out $D/${f^^}; } && n=$((n+1))
+    sed "s/\r*\$/\r/" $N/$f > $IB/out && { cmp -s $IB/out $D/${f^^} || cp $IB/out $D/${f^^}; } && n=$((n+1))
 done
 # the INF of the developer first run that stores the network bindings (registry.ini)
-sed "s/\r*\$/\r/" $R/apps/net/ncpabind/ncpabind.inf > $B/out && { cmp -s $B/out $D/NCPABIND.INF || cp $B/out $D/NCPABIND.INF; } && n=$((n+1))
+sed "s/\r*\$/\r/" $R/apps/net/ncpabind/ncpabind.inf > $IB/out && { cmp -s $IB/out $D/NCPABIND.INF || cp $IB/out $D/NCPABIND.INF; } && n=$((n+1))
 echo "   $n INFs in sdcard/root/WINNT/System32"

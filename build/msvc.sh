@@ -5,7 +5,7 @@
 export MSVC_ENV=0 WINEDEBUG=-all
 wineserver -p 2>/dev/null
 
-K=/work/RASPI/arcfw/kernel
+K=/work/RASPI/kernel B=/work/RASPI/build
 
 # The sources of the port that are NT's with ARM changes, from their edit scripts
 # over the NT tree (tools/ntdiff.pl).
@@ -26,7 +26,7 @@ CLOPTS="-nologo -c -Zl -Zc:wchar_t- -Zc:forScope- -GS- -Gy -O2 -GF- -Oy- -Z7 -W1
 # C and C++ of Microsoft C 2.0 the compiler of today rejects (msc2.sed); #line keeps the
 # original name for the debugger.
 ntsrc() {
-    { echo "#line 1 \"$1\""; tr -d '\032\r' < "$1" | sed -E -f $K/riscgate.sed -f $K/msvcgate.sed -f $K/incfix.sed | sed -f $K/armport.sed -f $K/msc2.sed; } > "$2"
+    { echo "#line 1 \"$1\""; tr -d '\032\r' < "$1" | sed -E -f $B/riscgate.sed -f $B/msvcgate.sed -f $B/incfix.sed | sed -f $B/armport.sed -f $B/msc2.sed; } > "$2"
 }
 
 # ntcc OBJ SOURCE OPTION...: compile a C or C++ source; its messages to OBJ.err, and

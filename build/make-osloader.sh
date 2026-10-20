@@ -7,13 +7,13 @@
 # (obj/libcntpr.lib), fixed at 0x80600000 with entry BlOsLoader and the MSG.USA
 # message table, made a ROM image (link -rom, as tools/pe2img -rom makes it).
 #
-# Usage:  cd RASPI/arcfw/kernel && ./make-lib.sh BOOT/LIB && ./make-lib.sh CONFIG/BOOT &&
+# Usage:  cd RASPI/build && ./make-lib.sh BOOT/LIB && ./make-lib.sh CONFIG/BOOT &&
 #         ./make-lib.sh BOOT/BLDR && INSTALL=1 ./make-osloader.sh
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-NT35="$(cd ../../.. && pwd)"
+NT35="$(cd ../.. && pwd)"
 
-docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
+docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh

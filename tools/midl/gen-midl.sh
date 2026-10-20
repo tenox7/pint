@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The pass 0 of the NT build: run the midl (and wcshdr) recipes of the components' MAKEFIL0
-# (with arcfw/kernel/nmk.awk) on a lower case mirror of their directories, with
+# (with build/nmk.awk) on a lower case mirror of their directories, with
 # MIDL (obj/host, tools/make-tools.sh, on the 32-bit Wine: tools/host.sh) and the ARM
 # target: MIDL_CPP is the cl -E of the target (obj/host/MIDLCPP.EXE, midlcpp),
 # MIDL_FLAGS -D_ARM_ -D_WCHAR_T_DEFINED. The stubs and headers it makes land in
@@ -13,9 +13,9 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/host/MIDL.EXE" ] || { echo "gen-midl: build the tools first (tools/make-tools.sh)"; exit 1; }
 
-docker run --rm -e ONLY="$*" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -e ONLY="$*" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -eu
-K=/work/RASPI/arcfw/kernel
+B=/work/RASPI/build
 P=/work/PRIVATE
 W=/tmp/mw
 G=/work/RASPI/obj/gen/midl
@@ -52,7 +52,7 @@ mirror() {
 # build (the ARM headers ahead of the SDK ones); a directory of the tree is mirrored.
 path() {
     case $1 in
-    BASEDIR/public/sdk/inc) echo "/work/RASPI/arcfw/kernel/inc -I/tmp/f/pub" ;;
+    BASEDIR/public/sdk/inc) echo "/work/RASPI/kernel/inc -I/tmp/f/pub" ;;
     BASEDIR/public/sdk/inc/crt) echo /tmp/f/crt ;;
     BASEDIR/public/oak/inc) echo /tmp/f/oak ;;
     BASEDIR/private/*) local r; r=$(CUR=/work real "${1#BASEDIR/}") && mirror $r && echo $W/$(lower "${r#$P/}") ;;
@@ -104,7 +104,7 @@ recipe() {
     sleep 1
     for t in "$@"; do
         NMK_MACROS="MIDL_CPP=/work/RASPI/obj/host/MIDLCPP.EXE
-MIDL_FLAGS=-D_ARM_ -D_WCHAR_T_DEFINED" NMK_KEEP=BASEDIR NMK_TARGET="$t" awk -f $K/nmk.awk $P/$mk > /tmp/nmk.sh
+MIDL_FLAGS=-D_ARM_ -D_WCHAR_T_DEFINED" NMK_KEEP=BASEDIR NMK_TARGET="$t" awk -f $B/nmk.awk $P/$mk > /tmp/nmk.sh
         (cd $W/$(lower "${CUR#$P/}") && . /tmp/nmk.sh)
     done
     # what the recipes made, in the directories of the tree
