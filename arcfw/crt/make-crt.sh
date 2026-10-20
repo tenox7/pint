@@ -12,7 +12,7 @@ set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 
-docker run --rm -e UM="${UM:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -e CJ="${CJ:-4}" -e UM="${UM:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh
 C=/work/PRIVATE/CRT32NT
@@ -36,19 +36,13 @@ bash crtlist.sh $C > $DIR/list
 for f in MEMCMP MEMCPY MEMMOVE MEMSET STRCAT STRCHR STRCMP STRLEN STRRCHR; do echo $C/STRING/$f.C; done >> $DIR/list
 
 n=0; fail=0
-for f in $(cat $DIR/list); do
-  b=$(basename "${f%.[Cc]}" | tr A-Z a-z)
-  d=$(basename $(dirname $f) | tr A-Z a-z)
-  ntcc $DIR/obj/$b.obj $DIR/src/$d/$b.c $MODE $DEFS -I$DIR/src/$d $INCS && n=$((n+1)) || fail=$((fail+1))
-done
+# one source of the list, compiled by the pool of msvc.sh (par, pwait)
+crtc() { local f=$1 b=$(basename "${1%.[Cc]}" | tr A-Z a-z) d=$(basename $(dirname $1) | tr A-Z a-z); ntcc $DIR/obj/$b.obj $DIR/src/$d/$b.c $MODE $DEFS -I$DIR/src/$d $INCS; }
+for f in $(cat $DIR/list); do par crtc $f; done
 ntsrc helper/arm/rthelpc.c $DIR/rthelpc.c && ntcc $DIR/obj/rthelpc.obj $DIR/rthelpc.c $MODE && n=$((n+1)) || fail=$((fail+1))
 ntsrc misc/arm/chandler.c $DIR/chandler.c && ntcc $DIR/obj/chandler.obj $DIR/chandler.c $MODE $DEFS $INCS && n=$((n+1)) || fail=$((fail+1))
-for s in jmpuwind setjmp setjmpex longjmp; do
-  ntas $DIR/obj/$s.obj misc/arm/$s.asm -I/work/RASPI/obj/gen && n=$((n+1)) || fail=$((fail+1))
-done
-for s in sdiv udiv sdiv64 udiv64 srsh ursh divby0 chkstk; do
-  ntas $DIR/obj/$s.obj helper/arm/$s.asm -I/work/RASPI/obj/gen && n=$((n+1)) || fail=$((fail+1))
-done
+for s in jmpuwind setjmp setjmpex longjmp; do par ntas $DIR/obj/$s.obj misc/arm/$s.asm -I/work/RASPI/obj/gen; done
+for s in sdiv udiv sdiv64 udiv64 srsh ursh divby0 chkstk; do par ntas $DIR/obj/$s.obj helper/arm/$s.asm -I/work/RASPI/obj/gen; done
 # The floating point library of FP32NT (trannt.lib), which CRTLIB merges into
 # libcntpr.lib: its SOURCES (CRTLIBTYPE NT) and ARM sources (the TRAN of crt32.arm).
 T=/work/PRIVATE/FP32NT/TRAN
@@ -56,14 +50,20 @@ export SRCMACROS="CRTLIBTYPE=NT"
 TDEFS=$(bash $K/srcmacro.sh $T/SOURCES C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g")
 TINCS="-I$A/h -I/work/RASPI/arcfw/ported/fp32/include $(bash $K/incdirs.sh $T "$(bash $K/srcmacro.sh $T/SOURCES INCLUDES)") -I$K/inc -I/tmp/f/ovr -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 mkdir -p $DIR/tran
-for f in $(bash $K/srcmacro.sh $T/SOURCES SOURCES | tr " " "\n" | grep -iE "\.c$") $(awk "\$1 == \"TRAN\" {print \$2}" $A/crt32.arm); do
+# one source of TRAN, compiled by the pool
+tranc() {
+  local f=$1 b
   if [ -f $A/$f ]; then f=$A/$f; else f=$T/$(ls $T | grep -ix "$f"); fi
   b=t_$(basename "${f%.*}" | tr A-Z a-z)
   case $f in
   *.asm) ntas $DIR/obj/$b.obj $f $NTDEFINES $TDEFS ;;
   *) ntsrc $f $DIR/tran/$b.c && sed -i -f $A/crtgate.sed $DIR/tran/$b.c && ntcc $DIR/obj/$b.obj $DIR/tran/$b.c -Oi- $NTDEFINES $TDEFS $TINCS ;;
-  esac && n=$((n+1)) || fail=$((fail+1))
+  esac
+}
+for f in $(bash $K/srcmacro.sh $T/SOURCES SOURCES | tr " " "\n" | grep -iE "\.c$") $(awk "\$1 == \"TRAN\" {print \$2}" $A/crt32.arm); do
+  par tranc $f
 done
+pwait; n=$((n+PAROK)); fail=$((fail+PARFAIL))
 echo "   libcntpr: $n objects, $fail failed"
 [ $fail -eq 0 ] || exit 1
 mkdir -p $OUT

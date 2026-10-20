@@ -21,7 +21,21 @@
 +// rest), as on Alpha.
 =3 212 4
 =1 327 3
-=1 39 182
+=1 39 67
++        FCFFFFFF | NonPaged System area               |
+=1 43 1
++        FD000000 | HAL PCI memory window (16 MB):     |
++                 |   the PCI Express bus of a BCM2711 |
+=1 43 1
++        FEC00000 | HAL peripheral window (16 MB):     |
++                 |   the BCM2835 peripherals          |
+=1 107 56
++//
++// The nonpaged pool ends below the HAL device windows (KE\ARM\TBARM.C).
++//
++
++#define MM_NONPAGED_POOL_END ((PVOID)(0xFCFE0000))
+=1 164 57
 +// The number of bits in a physical address. ARMv7-A short-descriptor (non-LPAE)
 +// addresses 32-bit physical space; the R4000 used 36.
 =4 206 4

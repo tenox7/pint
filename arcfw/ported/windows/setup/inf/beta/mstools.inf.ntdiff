@@ -2,6 +2,7 @@
 =1 1 48
 +    ProcessorID_CortexA7  = Cortex_A7
 +    ProcessorID_CortexA53 = Cortex_A53
++    ProcessorID_CortexA72 = Cortex_A72
 =1 49 8
 +    PlatformID_Arm = Arm
 =1 57 120
@@ -10,6 +11,8 @@
 +    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA7)
 +        set STF_PLATFORM = $(PlatformID_Arm)
 +    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA53)
++        set STF_PLATFORM = $(PlatformID_Arm)
++    else-ifstr(i) $(STF_PROCESSOR) == $(ProcessorID_CortexA72)
 +        set STF_PLATFORM = $(PlatformID_Arm)
 =1 257 397
 +    ifstr(i) $(!STF_PLATFORM) == $(!PlatformID_Arm)

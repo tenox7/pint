@@ -38,6 +38,7 @@ Abstract:
 #define TAG_SET_POWER_STATE     0x00028001
 #define TAG_GET_CLOCK_RATE      0x00030002
 #define TAG_GET_MAX_CLOCK_RATE  0x00030004
+#define TAG_NOTIFY_XHCI_RESET   0x00030058
 
 #define POWER_STATE_ON          1
 #define POWER_STATE_WAIT        2
@@ -152,6 +153,37 @@ Return Value:
     return MailboxTag(TAG_SET_POWER_STATE, 8, DeviceId,
                       On ? POWER_STATE_ON | POWER_STATE_WAIT : POWER_STATE_WAIT,
                       Answer);
+}
+
+ULONG
+MailboxNotifyXhciReset (
+    IN ULONG DeviceAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tells the VideoCore that the USB 3 host on the PCI Express
+    link was reset, so that it loads the host's firmware: the VL805 of a
+    Raspberry Pi 4 Model B from revision 1.4, and of a Pi 400, has no
+    EEPROM of its own.
+
+Arguments:
+
+    DeviceAddress - Supplies the PCI address of the host: its bus in bits 20
+        to 27, its device in bits 15 to 19 and its function in bits 12 to 14.
+
+Return Value:
+
+    0 on success, 1 otherwise.
+
+--*/
+
+{
+    ULONG Answer[2];
+
+    return MailboxTag(TAG_NOTIFY_XHCI_RESET, 4, DeviceAddress, 0, Answer);
 }
 
 ULONG

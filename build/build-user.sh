@@ -3,7 +3,8 @@
 # run-time, then each library, DLL and program, the images into
 # sdcard/root/WINNT/System32. The import lists of the DLLs that import each
 # other come first, from their .def files. Each step runs when its inputs changed
-# (build/stamp.sh).
+# (build/stamp.sh). The programs, services and transports no other component links are
+# jobs (stamp.sh), J at once.
 #
 # Usage:  build/build-user.sh
 set -euo pipefail
@@ -13,6 +14,8 @@ lib() { ROOT=$1 cstep lib $1 $2 -- $K/make-lib.sh $2; }
 dll() { INSTALL=1 ROOT=$1 cstep dll $1 $2 link -- $K/make-dll.sh $2; }
 exe() { INSTALL=1 ROOT=$1 cstep exe $1 $2 link -- $K/make-exe.sh $2 $3; }
 implib() { [ -f $R/obj/um/$3.lib ] || IMPLIB=1 ROOT=$1 $K/make-dll.sh $2; }
+# pair ROOT COMPONENT:PROGRAM: the library of a program and the program
+pair() { lib $1 ${2%%:*}; exe $1 ${2%%:*} ${2#*:}; }
 umcrt() ( cd $R/arcfw/crt && UM=1 ./make-crt.sh && ./make-crt32.sh ST && ./make-crt32.sh MT && ./make-crt32.sh DLL && INSTALL=1 ./make-crtdll.sh )
 
 implib $W BASE/CLIENT/DAYTONA kernel32
@@ -85,8 +88,8 @@ for a in SHELL/ACCESORY/NOTEPAD:notepad SHELL/ACCESORY/CALC:calc SHELL/ACCESORY/
          SHELL/GAMES/SOL:sol EP/WINMINE:winmine EP/FREECELL:freecell SHELL/TASKMAN:taskman SHELL/WINFILE:winfile \
          SHELL/WINVER:winver SHELL/GAMES/REVERSI:reversi EP/CRUEL:cruel EP/GOLF:golf EP/PEGGED:pegged EP/SNAKE:snake \
          EP/TICTAC:tictac EP/OLDTP:taipei; do
-    lib $W ${a%%:*}; exe $W ${a%%:*} ${a#*:}
-done
+    job ${a%%:*} pair $W $a
+done; barrier
 
 # WinHelp and its full-text search (fteng32 and ftui32 import each other)
 implib $W WINHELP/FTUI ftui32; implib $W WINHELP/FTENGINE fteng32
@@ -98,10 +101,12 @@ dll $W OLE/CLIENT; dll $W OLE/SERVER
 exe $W SHELL/ACCESORY/CARDFILE cardfile; exe $W SHELL/ACCESORY/ACCESS/SKEYS skeys
 lib $W SHELL/ACCESORY/COMMON; lib $W SHELL/ACCESORY/CLIPBOOK/COMMON
 dll $W SHELL/ACCESORY/ACCESS/SKDLL; dll $W SHELL/ACCESORY/RECORDER/REC_DLL
-for a in PAINTBRS:pbrush PACKAGER:packgr32 TERMINAL:terminal CALENDAR:calendar CLIPBOOK/DATASRV:clipsrv \
-         CLIPBOOK/CLIPVIEW:clipbrd ACCESS/ACCESS:access RECORDER/REC_EXE:recorder; do
-    lib $W SHELL/ACCESORY/${a%%:*}; exe $W SHELL/ACCESORY/${a%%:*} ${a#*:}
-done
+# (Paintbrush, the ClipBook server and viewer all name their library dummy.lib: one job)
+dummies() { for a in PAINTBRS:pbrush CLIPBOOK/DATASRV:clipsrv CLIPBOOK/CLIPVIEW:clipbrd; do pair $W SHELL/ACCESORY/$a; done; }
+job dummies dummies
+for a in PACKAGER:packgr32 TERMINAL:terminal CALENDAR:calendar ACCESS/ACCESS:access RECORDER/REC_EXE:recorder; do
+    job SHELL/ACCESORY/${a%%:*} pair $W SHELL/ACCESORY/$a
+done; barrier
 
 # multimedia: winmm and its drivers (MCI, the MME driver of the kernel sound drivers, the
 # synthesizer), the audio compression manager and its codecs, video for Windows and the players
@@ -111,7 +116,7 @@ for c in MMDRV MCIWAVE MCISEQ MCICDA SYNTH MSACM/MSACM MSACM/MSACMMAP MSACM/IMAA
 done
 for c in DRAWDIB COMPMAN MCIWND; do lib $W MEDIA/AVI/$c; done
 for c in VIDEO MSVIDC MSRLE MCIAVI32; do dll $W MEDIA/AVI/$c; done
-for a in SNDVOL:sndvol32 CDPLAYER:cdplayer MPLAYER2:mplay32; do exe $W MEDIA/${a%%:*} ${a#*:}; done
+for a in SNDVOL:sndvol32 CDPLAYER:cdplayer MPLAYER2:mplay32; do job MEDIA/${a%%:*} exe $W MEDIA/${a%%:*} ${a#*:}; done; barrier
 
 # Windows NT Diagnostics: winmsd, its 3D controls (winmsd.dll) and column list box (clb.dll)
 lib $P SDKTOOLS/WINTOOLS/LIB; dll $P SDKTOOLS/WINTOOLS/CTL3D/DLL; dll $P SDKTOOLS/WINTOOLS/CLB
@@ -124,13 +129,13 @@ for c in ULIB/SRC UREG/SRC IFSUTIL/SRC UFAT/SRC UHPFS/SRC UNTFS/SRC CUFAT/SRC CU
 lib $P UTILS/NTLIB/SRC; lib $N DISKREG; lib $W DIAMOND/MSZIP/MCI.NT; lib $W DIAMOND/CHUCK/FCI.NT
 for a in ACLCONV:aclconv CHCP:chcp FINDSTR:findstr KEYB:keyb FORMAT:format MEP/SRC:mep MODE:mode MORE:more \
          RDISK:rdisk REPLACE:replace RESTORE/SRC:restore XCOPY:xcopy AUTOCONV:autoconv FDISK:windisk; do
-    lib $P UTILS/${a%%:*}; exe $P UTILS/${a%%:*} ${a#*:}
+    job UTILS/${a%%:*} pair $P UTILS/$a
 done
 for a in ATTRIB:attrib CHKDSK:chkdsk COMP:comp CONVERT:convert DISKCOMP:diskcomp DISKCOPY:diskcopy DOSKEY:doskey \
          FC:fc FIND:find HELP:help LABEL:label PRINT:print RECOVER:recover SORT:sort SUBST:subst TREE:tree \
          AUTOCHK/DAYTONA:autochk; do
-    exe $P UTILS/${a%%:*} ${a#*:}
-done
+    job UTILS/${a%%:*} exe $P UTILS/${a%%:*} ${a#*:}
+done; barrier
 lib $P SDKTOOLS/PERFMON; exe $P SDKTOOLS/PERFMON perfmon
 
 # networking: Windows Sockets (wsock32, its NetBIOS and TCP/IP helpers, the STREAMS library winstrm),
@@ -143,11 +148,11 @@ X=/work/RASPI/apps/net
 dll $X wshtcpip; dll $X icmp; dll $X lmhsvc; for p in ping ipconfig hostname; do exe $X $p $p; done
 # the RPC transports over TCP/IP, UDP and NetBIOS, and the NT LM security support provider
 # (security.dll, and its service, ntlmssps.dll)
-for c in CLNTTCP SVRTCP CLNTNB SVRNB DGUDPC DGUDPS; do dll $P RPC/RUNTIME/TRANS/WIN32/$c; done
+for c in CLNTTCP SVRTCP CLNTNB SVRNB DGUDPC DGUDPS; do job RPC/$c dll $P RPC/RUNTIME/TRANS/WIN32/$c; done; barrier
 lib $P NET/SVCDLLS/NTLMSSP/COMMON; dll $P NET/SVCDLLS/NTLMSSP/CLIENT; dll $P NET/SVCDLLS/NTLMSSP/SERVER
 D=NET/SOCKETS/TCPCMD/DHCP
 lib $P $D/LIB; lib $P $D/CLIENT/DHCP; dll $P $D/CLIENT/NEWNT
-for c in SRVSVC/SERVER WKSSVC/SERVER/DAYTONA BROWSER/SERVER MSGSVC/SERVER ALRSVC LOGONSRV/SERVER; do dll $P NET/SVCDLLS/$c; done
+for c in SRVSVC/SERVER WKSSVC/SERVER/DAYTONA BROWSER/SERVER MSGSVC/SERVER ALRSVC LOGONSRV/SERVER; do job NET/$c dll $P NET/SVCDLLS/$c; done; barrier
 lib $P NET/DOSPRINT; dll $P NET/XACTSRV
 lib $P NET/NETCMD/COMMON; lib $P NET/NETCMD/MAP32
 lib $P NET/NETCMD/NETUSE; exe $P NET/NETCMD/NETUSE net
@@ -185,8 +190,8 @@ lib $W SHELL/USERPRI; lib $W PRSINF
 for c in CURSORS VIDEO MULTIMED SOUND DRIVERS MIDI PROFILE T1INSTAL; do dll $W SHELL/CONTROL/$c; done
 lib $W SHELL/CONTROL/SCRNSAVE/COMMON
 for a in BEZIER:ssbezier DEFAULT:scrnsave MARQUEE:ssmarque MYSTIFY:ssmyst STARS:ssstars LOGON:logon; do
-    exe $W SHELL/CONTROL/SCRNSAVE/${a%%:*} ${a#*:}
-done
+    job SCRNSAVE/${a%%:*} exe $W SHELL/CONTROL/SCRNSAVE/${a%%:*} ${a#*:}
+done; barrier
 lib $P MVDM/VDMUTILS/PIFEDIT; exe $P MVDM/VDMUTILS/PIFEDIT pifedit
 lib $P UTILS/NTBACKUP/SRC; exe $P UTILS/NTBACKUP/SRC ntbackup
 dll $W SETUP/MORICONS

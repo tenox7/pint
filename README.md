@@ -27,7 +27,8 @@ installed once into `../msvc` beside the NT source; sources and outputs stay on 
     build/build-update.sh   # only what changed since the last build
 
 `build-update.sh` runs only the steps whose files changed (`obj/stamp`) and copies what they made into the existing
-system disk, keeping what NT wrote on it; the disk is made anew when the registry hives change.
+system disk, keeping what NT wrote on it; the disk is made anew when the registry hives change. Builds run `J` steps
+at once (default 8, `J=1` in order) and `CJ` compiles per step (default 4).
 
     build/portable-qemu-image.sh  # obj/pint-qemu.tar.gz: the system disk, firmware and QEMU for macOS, Linux, Windows
 

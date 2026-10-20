@@ -16,6 +16,7 @@
 //   MultiFunctionAdapter -> KeyboardController(key, the USB host) -> KeyboardPeripheral(keyboard)
 //   MultiFunctionAdapter -> PointerController(point, the USB host) -> PointerPeripheral(pointer)
 //   MultiFunctionAdapter -> NetworkController(net, a function of the USB host), if one is found
+//   System(arc) -> MultiFunctionAdapter("PCI"), on a BCM2711 whose PCI Express link is up
 //   System(arc) -> ScsiAdapter(scsi) -> DiskController(disk) -> DiskPeripheral(rdisk)
 // BlGetPathnameFromComponent renders the SD card as "scsi(0)disk(0)rdisk(0)".
 //
@@ -41,7 +42,8 @@ static CONFIGURATION_COMPONENT_DATA ArcPointerNode;
 static CONFIGURATION_COMPONENT_DATA ArcNetworkNode;
 
 //
-// The BCM2836 has four Cortex-A7 cores and the BCM2837 four Cortex-A53, each
+// The BCM2836 has four Cortex-A7 cores, the BCM2837 four Cortex-A53 and the
+// BCM2711 four Cortex-A72, each
 // with split L1 caches and a VFPv4 unit, sharing one L2. As on every ARC machine,
 // each processor component carries its floating point and cache components; its
 // identifier names the core (the MIDR part number), and a cache's Key encodes its
@@ -60,7 +62,7 @@ static CHAR ArcSystemId[64] = "Raspberry Pi";
 static PCHAR ArcCpuId;
 static CHAR ArcFpuId[] = "ARM-VFPv4";
 static CHAR ArcBusId[24] = "BCM2836-Internal Bus";
-static CHAR ArcScsiId[] = "BCM2835-EMMC";
+static PCHAR ArcScsiId = "BCM2835-EMMC";
 static CHAR ArcVideoId[] = BCM_VIDEO_IDENTIFIER;
 static CHAR ArcMonitorId[24];
 static CHAR ArcUsbId[] = "BCM2835-USB";
@@ -98,15 +100,18 @@ static struct {
 // The configuration data of the SD card controller (the EMMC): its registers,
 // the VideoCore mailbox through which its clock is controlled, its interrupt at
 // DEVICE_LEVEL, and the SCSI host identifier, as Jazz describes its SCSI
-// controller.
+// controller. The card of a BCM2711 board is on the EMMC2. An interrupt vector
+// is an IRQ number of the BCM2835 interrupt controller, or on the BCM2711 an
+// interrupt ID of the GIC-400 (VideoCore interrupt n is ID 96 + n).
 //
 
-#define EMMC_PHYSICAL_BASE      0x3F300000
+#define EMMC_PHYSICAL_BASE      (PERIPHERAL_BASE + 0x300000)
+#define EMMC2_PHYSICAL_BASE     (PERIPHERAL_BASE + 0x340000)
 #define EMMC_REGISTERS_SIZE     0x100
-#define MAILBOX_PHYSICAL_BASE   0x3F00B880
+#define MAILBOX_PHYSICAL_BASE   (PERIPHERAL_BASE + 0xB880)
 #define MAILBOX_SIZE            0x40
 #define EMMC_LEVEL              3
-#define EMMC_VECTOR             62
+#define EMMC_VECTOR             (FwBcm2711 ? 158 : 62)
 #define SCSI_HOST_ID            7
 
 static struct {
@@ -122,10 +127,10 @@ static struct {
 // describes its i8742 to both.
 //
 
-#define USB_PHYSICAL_BASE       0x3F980000
+#define USB_PHYSICAL_BASE       (PERIPHERAL_BASE + 0x980000)
 #define USB_REGISTERS_SIZE      0x10000
 #define USB_LEVEL               3
-#define USB_VECTOR              9
+#define USB_VECTOR              (FwBcm2711 ? 105 : 9)
 
 static struct {
     CM_PARTIAL_RESOURCE_LIST List;
@@ -317,7 +322,7 @@ MakeScsiData(
     Partial[0].u.Interrupt.Vector = EMMC_VECTOR;
 
     SetDescriptor(&Partial[1], CmResourceTypeMemory, CM_RESOURCE_MEMORY_READ_WRITE);
-    Partial[1].u.Memory.Start.LowPart = EMMC_PHYSICAL_BASE;
+    Partial[1].u.Memory.Start.LowPart = FwBcm2711 ? EMMC2_PHYSICAL_BASE : EMMC_PHYSICAL_BASE;
     Partial[1].u.Memory.Length = EMMC_REGISTERS_SIZE;
 
     SetDescriptor(&Partial[2], CmResourceTypeMemory, CM_RESOURCE_MEMORY_READ_WRITE);
@@ -332,6 +337,22 @@ MakeScsiData(
 
     return sizeof(CM_PARTIAL_RESOURCE_LIST) + 3 * sizeof(CM_PARTIAL_RESOURCE_DESCRIPTOR) +
            sizeof(CM_SCSI_DEVICE_DATA);
+}
+
+//
+// Give the SCSI adapter the controller the boot driver found the card on
+// (sdcard.c): the EMMC2 or the EMMC of a BCM2711.
+//
+
+VOID
+FwSetScsiAdapter(
+    IN ULONG PhysicalBase,
+    IN BOOLEAN Emmc2
+    )
+{
+    ArcScsiData.List.PartialDescriptors[1].u.Memory.Start.LowPart = PhysicalBase;
+    ArcScsiId = Emmc2 ? "BCM2711-EMMC2" : "BCM2835-EMMC";
+    SetIdentifier(&ArcScsiNode, ArcScsiId);
 }
 
 //
@@ -444,6 +465,29 @@ FwAddNetworkController (
 }
 
 //
+// The PCI bus behind the PCI Express root complex of a BCM2711, once the link
+// is up and the devices have their memory and interrupt lines (pcie.c): the
+// second multifunction adapter of the system, "PCI", as on the Alpha
+// machines; the HAL finds the devices in their configuration space.
+//
+
+static CONFIGURATION_COMPONENT_DATA ArcPciNode;
+
+VOID
+FwAddPciBus (
+    VOID
+    )
+{
+    if (ArcPciNode.Parent != NULL) {
+        return;
+    }
+
+    SetComponent(&ArcPciNode, AdapterClass, MultiFunctionAdapter, 1);
+    SetIdentifier(&ArcPciNode, "PCI");
+    Link(&ArcSystemNode, &ArcPciNode);
+}
+
+//
 // Build the display controller and monitor components.
 //
 
@@ -506,6 +550,8 @@ CpuIdentifier(
         return "ARM-CortexA7";
     case 0xD03:
         return "ARM-CortexA53";
+    case 0xD08:
+        return "ARM-CortexA72";
     default:
         return "ARM";
     }
@@ -520,6 +566,9 @@ FwBuildConfigurationTree(
     ULONG IcacheKey, DcacheKey, L2Key;
 
     ArcCpuId = CpuIdentifier();
+    if (FwBcm2711) {
+        ArcScsiId = "BCM2711-EMMC2";
+    }
 
     SetComponent(&ArcSystemNode,     SystemClass,     ArcSystem,            0);
     SetComponent(&ArcBusNode,        AdapterClass,    MultiFunctionAdapter, 0);

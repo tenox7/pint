@@ -3,11 +3,13 @@
 =1 5 3
 +    sdcard.c
 =1 9 3
-+    This module implements the hard disk boot driver for the Raspberry Pi 2
++    This module implements the hard disk boot driver for the Raspberry Pi
 +    (the ARM BOOT\LIB\SCSIDISK.C ScsiDiskEntryTable) over its SD card, the
-+    system disk, which sits on the BCM2836 EMMC controller (an Arasan SD host
-+    controller, SDHCI 3.0). The card is disk 0 of SCSI adapter 0, the adapter
-+    the configuration tree describes: scsi(0)disk(0)rdisk(0).
++    system disk, which sits on the EMMC controller of the BCM2836 and BCM2837
++    (an Arasan SD host controller, SDHCI 3.0) or on the EMMC2 controller of the
++    BCM2711 (SDHCI 3.0), the only one wired to the card slot of a Raspberry
++    Pi 4. The card is disk 0 of SCSI adapter 0, the adapter the configuration
++    tree describes: scsi(0)disk(0)rdisk(0).
 +
 +    The controller is driven by programmed I/O: each 512-byte block passes
 +    through the data port. Card bring-up follows the SD physical layer
@@ -24,13 +26,14 @@
 +    The VideoCore firmware of a BCM2837 board (Pi 2 v1.2, Pi 3) leaves them on
 +    ALT0, its SD host controller, and connects the EMMC to the wireless chip on
 +    GPIO 34-39 (ALT3 too); those pins are made inputs, so the EMMC drives the
-+    slot alone.
++    slot alone. The EMMC2 has pins of its own.
 =1 23 3
 =3 28 2
 +#include "string.h"
 +
-+#define EMMC_BASE           0x3F300000u
-+#define EMMC(r)             (*(volatile ULONG *)(EMMC_BASE + (r)))
++#define EMMC_OFFSET         0x300000u
++#define EMMC2_OFFSET        0x340000u
++#define EMMC(r)             (*(volatile ULONG *)(SdBase + (r)))
 +
 +#define BLKSIZECNT          0x04
 +#define ARG1                0x08
@@ -96,10 +99,12 @@
 +
 +#define POWER_DEVID_SD      0
 +#define CLOCK_ID_EMMC       1
++#define CLOCK_ID_EMMC2      12
 +#define IDENT_CLOCK         400000
 +#define TRANSFER_CLOCK      25000000
 +#define TIMEOUT_US          1000000
 +
++static ULONG SdBase;
 +static ULONG SdBaseClock;
 +static ULONG SdRca;
 +static ULONG SdSectors;
@@ -335,10 +340,13 @@
 +PCHAR SdDiskDevicePath = "scsi(0)disk(0)rdisk(0)";
 +
 +static BOOLEAN
-+SdDiskBootInitialize (
-=2 1139 7
-+    This routine resets the controller and brings the card to the transfer
-+    state.
++SdCardInitialize (
++    IN PCHAR Name
+=1 218 6
++    This routine resets the controller at SdBase and brings the card to the
++    transfer state.
+=1 225 3
++    Name - Supplies the name of the controller in messages.
 =1 231 3
 +    TRUE if a card is ready, FALSE otherwise.
 =1 235 4
@@ -346,16 +354,6 @@
 +    ULONG i;
 +    BOOLEAN v2;
 +
-+    for (i = 34; i <= 39; i += 1) {
-+        if (SdGetPinFunction(i) == GPIO_ALT3) {
-+            SdSetPinFunction(i, GPIO_INPUT);
-=1 938 3
-+    for (i = 48; i <= 53; i += 1) {
-+        SdSetPinFunction(i, GPIO_ALT3);
-+    }
-+
-+    MailboxSetPowerState(POWER_DEVID_SD, TRUE);
-+    SdBaseClock = MailboxGetClockRate(CLOCK_ID_EMMC);
 +    if (SdBaseClock == 0) {
 +        SdBaseClock = 50000000;
 +    }
@@ -363,13 +361,13 @@
 +    SdWrite(CONTROL0, 0);
 +    SdWrite(CONTROL1, C1_SRST_HC);
 +    if (!SdWait(CONTROL1, C1_SRST_HC, 0)) {
-+        FwPrint("SD: controller reset timed out\r\n");
++        FwPrint("%s: controller reset timed out\r\n", Name);
 +        return FALSE;
 +    }
 +
 +    SdWrite(CONTROL0, C0_POWER_330);
 +    if (!SdSetClock(IDENT_CLOCK)) {
-+        FwPrint("SD: clock did not stabilize\r\n");
++        FwPrint("%s: clock did not stabilize\r\n", Name);
 +        return FALSE;
 +    }
 +
@@ -383,7 +381,7 @@
 +
 +    for (i = 0; i < 1000; i += 1) {
 +        if (!SdCommand(APP | CMD(41) | R3, (v2 ? 0x40000000 : 0) | 0x00FF8000, 0)) {
-+            FwPrint("SD: no card\r\n");
++            FwPrint("%s: no card\r\n", Name);
 +            return FALSE;
 +        }
 +
@@ -394,28 +392,28 @@
 +    }
 +
 +    if ((ocr & 0x80000000) == 0) {
-+        FwPrint("SD: card did not power up\r\n");
++        FwPrint("%s: card did not power up\r\n", Name);
 +        return FALSE;
 +    }
 +
 +    SdHighCapacity = (ocr & 0x40000000) != 0;
 +
 +    if (!SdCommand(CMD(2) | R2, 0, 0) || !SdCommand(CMD(3) | R6, 0, 0)) {
-+        FwPrint("SD: card identification failed\r\n");
++        FwPrint("%s: card identification failed\r\n", Name);
 +        return FALSE;
 +    }
 +
 +    SdRca = EMMC(RESP0) >> 16;
 +
 +    if (!SdCommand(CMD(9) | R2, SdRca << 16, 0)) {
-+        FwPrint("SD: CSD read failed\r\n");
++        FwPrint("%s: CSD read failed\r\n", Name);
 +        return FALSE;
 +    }
 +
 +    SdSectors = SdCapacity();
 +
 +    if (!SdCommand(CMD(7) | R1B, SdRca << 16, 0) || !SdSetClock(TRANSFER_CLOCK)) {
-+        FwPrint("SD: card select failed\r\n");
++        FwPrint("%s: card select failed\r\n", Name);
 +        return FALSE;
 +    }
 +
@@ -427,8 +425,44 @@
 +        SdCommand(CMD(16) | R1, SECTOR_SIZE, 0);
 +    }
 +
-+    FwPrint("SD: %s card, %d MB\r\n", SdHighCapacity ? "SDHC" : "SD", SdSectors / 2048);
++    FwPrint("%s: %s card, %d MB\r\n", Name, SdHighCapacity ? "SDHC" : "SD", SdSectors / 2048);
 =1 3213 3 -4
++static BOOLEAN
++SdDiskBootInitialize (
+=2 1139 7
++    This routine finds the controller of the card and brings the card to the
++    transfer state. Every BCM2711 board wires its card to the EMMC2 (the EMMC
++    is the wireless chip's); QEMU's raspi4b attaches it to the EMMC, the only
++    controller of its card, which is looked at when the EMMC2 has none.
+=1 231 3
++    TRUE if a card is ready, FALSE otherwise.
+=1 235 4
++    ULONG i;
++
++    if (FwBcm2711) {
++        SdBase = PERIPHERAL_BASE + EMMC2_OFFSET;
++        SdBaseClock = MailboxGetClockRate(CLOCK_ID_EMMC2);
++        if (SdCardInitialize("SD (EMMC2)")) {
+=1 3213 3 4
++        SdBase = PERIPHERAL_BASE + EMMC_OFFSET;
++        SdBaseClock = MailboxGetClockRate(CLOCK_ID_EMMC);
++        return SdCardInitialize("SD (EMMC)");
++    }
++
++    SdBase = PERIPHERAL_BASE + EMMC_OFFSET;
++    for (i = 34; i <= 39; i += 1) {
++        if (SdGetPinFunction(i) == GPIO_ALT3) {
++            SdSetPinFunction(i, GPIO_INPUT);
+=1 938 3
++    for (i = 48; i <= 53; i += 1) {
++        SdSetPinFunction(i, GPIO_ALT3);
++    }
++
++    MailboxSetPowerState(POWER_DEVID_SD, TRUE);
++    SdBaseClock = MailboxGetClockRate(CLOCK_ID_EMMC);
++    return SdCardInitialize("SD");
++}
++
 +static ARC_STATUS
 +SdDiskSectors(
 +    IN ULONG Lba,
@@ -645,6 +679,7 @@
 =1 1267 8
 +    if (!SdDiskBootInitialize()) {
 =1 1307 3
++    FwSetScsiAdapter(SdBase, SdBase == PERIPHERAL_BASE + EMMC2_OFFSET);
 +    LookupTable->DevicePath = SdDiskDevicePath;
 +    LookupTable->DispatchTable = &SdDiskEntryTable;
 +}

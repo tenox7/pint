@@ -13,7 +13,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 TYPE=${1:?usage: make-crt32.sh ST|MT|DLL}
 
-docker run --rm -e TYPE="$TYPE" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt \
+docker run --rm -e CJ="${CJ:-4}" -e TYPE="$TYPE" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/crt \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh
@@ -31,6 +31,21 @@ DLL) LIB=libcdll; COMPS="$COMPS DLLSTUFF" ;;
 *) echo "make-crt32: TYPE is ST, MT or DLL"; exit 1 ;;
 esac
 
+# one source of the component build() makes (its locals D, o, defs, incs), compiled by the
+# pool of msvc.sh (par, pwait)
+one() {
+  local f=$1
+  local p b
+  p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$(echo $f | tr A-Z a-z)
+  if [ -f $A/$f ]; then f=$A/$f; elif [ -f $p ]; then f=$p; else f=$D/$(ls $D | grep -ix "$f"); fi
+  b=$(basename "${f%.*}" | tr A-Z a-z)
+  case $f in
+  *.asm) ntas $o/$b.obj $f $NTDEFINES $defs -I/work/RASPI/obj/gen ;;
+  *.[Cc][Xx][Xx]) ntsrc $f $o/src/$b.cxx && sed -i -f $A/crtgate.sed $o/src/$b.cxx && ntcc $o/$b.obj $o/src/$b.cxx -Oi- $NTDEFINES $defs $incs ;;
+  *) ntsrc $f $o/src/$b.c && sed -i -f $A/crtgate.sed $o/src/$b.c && ntcc $o/$b.obj $o/src/$b.c -Oi- $NTDEFINES $defs $incs ;;
+  esac
+}
+
 # build COMPONENTDIR: its SOURCES and ARM sources into $DIR/<component>
 build() {
   local D=$1 c=$(basename $1) o=$DIR/$(basename $1 | tr A-Z a-z) defs rel incs f b n=0 fail=0
@@ -41,15 +56,9 @@ build() {
   rel=$(cat $D/*.[CcHh] 2>/dev/null | tr -d "\r" | sed -nE "s/^[[:space:]]*#[[:space:]]*include[[:space:]]*[\"<](\.\.[\\\\/][^\">]*)[\\\\/][^\\\\/\">]+[\">].*/\1/p" | sort -u | tr "\n" ";")
   incs="-I$A/h -I/work/RASPI/arcfw/ported/fp32/include -I/tmp/f/ovr $(bash $K/incdirs.sh $D "$(bash $K/srcmacro.sh $D/SOURCES INCLUDES)") -I$K/inc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt -I$D $(bash $K/incdirs.sh $D "$rel" | cut -d" " -f3-)"
   for f in $(bash $K/srcmacro.sh $D/SOURCES SOURCES | tr " " "\n" | grep -iE "\.(c|cxx)$") $(awk -v c=$c "\$1 == c {print \$2}" $A/crt32.arm); do
-    p=/work/RASPI/arcfw/ported/$(echo ${D#/work/PRIVATE/} | tr A-Z a-z)/$(echo $f | tr A-Z a-z)
-    if [ -f $A/$f ]; then f=$A/$f; elif [ -f $p ]; then f=$p; else f=$D/$(ls $D | grep -ix "$f"); fi
-    b=$(basename "${f%.*}" | tr A-Z a-z)
-    case $f in
-    *.asm) ntas $o/$b.obj $f $NTDEFINES $defs -I/work/RASPI/obj/gen ;;
-    *.[Cc][Xx][Xx]) ntsrc $f $o/src/$b.cxx && sed -i -f $A/crtgate.sed $o/src/$b.cxx && ntcc $o/$b.obj $o/src/$b.cxx -Oi- $NTDEFINES $defs $incs ;;
-    *) ntsrc $f $o/src/$b.c && sed -i -f $A/crtgate.sed $o/src/$b.c && ntcc $o/$b.obj $o/src/$b.c -Oi- $NTDEFINES $defs $incs ;;
-    esac && n=$((n+1)) || fail=$((fail+1))
+    par one $f
   done
+  pwait; n=$PAROK; fail=$PARFAIL
   echo "   $c: $n compiled, $fail failed"
   [ $fail -eq 0 ]
 }

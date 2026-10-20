@@ -36,6 +36,7 @@ arcfw/crt/h/cruntime.h
 arcfw/crt/h/stdarg.h
 arcfw/crt/misc/arm/chandler.c
 arcfw/drivers/bcmvideo/bcmvideo.c
+arcfw/hal/adjust.c
 arcfw/hal/clock.c
 arcfw/hal/hal.src
 arcfw/hal/halp.h
@@ -48,6 +49,8 @@ arcfw/hal/jxhwsup.c
 arcfw/hal/jxport.c
 arcfw/hal/jxreturn.c
 arcfw/hal/jxtime.c
+arcfw/hal/pcip.h
+arcfw/hal/pcisup.c
 arcfw/hal/sysint.c
 arcfw/inc/arc.h
 arcfw/kernel/armdef.src

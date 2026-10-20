@@ -4,17 +4,23 @@
 # sdcard/root/SDKTOOLS (\SDKTOOLS of the system disk), their DLLs beside them. The
 # tools already in System32 (ini, ech, adduser, shutdown, winmsd, perfmon, imagehlp)
 # are built by build-user.sh. Each step runs when its inputs changed (build/stamp.sh).
+# The libraries and DLLs build first, then the programs, which link them; each component
+# is a job (stamp.sh), J at once.
 #
 # Usage:  build/build-sdktools.sh
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
 P=/work/PRIVATE S=SDKTOOLS
 export DEST=SDKTOOLS
-# lib COMPONENT [PROGRAM...]: its library (in its directory, LOCAL=1), then its programs
-lib() { local c=$1; shift; LOCAL=1 ROOT=$P cstep lib $P $S/$c -- $K/make-lib.sh $S/$c; exe $c "$@"; }
-dll() { local c=$1; shift; INSTALL=1 ROOT=$P cstep dll $P $S/$c link -- $K/make-dll.sh $S/$c; exe $c "$@"; }
-# exe COMPONENT PROGRAM...: a step for each program of the component
-exe() {
+# lib COMPONENT [PROGRAM...]: its library (in its directory, LOCAL=1), and its programs;
+# dll COMPONENT [PROGRAM...]: its DLL and its programs; exe COMPONENT PROGRAM...: its
+# programs, a step for each. PHASE libs builds the libraries and DLLs, PHASE exes the programs.
+lib() { local c=$1; shift; if [ $PHASE = libs ]; then job lib/$c libstep $c; else exe $c "$@"; fi; }
+dll() { local c=$1; shift; if [ $PHASE = libs ]; then job dll/$c dllstep $c; else exe $c "$@"; fi; }
+exe() { local c=$1; shift; [ $PHASE = exes ] && [ $# -gt 0 ] || return 0; job exe/$c exesteps $c "$@"; }
+libstep() { LOCAL=1 ROOT=$P cstep lib $P $S/$1 -- $K/make-lib.sh $S/$1; }
+dllstep() { INSTALL=1 ROOT=$P cstep dll $P $S/$1 link -- $K/make-dll.sh $S/$1; }
+exesteps() {
     local c=$1 p; shift
     for p; do INSTALL=1 ROOT=$P step exe/$S/$c/$p $(perl $R/build/inputs.pl $R $P $S/$c link) -- $K/make-exe.sh $S/$c $p; done
 }
@@ -26,6 +32,7 @@ slmcmds() {
     done
 }
 
+tools() {
 # DIRS
 exe ALIAS alias; exe CAT cat; lib CHECKREL checkrel; exe CHMODE chmode; exe CMDEVENT cmdevent; exe CRASHDMP crashdmp
 exe CP cp; exe DELNODE delnode; exe DIFF diff; exe DSKDUMP dskdump; exe DISKMON diskmon; exe DU du; exe ECHOTIME echotime
@@ -57,11 +64,11 @@ lib VCTOOLS/PMAKE/SRC nmake
 exe PCH pch; exe PDC pdc; exe NTSLM ntslm; lib MASM masm386; lib DISKEDIT diskedit; lib DLGEDIT dlgedit
 lib DOCTOR doctor c2rtf; exe DOSDEV dosdev; lib DSKIMAGE dskimage; lib FONTEDIT fontedit; dll GUTILS; lib IMAGEDIT imagedit
 lib MIP2COFF mip2coff; exe OBJDIR objdir; exe READLINE readline; exe SETLINK setlink; exe SOLIDPP solidpp
-lib SLMNEW/SLM slm sadmin slmck execslm; step slmcmds $R/sdcard/root/$S/EXECSLM.EXE -- slmcmds
+lib SLMNEW/SLM slm sadmin slmck execslm
 lib SLMNEW/UTIL merge unmerge slmdiff cookie; exe SLMNEW/SLMED/DAYTONA slmed; exe SLMNEW/FIXDIFF fixdiff
 exe SLEEP sleep; dll SPY/DLL; lib SPY/APP spy; exe RANDOM random; exe SECLIST seclist; exe SIMBAD simbad
 exe TAKEOWN takeown; exe RCDUMP rcdump; lib VI vi; exe NEWINVTP winvtp; lib WZMAIL/DH.NEW/LIB; lib WZMAIL/MAIL1.0 wzmail
-dll FASTIMER; lib WAP/DUMP apf32dmp; lib WAP/CONVERT apf32cvt; for c in FERNEL BASE ADVAPI CRTDLL; do dll WAP/$c; done
+dll FASTIMER; barrier; lib WAP/DUMP apf32dmp; lib WAP/CONVERT apf32cvt; for c in FERNEL BASE ADVAPI CRTDLL; do dll WAP/$c; done
 exe WINDIFF/WINDIFF windiff; lib WINDIFF/CLIENT; exe WINDIFF/SERVER sumserve; lib ZOOMIN zoomin; lib COMPDIR compdir
 lib PVIEWER pviewer; exe ROSHARE roshare; exe A2COFF a2coff; lib CLEARMEM clearmem; lib EDITREG editreg; lib XEROX xerox
 exe TILE tile
@@ -73,6 +80,11 @@ exe MHLSRV/SERVER mhlsrv; exe NEWER newer; exe NTFSDUMP ntfsdump; lib OWNTREE ow
 lib RSHELL/SERVER rcmdsrv; lib SFS sfs-gate sfs-page; lib SYMREF/SRDAEM srdaem; exe SYMREF/SYMREF symref; lib TIMTP timtp
 lib LZTEST lztest; exe VMTESTS poolkill vmperf32 vmtest vmstress tfork pageit color; exe XMAS xmas; exe YACC yacc
 lib ZD zdsim
+}
+
+PHASE=libs; tools; barrier
+PHASE=exes; tools; barrier
+step slmcmds $R/sdcard/root/$S/EXECSLM.EXE -- slmcmds
 # the templates of the scanners flex and the parsers yacc write (flex -Sc:\sdktools\skeleton.flx, yacc
 # finds yypars.c on the INCLUDE path)
 T="$R/../PRIVATE/SDKTOOLS/FLEX/SKELETON.FLX $R/../PRIVATE/SDKTOOLS/YACC/YYPARS.C"

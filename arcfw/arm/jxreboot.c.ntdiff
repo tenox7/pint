@@ -7,7 +7,7 @@
 +#include "fwp.h"
 =1 26 1
 +
-+#define PM_BASE     0x3F100000u
++#define PM_BASE     (PERIPHERAL_BASE + 0x100000u)
 +#define PM_RSTC     (*(volatile unsigned int *)(PM_BASE + 0x1c))
 +#define PM_WDOG     (*(volatile unsigned int *)(PM_BASE + 0x24))
 +#define PM_PASSWORD 0x5a000000u

@@ -2,4 +2,5 @@
 =1 1 121
 +    IDS_PROCESSOR_ARM_CORTEX_A7                 "ARM Cortex-A7"
 +    IDS_PROCESSOR_ARM_CORTEX_A53                "ARM Cortex-A53"
++    IDS_PROCESSOR_ARM_CORTEX_A72                "ARM Cortex-A72"
 =1 122 269

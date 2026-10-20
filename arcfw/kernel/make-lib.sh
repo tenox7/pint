@@ -14,7 +14,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-lib.sh COMPONENT}
 
-docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e LOCAL="${LOCAL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
+docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e LOCAL="${LOCAL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
     -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -54,15 +54,18 @@ srcinc() { local s=$(realpath $(dirname $1)); [ "$s" = "$(realpath $D)" ] && ret
 INCS="$INCS $(bash relinc.sh $INCS $srcs)"
 arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm; [ -f $arm ] || arm=$(bash portdir.sh $D)/sources.arm
 n=0; nr=0; fail=0
-for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$(dirname $arm)/&|" ); do
-  b=$(basename "${f%.*}" | tr A-Z a-z)
-  [ -f $f ] || { fail=$((fail+1)); echo "   no source $f"; continue; }
+# one source, compiled by the pool of msvc.sh (par, pwait)
+one() {
+  local f=$1 b=$(basename "${1%.*}" | tr A-Z a-z)
+  [ -f $f ] || { echo "   no source $f"; return 1; }
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
   *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) ntsrc $f $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $MODE $DEFS $(srcinc $f) $INCS ;;
   *) ntsrc $f $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $MODE $DEFS $(srcinc $f) $INCS ;;
-  esac && n=$((n+1)) || fail=$((fail+1))
-done
+  esac
+}
+for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$(dirname $arm)/&|" ); do par one $f; done
+pwait; n=$PAROK; fail=$PARFAIL
 # the resources of its resource scripts (obj\*\<name>.res), which the image of another
 # component links (..\xlate\obj\*\acledit.res of NET UI)
 for r in $(macro SOURCES | tr " " "\n" | grep -iE "\.rc$" | tr "\\\\" /); do

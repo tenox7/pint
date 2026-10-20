@@ -1,9 +1,3 @@
-  b=$(basename "${f%.*}" | tr A-Z a-z)
-  case $f in
-  *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
-  # a quoted include finds a header beside the source (#line), the port version among the farmed ones
-  *) ntsrc $f $DIR/src/$b.c && { [ -z "$PH" ] || sed -i "1s|.*/|#line 1 \"/tmp/f/$c/|" $DIR/src/$b.c; } && ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $INCS ;;
-  esac && n=$((n+1)) || fail=$((fail+1))
 #!/usr/bin/env bash
 # Build an NT kernel-mode driver from its component's SOURCES (TARGETTYPE DRIVER or
 # EXPORT_DRIVER) as makefile.def does, with Microsoft C for ARM: compile with the
@@ -24,7 +18,7 @@ COMP=${1:?usage: make-driver.sh COMPONENT}
 [ -f "$NT35/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
 [ -f "$NT35/RASPI/obj/hal.lib" ] || { echo "run make-hal.sh first"; exit 1; }
 
-docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" \
+docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" \
     -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -59,16 +53,19 @@ INCS="$INCS $(bash relinc.sh $INCS $(realpath -m $srcs))"
 echo ">> compiling $COMP ($NAME.sys, $TYPE)"
 n=0; fail=0
 arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm
-for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do
-  b=$(basename "${f%.*}" | tr A-Z a-z)
+# one source, compiled by the pool of msvc.sh (par, pwait)
+one() {
+  local f=$1 b=$(basename "${1%.*}" | tr A-Z a-z)
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
   # a quoted include finds the header beside the source (#line): with port versions of
   # headers, the farmed ones
   *) ntsrc $f $DIR/src/$b.c && { [ -z "$PH" ] || sed -i "1s|.*/|#line 1 \"/tmp/f/$c/|" $DIR/src/$b.c; } &&
      ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $INCS ;;
-  esac && n=$((n+1)) || fail=$((fail+1))
-done
+  esac
+}
+for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$K/&|" ); do par one $f; done
+pwait; n=$PAROK; fail=$PARFAIL
 echo "   $n compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
 

@@ -6,11 +6,13 @@ Module Name:
 
 Abstract:
 
-    This module implements the USB host of the BCM2835 the firmware and the
-    keyboard and pointer port driver share: the Synopsys DesignWare OTG core
-    in host mode with DMA, its root port, the hubs behind it (on the board the
-    LAN9514, and those plugged into its ports), and the keyboards and pointers
-    of the HID class.
+    This module implements the USB host the firmware and the keyboard and
+    pointer port driver share: the Synopsys DesignWare OTG core of the
+    BCM2835 in host mode with DMA, its root port, the hubs behind it (on the
+    board the LAN9514, and those plugged into its ports), and the keyboards
+    and pointers of the HID class. An xHCI (xhci.c) runs the transfers and
+    the root ports instead of the core when the host is one; the
+    enumeration, the hubs and the HID class are the same.
 
     Transfers run on host channel 0, one transaction group at a time, through
     the buffer of the host. A full or low speed device behind a high speed hub
@@ -48,6 +50,7 @@ Abstract:
 #endif
 
 #include "usbhost.h"
+#include "xhci.h"
 
 //
 // DWC2 core registers and their fields.
@@ -193,18 +196,6 @@ Abstract:
 #define DESCRIPTOR_REPORT       0x22
 #define DESCRIPTOR_HUB          0x29
 
-#define PORT_ENABLE             1
-#define PORT_RESET              4
-#define PORT_POWER              8
-#define C_PORT_CONNECTION       16
-#define PORT_STATUS_CONNECTION  0x0001
-#define PORT_STATUS_ENABLE      0x0002
-#define PORT_STATUS_RESET       0x0010
-#define PORT_STATUS_LOW_SPEED   0x0200
-#define PORT_STATUS_HIGH_SPEED  0x0400
-#define PORT_CHANGE_CONNECTION  0x0001
-#define PORT_CHANGE_RESET       0x0010
-
 #define CLASS_HID               3
 #define CLASS_HUB               9
 #define SUBCLASS_BOOT           1
@@ -240,6 +231,7 @@ typedef struct _HID_INTERFACE {
     UCHAR Subclass;
     UCHAR Protocol;
     UCHAR Endpoint;
+    UCHAR Interval;
     USHORT Maximum;
     USHORT ReportLength;
 } HID_INTERFACE, *PHID_INTERFACE;
@@ -637,6 +629,10 @@ UsbControl(
     Setup[5] = (UCHAR)(Index >> 8);
     Setup[6] = (UCHAR)Length;
     Setup[7] = (UCHAR)(Length >> 8);
+    if (Host->Xhci) {
+        return XhciControl(Host, Device, Setup, Data, Length);
+    }
+
     Status = UsbTransfer(Host, Device, 0, EPTYPE_CONTROL, FALSE, Device->ControlMaximum, &Pid,
                          Setup, sizeof(Setup), CONTROL_TIMEOUT_MS);
     if (Status < 0) {
@@ -676,8 +672,13 @@ UsbInterrupt(
 {
     LONG Status;
 
-    Status = UsbTransfer(Host, Device, Endpoint, EPTYPE_INTERRUPT, TRUE, Maximum, Toggle,
-                         Buffer, Length < Maximum ? Length : Maximum, PERIODIC_TIMEOUT_MS);
+    if (Host->Xhci) {
+        Status = XhciInterrupt(Host, Device, Endpoint, Buffer, Length);
+    } else {
+        Status = UsbTransfer(Host, Device, Endpoint, EPTYPE_INTERRUPT, TRUE, Maximum, Toggle,
+                             Buffer, Length < Maximum ? Length : Maximum, PERIODIC_TIMEOUT_MS);
+    }
+
     if (Status == XFER_STALL) {
         UsbControl(Host, Device, 0x02, REQUEST_CLEAR_FEATURE, 0, 0x80 | Endpoint, NULL, 0);
         *Toggle = PID_DATA0;
@@ -729,6 +730,10 @@ UsbRemoveDevice(
         if (Host->Hids[Child].Present && Host->Hids[Child].Device == Index) {
             Host->Hids[Child].Present = FALSE;
         }
+    }
+
+    if (Host->Xhci) {
+        XhciRemoveDevice(Host, &Host->Devices[Index]);
     }
 
     Host->Devices[Index].Present = FALSE;
@@ -1123,6 +1128,60 @@ UsbStartHid(
 }
 
 //
+// The ports of a hub, or the root ports of an xHCI (USB_ROOT): a feature of
+// one set or cleared, and its status read and its changes acknowledged.
+//
+
+static VOID
+UsbPortFeature(
+    IN PUSB_HOST Host,
+    IN ULONG HubIndex,
+    IN ULONG Port,
+    IN BOOLEAN Set,
+    IN ULONG Feature
+    )
+{
+    if (HubIndex == USB_ROOT) {
+        XhciPortFeature(Host, Port, Set, Feature);
+        return;
+    }
+
+    UsbControl(Host, &Host->Devices[HubIndex], 0x23, Set ? REQUEST_SET_FEATURE : REQUEST_CLEAR_FEATURE,
+               Feature, Port, NULL, 0);
+}
+
+static BOOLEAN
+UsbPortStatus(
+    IN PUSB_HOST Host,
+    IN ULONG HubIndex,
+    IN ULONG Port,
+    OUT PULONG Status,
+    OUT PULONG Change
+    )
+{
+    UCHAR Data[4];
+    ULONG Feature;
+
+    if (HubIndex == USB_ROOT) {
+        return XhciPortStatus(Host, Port, Status, Change);
+    }
+
+    if (UsbControl(Host, &Host->Devices[HubIndex], 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 4) {
+        return FALSE;
+    }
+
+    *Status = Data[0] | (Data[1] << 8);
+    *Change = Data[2] | (Data[3] << 8);
+    for (Feature = 0; Feature < 5; Feature += 1) {
+        if (*Change & (1 << Feature)) {
+            UsbPortFeature(Host, HubIndex, Port, FALSE, C_PORT_CONNECTION + Feature);
+        }
+    }
+
+    return TRUE;
+}
+
+//
 // A hub: its descriptor, the power of its ports, and the devices on them.
 //
 
@@ -1148,8 +1207,12 @@ UsbStartHub(
     }
 
     Hub->Ports = Data[2] < 15 ? Data[2] : 15;
+    if (Host->Xhci && !XhciConfigureHub(Host, Hub, (Data[3] >> 5) & 3)) {
+        return FALSE;
+    }
+
     for (Port = 1; Port <= Hub->Ports; Port += 1) {
-        UsbControl(Host, Hub, 0x23, REQUEST_SET_FEATURE, PORT_POWER, Port, NULL, 0);
+        UsbPortFeature(Host, Index, Port, TRUE, PORT_POWER);
     }
 
     UsbSleep(Data[5] * 2 + 100);
@@ -1221,9 +1284,11 @@ UsbParseConfiguration(
         if (Device->Class == CLASS_HUB && Device->HubEndpoint == 0) {
             Device->HubEndpoint = Item[2] & 0xF;
             Device->HubMaximum = (Item[4] | (Item[5] << 8)) & 0x7FF;
+            Device->HubInterval = Item[6];
         } else if (Current != NULL && Current->Endpoint == 0) {
             Current->Endpoint = Item[2] & 0xF;
             Current->Maximum = (Item[4] | (Item[5] << 8)) & 0x7FF;
+            Current->Interval = Item[6];
         }
     }
 
@@ -1231,11 +1296,44 @@ UsbParseConfiguration(
 }
 
 //
+// Configure the endpoints of a configuration of a device on an xHCI before it
+// is set: the status change endpoint of a hub, or the interrupt endpoints of
+// the HID interfaces.
+//
+
+static BOOLEAN
+UsbConfigureEndpoints(
+    IN PUSB_HOST Host,
+    IN PUSB_DEVICE Device,
+    IN PHID_INTERFACE Hids,
+    IN ULONG Count
+    )
+{
+    ULONG Index;
+
+    if (Device->Class == CLASS_HUB) {
+        return Device->HubEndpoint != 0 &&
+               XhciConfigureEndpoint(Host, Device, Device->HubEndpoint, Device->HubMaximum, Device->HubInterval);
+    }
+
+    for (Index = 0; Index < Count; Index += 1) {
+        if (Hids[Index].Endpoint != 0 &&
+            !XhciConfigureEndpoint(Host, Device, Hids[Index].Endpoint, Hids[Index].Maximum, Hids[Index].Interval)) {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+//
 // Configure the device on a port the hub (or the root port) reset, which
-// answers at address 0 until it is given its own: a hub is configured and
-// its ports enumerated, a device with keyboards or pointers is configured
-// and they are started, another device is left unconfigured. The stage of
-// the device is the one it failed at.
+// answers at address 0 until it is given its own (on an xHCI, by the
+// controller, before its descriptor is read): a hub is configured and its
+// ports enumerated, a device with keyboards or pointers is configured and
+// they are started, another device (and a super speed hub, which has only
+// super speed devices behind it) is left unconfigured. The stage of the
+// device is the one it failed at.
 //
 
 static BOOLEAN
@@ -1252,22 +1350,36 @@ UsbConfigure(
     ULONG Total;
     LONG Length;
 
+    Device->Stage = USB_STAGE_ADDRESS;
+    if (Host->Xhci && !XhciAddressDevice(Host, Index)) {
+        return FALSE;
+    }
+
     Device->Stage = USB_STAGE_DESCRIPTOR;
     if (UsbControl(Host, Device, 0x80, REQUEST_GET_DESCRIPTOR, DESCRIPTOR_DEVICE << 8, 0, Data, 8) < 8) {
         return FALSE;
     }
 
-    if (Data[7] == 16 || Data[7] == 32 || Data[7] == 64) {
+    if (Data[7] == 8 || Data[7] == 16 || Data[7] == 32 || Data[7] == 64) {
         Device->ControlMaximum = Data[7];
+    } else if (Data[7] == 9 && Device->Speed == SPEED_SUPER) {
+        Device->ControlMaximum = 512;
     }
 
-    Device->Stage = USB_STAGE_ADDRESS;
-    if (UsbControl(Host, Device, 0x00, REQUEST_SET_ADDRESS, Index + 1, 0, NULL, 0) < 0) {
-        return FALSE;
+    if (Host->Xhci) {
+        if (!XhciSetControlMaximum(Host, Device)) {
+            return FALSE;
+        }
+    } else {
+        Device->Stage = USB_STAGE_ADDRESS;
+        if (UsbControl(Host, Device, 0x00, REQUEST_SET_ADDRESS, Index + 1, 0, NULL, 0) < 0) {
+            return FALSE;
+        }
+
+        Device->Address = (UCHAR)(Index + 1);
+        UsbSleep(10);
     }
 
-    Device->Address = (UCHAR)(Index + 1);
-    UsbSleep(10);
     Device->Stage = USB_STAGE_DEVICE;
     if (UsbControl(Host, Device, 0x80, REQUEST_GET_DESCRIPTOR, DESCRIPTOR_DEVICE << 8, 0, Data, 18) < 18) {
         return FALSE;
@@ -1290,12 +1402,16 @@ UsbConfigure(
     }
 
     Count = UsbParseConfiguration(Device, Data, (ULONG)Length, Hids);
-    if (Device->Class != CLASS_HUB && Count == 0) {
+    if (Device->Speed == SPEED_SUPER || (Device->Class != CLASS_HUB && Count == 0)) {
         Device->Stage = USB_STAGE_READY;
         return TRUE;
     }
 
     Device->Stage = USB_STAGE_SET;
+    if (Host->Xhci && !UsbConfigureEndpoints(Host, Device, Hids, Count)) {
+        return FALSE;
+    }
+
     if (UsbControl(Host, Device, 0x00, REQUEST_SET_CONFIG, Configuration, 0, NULL, 0) < 0) {
         return FALSE;
     }
@@ -1351,7 +1467,7 @@ UsbEnumerate(
     Device->Depth = Hub != NULL ? Hub->Depth + 1 : 0;
     Device->ControlMaximum = 8;
     Device->Stage = USB_STAGE_RESET;
-    if (Hub != NULL && Speed != SPEED_HIGH && Host->RootSpeed == SPEED_HIGH) {
+    if (!Host->Xhci && Hub != NULL && Speed != SPEED_HIGH && Host->RootSpeed == SPEED_HIGH) {
         Device->TtAddress = Hub->Speed == SPEED_HIGH ? Hub->Address : Hub->TtAddress;
         Device->TtPort = Hub->Speed == SPEED_HIGH ? (UCHAR)Port : Hub->TtPort;
     }
@@ -1361,49 +1477,18 @@ UsbEnumerate(
     }
 
     Device->Interrupt = Host->Interrupt;
-    if (Hub != NULL && Device->Address == 0) {
-        UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, PORT_ENABLE, Port, NULL, 0);
+    if (Device->Address == 0 && (Hub != NULL || Host->Xhci)) {
+        UsbPortFeature(Host, Parent, Port, FALSE, PORT_ENABLE);
     }
 }
 
 //
-// Read the status of a port of a hub and acknowledge its changes.
-//
-
-static BOOLEAN
-UsbPortStatus(
-    IN PUSB_HOST Host,
-    IN PUSB_DEVICE Hub,
-    IN ULONG Port,
-    OUT PULONG Status,
-    OUT PULONG Change
-    )
-{
-    UCHAR Data[4];
-    ULONG Feature;
-
-    if (UsbControl(Host, Hub, 0xA3, REQUEST_GET_STATUS, 0, Port, Data, 4) < 4) {
-        return FALSE;
-    }
-
-    *Status = Data[0] | (Data[1] << 8);
-    *Change = Data[2] | (Data[3] << 8);
-    for (Feature = 0; Feature < 5; Feature += 1) {
-        if (*Change & (1 << Feature)) {
-            UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION + Feature, Port, NULL, 0);
-        }
-    }
-
-    return TRUE;
-}
-
-//
-// Look at a port of a hub: acknowledge its changes, remove the device that
-// was on it if it went (or came again), and reset and enumerate the device
-// connected to it if there is none yet. A device that fails is tried again
-// from a reset of its port, with the power of the port cycled halfway, as
-// Linux does; one that fails every try stays listed with the step it failed
-// at.
+// Look at a port of a hub (or a root port of an xHCI): acknowledge its
+// changes, remove the device that was on it if it went (or came again), and
+// reset and enumerate the device connected to it if there is none yet. A
+// device that fails is tried again from a reset of its port, with the power
+// of the port cycled halfway, as Linux does; one that fails every try stays
+// listed with the step it failed at.
 //
 
 static VOID
@@ -1413,14 +1498,13 @@ UsbCheckPort(
     IN ULONG Port
     )
 {
-    PUSB_DEVICE Hub = &Host->Devices[HubIndex];
     ULONG Child = UsbFindDevice(Host, HubIndex, Port);
     ULONG Status;
     ULONG Change;
     ULONG Time;
     ULONG Try;
 
-    if (!UsbPortStatus(Host, Hub, Port, &Status, &Change)) {
+    if (!UsbPortStatus(Host, HubIndex, Port, &Status, &Change)) {
         return;
     }
 
@@ -1435,10 +1519,10 @@ UsbCheckPort(
 
     for (Try = 1; ; Try += 1) {
         UsbSleep(100);
-        UsbControl(Host, Hub, 0x23, REQUEST_SET_FEATURE, PORT_RESET, Port, NULL, 0);
+        UsbPortFeature(Host, HubIndex, Port, TRUE, PORT_RESET);
         for (Time = 0; Time < 500; Time += 10) {
             UsbSleep(10);
-            if (!UsbPortStatus(Host, Hub, Port, &Status, &Change)) {
+            if (!UsbPortStatus(Host, HubIndex, Port, &Status, &Change)) {
                 return;
             }
 
@@ -1447,11 +1531,12 @@ UsbCheckPort(
             }
         }
 
-        UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION + 4, Port, NULL, 0);
+        UsbPortFeature(Host, HubIndex, Port, FALSE, C_PORT_CONNECTION + 4);
         UsbSleep(10);
         UsbEnumerate(Host, HubIndex, Port,
                      (Status & PORT_STATUS_LOW_SPEED) ? SPEED_LOW :
-                     (Status & PORT_STATUS_HIGH_SPEED) ? SPEED_HIGH : SPEED_FULL,
+                     (Status & PORT_STATUS_HIGH_SPEED) ? SPEED_HIGH :
+                     (Status & PORT_STATUS_SUPER_SPEED) ? SPEED_SUPER : SPEED_FULL,
                      (Status & PORT_STATUS_ENABLE) != 0);
         Child = UsbFindDevice(Host, HubIndex, Port);
         if (Child == USB_NONE || Host->Devices[Child].Stage == USB_STAGE_READY || Try == ENUMERATION_TRIES) {
@@ -1460,13 +1545,13 @@ UsbCheckPort(
 
         UsbRemoveDevice(Host, Child);
         if (Try == ENUMERATION_TRIES / 2) {
-            UsbControl(Host, Hub, 0x23, REQUEST_CLEAR_FEATURE, PORT_POWER, Port, NULL, 0);
+            UsbPortFeature(Host, HubIndex, Port, FALSE, PORT_POWER);
             UsbSleep(POWER_CYCLE_MS);
-            UsbControl(Host, Hub, 0x23, REQUEST_SET_FEATURE, PORT_POWER, Port, NULL, 0);
+            UsbPortFeature(Host, HubIndex, Port, TRUE, PORT_POWER);
             UsbSleep(POWER_CYCLE_MS);
         }
 
-        if (!UsbPortStatus(Host, Hub, Port, &Status, &Change) || (Status & PORT_STATUS_CONNECTION) == 0) {
+        if (!UsbPortStatus(Host, HubIndex, Port, &Status, &Change) || (Status & PORT_STATUS_CONNECTION) == 0) {
             return;
         }
     }
@@ -1565,13 +1650,15 @@ UsbHostInitialize(
 
 Routine Description:
 
-    This routine brings up the host, which the user powered: it selects the
-    high speed PHY of the chip, forces host mode, sets up DMA and the FIFOs,
-    powers the root port, then enumerates the devices behind it.
+    This routine brings up the host, which the user powered, then enumerates
+    the devices behind its root ports. The core: it selects the high speed
+    PHY of the chip, forces host mode, sets up DMA and the FIFOs and powers
+    the root port. An xHCI is reset and run (xhci.c).
 
 Arguments:
 
-    Host - Supplies the host, with its registers and buffer.
+    Host - Supplies the host, with its registers and buffer, and an xHCI
+        with its memory.
 
 Return Value:
 
@@ -1580,8 +1667,22 @@ Return Value:
 --*/
 
 {
+    ULONG Port;
+
     RtlZeroMemory(Host->Devices, sizeof(Host->Devices));
     RtlZeroMemory(Host->Hids, sizeof(Host->Hids));
+    if (Host->Xhci) {
+        if (!XhciInitialize(Host)) {
+            return FALSE;
+        }
+
+        for (Port = 1; Port <= Host->Xhc.Ports; Port += 1) {
+            UsbCheckPort(Host, USB_ROOT, Port);
+        }
+
+        return TRUE;
+    }
+
     if ((READ_REG(Host, GSNPSID) & 0xFFFFF000) != 0x4F542000 || !UsbResetCore(Host)) {
         return FALSE;
     }
@@ -1627,8 +1728,8 @@ UsbHostScan(
 Routine Description:
 
     This routine looks for devices that came or went: it looks at the root
-    port, and reads the status change endpoint of each hub, then looks at the
-    ports it reports.
+    ports, and reads the status change endpoint of each hub, then looks at
+    the ports it reports.
 
 Arguments:
 
@@ -1647,7 +1748,13 @@ Return Value:
     ULONG Port;
     LONG Length;
 
-    UsbCheckRoot(Host);
+    if (Host->Xhci) {
+        for (Port = 1; Port <= Host->Xhc.Ports; Port += 1) {
+            UsbCheckPort(Host, USB_ROOT, Port);
+        }
+    } else {
+        UsbCheckRoot(Host);
+    }
     for (Index = 0; Index < USB_MAXIMUM_DEVICES; Index += 1) {
         Hub = &Host->Devices[Index];
         if (!Hub->Present || Hub->Ports == 0 || Hub->Stage != USB_STAGE_READY || Hub->HubEndpoint == 0) {
@@ -2076,7 +2183,7 @@ Routine Description:
 
     This routine gives a bulk endpoint of a device a free channel and lets
     the channel interrupt when it halts. A device reached through a
-    transaction translator has no pipes.
+    transaction translator, or behind an xHCI, has no pipes.
 
 Arguments:
 
@@ -2100,14 +2207,15 @@ Return Value:
 
 {
     PUSB_DEVICE Device = &Host->Devices[Index];
-    ULONG Channels = ((READ_REG(Host, GHWCFG2) >> GHWCFG2_CHANNELS_SHIFT) & 0xF) + 1;
+    ULONG Channels;
     ULONG Channel;
 
-    if (Index >= USB_MAXIMUM_DEVICES || !Device->Present || Device->TtAddress != 0 ||
+    if (Host->Xhci || Index >= USB_MAXIMUM_DEVICES || !Device->Present || Device->TtAddress != 0 ||
         Maximum == 0 || Maximum > 0x7FF) {
         return FALSE;
     }
 
+    Channels = ((READ_REG(Host, GHWCFG2) >> GHWCFG2_CHANNELS_SHIFT) & 0xF) + 1;
     for (Channel = 1; Channel < Channels && (Host->Channels & (1 << Channel)); Channel += 1) {
     }
 

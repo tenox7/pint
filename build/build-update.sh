@@ -3,7 +3,7 @@
 # an input of the port is newer, and the system disk is updated in place, keeping what
 # NT wrote on it (make-sd-image.sh -u). build-all.sh builds everything from scratch.
 #
-# Usage:  build/build-update.sh
+# Usage:  build/build-update.sh    # J jobs at once (default 8, J=1 in order), CJ compiles each (default 4)
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
 # the port's versions of NT files from their edit scripts first, so that their times count
@@ -18,15 +18,17 @@ GEN=$HOSTGEN step nethdr $R/arcfw/ported/ntos/inc $R/arcfw/ported/inc -- $K/make
 step crt $CRT -- $R/arcfw/crt/make-crt.sh
 INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/arcfw/ported/ntos/rtl $R/arcfw/ported/ntos/makefil0 $R/arcfw/ported/ntos/diskreg \
     $R/obj/libcntpr.lib -- $K/make-execlink.sh
-INSTALL=1 step hal $R/arcfw/hal $R/obj/ntoskrnl.lib $R/obj/libcntpr.lib -- $R/arcfw/hal/make-hal.sh
-for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do cstep lib /work/PRIVATE/NTOS $c -- $K/make-lib.sh $c; done
+INSTALL=1 job hal step hal $R/arcfw/hal $R/obj/ntoskrnl.lib $R/obj/libcntpr.lib -- $R/arcfw/hal/make-hal.sh
+for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do job lib/$c cstep lib /work/PRIVATE/NTOS $c -- $K/make-lib.sh $c; done
+barrier
 INSTALL=1 step osloader $R/obj/bldr.lib $R/obj/boot.lib $R/obj/bconfig.lib $R/obj/bldrrtl.lib $R/obj/libcntpr.lib \
     -- $K/make-osloader.sh
 $R/build/build-drivers.sh
 $R/build/build-user.sh
 $R/build/build-sdktools.sh
-GEN=$HOSTGEN step infs $R/tools/inf $R/arcfw/ported/windows/setup/bom $R/arcfw/ported/windows/setup/inf $R/arcfw/ported/windows/setup/localinf \
+GEN=$HOSTGEN job infs step infs $R/tools/inf $R/arcfw/ported/windows/setup/bom $R/arcfw/ported/windows/setup/inf $R/arcfw/ported/windows/setup/localinf \
     $R/apps/net/ncpabind -- $R/tools/inf/make-infs.sh
-step firmware $R/arcfw/arm $R/arcfw/drivers/bcmusb/usbhost.c $R/arcfw/drivers/bcmusb/usbhost.h $R/arcfw/drivers/bcmeth/bcmethhw.h $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
+job firmware step firmware $R/arcfw/arm $R/arcfw/drivers/bcmusb/usbhost.c $R/arcfw/drivers/bcmusb/usbhost.h $R/arcfw/drivers/bcmusb/xhci.c $R/arcfw/drivers/bcmusb/xhci.h $R/arcfw/drivers/bcmeth/bcmethhw.h $R/arcfw/ported/arcdos.c $R/arcfw/arcdos-inc $R/tools/fon2fw.pl $R/obj/boot.lib \
     $R/obj/bldrrtl.lib $R/obj/libcntpr.lib -- $R/build/build.sh
+barrier
 $R/sdcard/make-sd-image.sh $([ -n "${FORCE:-}" ] || echo -u)

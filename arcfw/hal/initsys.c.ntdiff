@@ -7,6 +7,13 @@
 +    Raspberry Pi 2 (the Jazz HAL's xxinithl.c, allstart.c and xxidle.s).
 =1 19 5
 =1 26 3
++
++//
++// The system on a chip, from the core's part number: the BCM2711 has the
++// Cortex-A72 cores.
++//
++
++BOOLEAN HalpBcm2711;
 =1 39 8
 =1 91 6
 +    This function provides the default bus error handling routine for the
@@ -26,6 +33,7 @@
 =1 99 15
 +    PKPRCB Prcb = PCR->Prcb;
 +
++    HalpBcm2711 = (BOOLEAN)(((PCR->ProcessorId >> 4) & 0xFFF) == HAL_CORTEX_A72);
 =1 127 2
 +
 =1 129 1
@@ -38,6 +46,7 @@
 =1 230 3
 +    }
 +
++    HalpInitializePCIExpress(LoaderBlock);
 +    return HalpInitializeDisplay1(LoaderBlock);
 +}
 +

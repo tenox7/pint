@@ -6,14 +6,15 @@ Module Name:
 
 Abstract:
 
-    The USB host of the BCM2835, shared by the firmware's keyboard and the
-    keyboard and pointer port driver: the Synopsys DesignWare OTG core, the
-    hubs and devices behind its root port, and the keyboards and pointers of
-    the HID class among them.
+    The USB host shared by the firmware's keyboard and the keyboard and
+    pointer port driver: the Synopsys DesignWare OTG core of the BCM2835, or
+    an xHCI (xhci.c), the hubs and devices behind its root ports, and the
+    keyboards and pointers of the HID class among them.
 
     The user of the host supplies the stall and sleep routines, a free
     running clock and the counts of it in a millisecond, the registers and a
-    buffer the core can reach with its bus address.
+    buffer the host can reach with its bus address, and for an xHCI its
+    memory (XHCI_MEMORY_SIZE, page aligned) with its bus address.
 
 --*/
 
@@ -33,6 +34,7 @@ Abstract:
 #define SPEED_HIGH              0
 #define SPEED_FULL              1
 #define SPEED_LOW               2
+#define SPEED_SUPER             3
 
 //
 // The kinds of input a HID interface gives.
@@ -63,9 +65,10 @@ Abstract:
 #define XFER_ERROR              (-3)
 
 //
-// A device behind the root port: its address is its index plus one. A full
-// or low speed device behind a high speed hub is reached through the
-// transaction translator of that hub's port.
+// A device behind a root port: on the core its address is its index plus
+// one, and a full or low speed device behind a high speed hub is reached
+// through the transaction translator of that hub's port; on an xHCI it has
+// a device slot, and the controller gives it its address.
 //
 
 typedef struct _USB_DEVICE {
@@ -77,10 +80,11 @@ typedef struct _USB_DEVICE {
     UCHAR Depth;
     UCHAR TtAddress;
     UCHAR TtPort;
-    UCHAR ControlMaximum;
+    UCHAR Slot;
     UCHAR Class;
     UCHAR Stage;
     UCHAR Kinds;
+    USHORT ControlMaximum;
     USHORT Vendor;
     USHORT Product;
     ULONG Interrupt;
@@ -92,6 +96,7 @@ typedef struct _USB_DEVICE {
     UCHAR Ports;
     UCHAR HubEndpoint;
     UCHAR HubToggle;
+    UCHAR HubInterval;
     USHORT HubMaximum;
 } USB_DEVICE, *PUSB_DEVICE;
 
@@ -163,9 +168,70 @@ typedef struct _USB_POINTER {
 } USB_POINTER, *PUSB_POINTER;
 
 //
-// The host: the frame interval it set for the speed of the root port, in
-// clocks of the PHY, with the one the core came out of reset with and the
-// frames counted in a millisecond with each (which the boot menu shows).
+// The xHCI: a ring of transfer request blocks, of the command or event ring
+// or of an endpoint of a device slot, with the TRB it fills next (the event
+// ring: reads next) and its cycle bit. The transfer an endpoint has queued
+// (one at a time) ends at its last TRB, after the data stage TRB of a
+// control transfer, whose short packet is reported first; an interrupt
+// endpoint's data goes to a buffer of its own.
+//
+
+#define XHCI_RING_TRBS          16
+#define XHCI_EVENT_TRBS         64
+#define XHCI_RINGS              (2 * USB_MAXIMUM_DEVICES + USB_MAXIMUM_HIDS)
+#define XHCI_SCRATCHPADS        32
+#define XHCI_MEMORY_SIZE        (0x10000 + XHCI_SCRATCHPADS * 0x1000)
+
+typedef struct _XHCI_RING {
+    volatile ULONG *Trbs;
+    ULONG Address;
+    PUCHAR Data;
+    ULONG DataAddress;
+    USHORT Maximum;
+    UCHAR Slot;
+    UCHAR Endpoint;
+    UCHAR Enqueue;
+    UCHAR Cycle;
+    BOOLEAN Pending;
+    BOOLEAN Done;
+    UCHAR Code;
+    UCHAR DataCode;
+    ULONG Residual;
+    ULONG DataResidual;
+    ULONG DataTrb;
+    ULONG LastTrb;
+} XHCI_RING, *PXHCI_RING;
+
+//
+// The xHCI: the offsets of its register sets, its root ports (a bit for
+// each USB 3 port), its device slots, the size of its contexts, and the
+// completion of the last command.
+//
+
+typedef struct _XHCI_CONTROLLER {
+    ULONG Version;
+    ULONG Operational;
+    ULONG Runtime;
+    ULONG Doorbells;
+    ULONG ContextSize;
+    ULONG Usb3Ports;
+    UCHAR Ports;
+    UCHAR Slots;
+    UCHAR Scratchpads;
+    BOOLEAN CommandDone;
+    UCHAR CommandCode;
+    UCHAR CommandSlot;
+    ULONG CommandTrb;
+    XHCI_RING Command;
+    XHCI_RING Event;
+    XHCI_RING Rings[XHCI_RINGS];
+} XHCI_CONTROLLER, *PXHCI_CONTROLLER;
+
+//
+// The host. The core: the frame interval it set for the speed of the root
+// port, in clocks of the PHY, with the one the core came out of reset with
+// and the frames counted in a millisecond with each (which the boot menu
+// shows). An xHCI: its memory and the state of its rings.
 //
 
 typedef struct _USB_HOST {
@@ -173,6 +239,10 @@ typedef struct _USB_HOST {
     PUCHAR Buffer;
     ULONG BufferAddress;
     ULONG ClockRate;
+    BOOLEAN Xhci;
+    PUCHAR Memory;
+    ULONG MemoryAddress;
+    XHCI_CONTROLLER Xhc;
     UCHAR RootSpeed;
     ULONG Interrupt;
     ULONG FrameInterval;

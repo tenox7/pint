@@ -13,7 +13,7 @@ NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/gen/error.h" ] || { echo "make-execlink: build the tools first (tools/make-tools.sh)"; exit 1; }
 [ -f "$NT35/RASPI/obj/gen/ksarm.h" ] && [ -f "$NT35/RASPI/obj/libcntpr.lib" ] || { echo "make-execlink: build ksarm.h and the C run-time first (make-ksarm.sh, ../crt/make-crt.sh)"; exit 1; }
 
-docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
+docker run --rm -e CJ="${CJ:-4}" -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -38,15 +38,22 @@ fail=0
 echo ">> compiling the ARM kernel layer"
 bash gensrv.sh $DIR/gen > /dev/null || { echo "  GENSRV FAIL"; exit 1; }
 for s in ke/*.asm ex/*.asm $DIR/gen/sysstubs.asm $DIR/gen/systable.asm; do
-  ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS -I$O/gen $KINCS || fail=$((fail+1))
+  par ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS -I$O/gen $KINCS
 done
 for s in rtl/debugstb.asm rtl/xcptmisc.asm rtl/xxcaptur.asm; do
-  ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS $(cdefs RTL) -I$O/gen $KINCS || fail=$((fail+1))
+  par ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS $(cdefs RTL) -I$O/gen $KINCS
 done
+# one ARM C source of KE, and one ARM source of a component (SUBSYS:file), compiled by the
+# pool of msvc.sh (par, pwait)
+kec() { local c=$1 b=$(basename ${1%.c}); ntsrc $c $DIR/src/$b.c && ntcc $DIR/arch/$b.obj $DIR/src/$b.c $MODE $DEFS $(cdefs KE) $COMMON; }
+archc() {
+  local S=${1%%:*} f=${1#*:}; local s=$(echo $S | tr A-Z a-z) b=$(basename "${f%.*}" | tr A-Z a-z)
+  [ -f $f ] || { echo "   no source $f"; return 1; }
+  ntsrc $f $DIR/src/arch_${s}_$b.c && ntcc $DIR/arch/arch_${s}_$b.obj $DIR/src/arch_${s}_$b.c $MODE $DEFS $(cdefs $S) -I/tmp/f/$s $COMMON
+}
 for c in ke/kearm.c ke/initkr.c ke/thredini.c ke/timindex.c ke/clock.c ke/tbarm.c ke/trapc.c ke/exceptn.c \
          ke/buserror.c ke/dmpstate.c ke/mpipi.c ke/apcuser.c; do
-  b=$(basename ${c%.c})
-  ntsrc $c $DIR/src/$b.c && ntcc $DIR/arch/$b.obj $DIR/src/$b.c $MODE $DEFS $(cdefs KE) $COMMON || fail=$((fail+1))
+  par kec $c
 done
 # The ARM sources of the components (their ARM_SOURCES): ports of the MIPS ones, and
 # the machine-neutral C NT keeps in its MIPS and Alpha directories.
@@ -60,26 +67,22 @@ for e in EX:/work/PRIVATE/NTOS/EX/MIPS/SPLOCKS.C EX:/work/PRIVATE/NTOS/EX/MIPS/P
          KD:kd/kdtrap.c KD:kd/kdcpuapi.c RTL:/work/PRIVATE/NTOS/RTL/MIPS/DEBUG.C KE:/work/PRIVATE/NTOS/KE/MIPS/FLUSH.C \
          KE:/work/PRIVATE/NTOS/KE/MIPS/XXFLSHTB.C KE:ke/intobj.c PS:ps/psctxarm.c \
          RTL:rtl/context.c RTL:rtl/largeint.c RTL:rtl/movemem.c RTL:rtl/exdsptch.c RTL:rtl/vunwind.c RTL:rtl/chandler.c RTL:rtl/getcalr.c; do
-  S=${e%%:*}; f=${e#*:}; s=$(echo $S | tr A-Z a-z); b=$(basename "${f%.*}" | tr A-Z a-z)
-  [ -f $f ] || { echo "   no source $f"; fail=$((fail+1)); continue; }
-  ntsrc $f $DIR/src/arch_${s}_$b.c && ntcc $DIR/arch/arch_${s}_$b.obj $DIR/src/arch_${s}_$b.c $MODE $DEFS $(cdefs $S) -I/tmp/f/$s $COMMON || fail=$((fail+1))
+  par archc $e
 done
+pwait; fail=$((fail+PARFAIL))
 
 # -------- 2. the portable KE, the executive, INIT and lsakrnlp.lib (LSA\CLIENT\KERNEL) --------
 echo ">> compiling the portable kernel and executive"
-n=0
+# one source of a component of the executive (or of the LSA, s lsa), compiled by the pool
+exec_c() { local f=$1 b=$(basename "${1%.[Cc]}" | tr A-Z a-z); ntsrc $f $DIR/src/e_${s}_$b.c && ntcc $DIR/exec/e_${s}_$b.obj $DIR/src/e_${s}_$b.c $MODE $DEFS $CD -I/tmp/f/$s $COMMON; }
+lsa_c() { local f=$1 b=$(basename "${1%.[Cc]}" | tr A-Z a-z); ntsrc $f $DIR/src/e_lsa_$b.c && ntcc $DIR/exec/e_lsa_$b.obj $DIR/src/e_lsa_$b.c $MODE $DEFS -I/tmp/f/lsa $COMMON; }
 for S in $SUBSYS; do
   s=$(echo $S | tr A-Z a-z)
   CD=$(cdefs $S)
-  for f in $(bash srclist.sh $S); do
-    b=$(basename "${f%.[Cc]}" | tr A-Z a-z)
-    ntsrc $f $DIR/src/e_${s}_$b.c && ntcc $DIR/exec/e_${s}_$b.obj $DIR/src/e_${s}_$b.c $MODE $DEFS $CD -I/tmp/f/$s $COMMON && n=$((n+1)) || fail=$((fail+1))
-  done
+  for f in $(bash srclist.sh $S); do par exec_c $f; done
 done
-for f in $(bash srclist.sh CLIENT/KERNEL /work/PRIVATE/LSA); do
-  b=$(basename "${f%.[Cc]}" | tr A-Z a-z)
-  ntsrc $f $DIR/src/e_lsa_$b.c && ntcc $DIR/exec/e_lsa_$b.obj $DIR/src/e_lsa_$b.c $MODE $DEFS -I/tmp/f/lsa $COMMON && n=$((n+1)) || fail=$((fail+1))
-done
+for f in $(bash srclist.sh CLIENT/KERNEL /work/PRIVATE/LSA); do par lsa_c $f; done
+pwait; n=$PAROK; fail=$((fail+PARFAIL))
 echo "   $n executive objects, $fail failed"
 [ $fail -eq 0 ] || exit 1
 ntlib $DIR/exec.lib $DIR/exec/*.obj || exit 1

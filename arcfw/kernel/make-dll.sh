@@ -19,7 +19,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-dll.sh COMPONENT}
 
-docker run --rm -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" -e IMPLIB="${IMPLIB:-0}" \
+docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" -e IMPLIB="${IMPLIB:-0}" \
     -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -94,14 +94,17 @@ srcs=$(bash srclist.sh $COMP $ROOT "(c|cxx|cpp)")
 # the directories of the relative includes of the sources, last
 INCS="$INCS $(bash relinc.sh $INCS $srcs)"
 arm=$K/$(echo $COMP | tr / _ | tr A-Z a-z).arm; [ -f $arm ] || arm=$(bash portdir.sh $D)/sources.arm
-for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$(dirname $arm)/&|" ); do
-  b=$(basename "${f%.*}" | tr A-Z a-z)
+# one source, compiled by the pool of msvc.sh (par, pwait)
+one() {
+  local f=$1 b=$(basename "${1%.*}" | tr A-Z a-z)
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I$O/gen $INCS ;;
   *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) ntsrc $f $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $DEFS $(srcinc $f) $INCS ;;
   *) ntsrc $f $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $DEFS $(srcinc $f) $INCS ;;
-  esac && n=$((n+1)) || fail=$((fail+1))
-done
+  esac
+}
+for f in $srcs $( [ -f $arm ] && grep -v "^#" $arm | sed "s|^[^/]|$(dirname $arm)/&|" ); do par one $f; done
+pwait; n=$((n+PAROK)); fail=$((fail+PARFAIL))
 echo "   $n compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
 # the objects as those of its directory, which another image links (..\imagehlp\obj\*\map.obj

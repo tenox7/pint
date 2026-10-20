@@ -12,4 +12,5 @@ DLLDEF=bcmusb.def
 
 SOURCES=bcmusb.c \
         usbhost.c \
+        xhci.c \
         bcmusb.rc

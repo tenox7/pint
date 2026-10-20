@@ -5,7 +5,7 @@
 # of the NT tree, the help files of the programs and the setup aid of a developer install
 # (arcfw/ported/oak/registry.ini, the program groups in \WINNT\IDW). FAT16 because both
 # the GPU firmware and NT 3.5 read it.
-# Flash it for a real Pi 2, or attach it in QEMU with -drive if=sd. With -u the disk of
+# Flash it for a real Pi 2, 3 or 4, or attach it in QEMU with -drive if=sd. With -u the disk of
 # the last build is updated in place, keeping what NT wrote on it: the files built since
 # go in (a new disk when the hives changed).
 #
@@ -28,8 +28,14 @@ need docker
 [[ -f ../obj/gen/hives/SYSTEM ]] || { echo "missing the hives - build them first: (cd ../tools/hive && ./make-hives.sh)"; exit 1; }
 mkdir -p ../obj/stamp
 
+mkdir -p "$FWCACHE"
+base="https://raw.githubusercontent.com/raspberrypi/firmware/stable/boot"
+for f in bootcode.bin start.elf fixup.dat bcm2709-rpi-2-b.dtb start4.elf fixup4.dat; do
+  [[ -s "$FWCACHE/$f" ]] || { echo ">> fetching $f"; curl -fsSL -o "$FWCACHE/$f" "$base/$f"; }
+done
+
 if [[ "${1:-}" = -u && -f "$IMG" && -f "$STAMP" && -z "$(find ../obj/gen/hives ../arcfw/ported/oak -newer "$STAMP" -print -quit)" ]]; then
-  new=$(cd .. && find sdcard/root sdcard/config.txt obj/arcfw.bin -type f -newer obj/stamp/sd-image)
+  new=$(cd .. && find sdcard/root sdcard/config.txt sdcard/firmware obj/arcfw.bin -type f -newer obj/stamp/sd-image)
   echo ">> updating $IMG: $(echo $new | wc -w | tr -d ' ') files"
   [[ -z "$new" ]] || docker run --rm -v "$ROOT":/work -w /work --entrypoint bash tenox7/msvc-arm32 -c '
 set -e
@@ -44,18 +50,12 @@ done' _ $new
   exit 0
 fi
 
-mkdir -p "$FWCACHE"
-base="https://raw.githubusercontent.com/raspberrypi/firmware/stable/boot"
-for f in bootcode.bin start.elf fixup.dat bcm2709-rpi-2-b.dtb; do
-  [[ -s "$FWCACHE/$f" ]] || { echo ">> fetching $f"; curl -fsSL -o "$FWCACHE/$f" "$base/$f"; }
-done
-
 echo ">> assembling $IMG (MBR + FAT16: firmware, config.txt, arcfw.bin, root/)"
 docker run --rm -v "$ROOT":/work -v "$ROOT/../PRIVATE":/nt/PRIVATE:ro -v "$ROOT/../PUBLIC":/nt/PUBLIC:ro -w /work/sdcard -e IMG="$IMG" -e SIZE_MB="$SIZE_MB" \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -e
 rm -rf /tmp/sd && mkdir -p /tmp/sd
-cp firmware/bootcode.bin firmware/start.elf firmware/fixup.dat firmware/bcm2709-rpi-2-b.dtb /tmp/sd/
+cp firmware/bootcode.bin firmware/start.elf firmware/fixup.dat firmware/bcm2709-rpi-2-b.dtb firmware/start4.elf firmware/fixup4.dat /tmp/sd/
 cp config.txt ../obj/arcfw.bin /tmp/sd/
 cp -r root/* /tmp/sd/
 mkdir -p /tmp/sd/WINNT/System /tmp/sd/WINNT/System32 /tmp/sd/TMP

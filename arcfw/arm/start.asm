@@ -14,8 +14,8 @@
 ;    wait, and the first one leaves the hypervisor mode for the supervisor mode,
 ;    allows unaligned accesses, every IT instruction and the CP15 barriers (an
 ;    ARMv8 core, the Cortex-A53, can disable both), takes exceptions in the
-;    Thumb state, enables the floating point unit, sets up its stack and calls
-;    the firmware.
+;    Thumb state through VBAR, enables the floating point unit, sets up its
+;    stack and calls the firmware.
 ;
 ;--
 
@@ -57,6 +57,7 @@ FwStart1
         bic     r0, r0, #(1 << 7)               ; every IT instruction (ITD),
         orr     r0, r0, #(1 << 5)               ; the CP15 barriers (CP15BEN),
         orr     r0, r0, #(1 << 30)              ; exceptions taken in Thumb state
+        bic     r0, r0, #(1 << 13)              ; through VBAR (low vectors)
         mcr     p15, 0, r0, c1, c0, 0
         isb
 

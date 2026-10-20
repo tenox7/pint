@@ -17,7 +17,7 @@ NT35="$(cd ../../.. && pwd)"
 COMP=${1:?usage: make-exe.sh COMPONENT PROGRAM}
 PROG=${2:?usage: make-exe.sh COMPONENT PROGRAM}
 
-docker run --rm -e COMP="$COMP" -e PROG="$PROG" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" \
+docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e PROG="$PROG" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" \
     -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -71,8 +71,9 @@ comp() {
   ntsrc $2 $DIR/src/$b.$x && ntcc $1/$b.obj $DIR/src/$b.$x $DEFS $INCS
 }
 o=$DIR/lobj; [ "$TTYPE" = PROGRAM ] && o=$DIR/obj
-for f in $prog; do comp $DIR/obj $f || exit 1; done
-for f in $srcs; do comp $o $f || exit 1; done
+for f in $prog; do par comp $DIR/obj $f; done
+for f in $srcs; do par comp $o $f; done
+pwait; [ $PARFAIL -eq 0 ] || exit 1
 
 # The objects of UMRES and UMOBJS, the UMLIBS, the libraries of the UMTYPE, the TARGETLIBS
 # of a PROGRAM and the LINKLIBS, in the order of makefile.def (srvmgr links crtdll.lib after

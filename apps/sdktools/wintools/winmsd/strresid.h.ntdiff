@@ -3,4 +3,5 @@
 +#define IDS_PROCESSOR_ARM_CORTEX_A7                 (  64 )
 =1 96 84
 +#define IDS_PROCESSOR_ARM_CORTEX_A53                ( 145 )
++#define IDS_PROCESSOR_ARM_CORTEX_A72                ( 146 )
 =1 180 186

@@ -4,10 +4,15 @@
 +    hardware dependent: the adapter objects, bus address translation and bus
 +    data of the Raspberry Pi 2 (the Jazz HAL's jxhwsup.c).
 +
-+    The only bus is the Internal bus. Bus master devices reach memory through
-+    the VideoCore bus, which sees SDRAM at BUS_MEMORY_BASE plus the physical
-+    address; there is no I/O map, so a transfer maps directly and needs no map
-+    registers. There is no system (slave) DMA controller in the NT sense.
++    The buses are the Internal bus and, on a BCM2711 whose firmware brought up
++    its PCI Express link, the PCI bus (pcisup.c, pcibus.c). Bus master devices
++    of the Internal bus reach memory through the VideoCore bus, which sees
++    SDRAM at BUS_MEMORY_BASE plus the physical address, those of the PCI bus at
++    the physical address (the inbound window of the root complex); there is no
++    I/O map, so a transfer maps directly and needs no map registers. The PCI
++    memory is the HAL's window, which drivers use without mapping it, as the
++    QVAs of the Alpha HALs. There is no system (slave) DMA controller in the NT
++    sense.
 =1 18 3
 +    Kernel mode
 =1 25 4
@@ -30,7 +35,9 @@
 =1 755 16
 =1 1047 1
 +
-+    if (DeviceDescription->InterfaceType != Internal || !DeviceDescription->Master) {
++    if ((DeviceDescription->InterfaceType != Internal &&
++         (DeviceDescription->InterfaceType != PCIBus || !HalpPCIPresent)) ||
++        !DeviceDescription->Master) {
 =1 557 3
 +    AdapterObject = ExAllocatePool(NonPagedPool, sizeof(ADAPTER_OBJECT));
 =1 1928 1
@@ -42,6 +49,7 @@
 +    AdapterObject->ScatterGather = DeviceDescription->ScatterGather;
 +    AdapterObject->MapRegistersPerChannel = BYTES_TO_PAGES(DeviceDescription->MaximumLength) + 1;
 +    AdapterObject->MapRegisterBase = AdapterObject;
++    AdapterObject->BusMemoryBase = DeviceDescription->InterfaceType == PCIBus ? 0 : BUS_MEMORY_BASE;
 +    KeInitializeDeviceQueue(&AdapterObject->ChannelWaitQueue);
 +
 +    *NumberOfMapRegisters = AdapterObject->MapRegistersPerChannel;
@@ -123,7 +131,7 @@
 +    PULONG Next;
 +    ULONG Offset;
 +    ULONG Mapped;
-=2 633 2
++
 +    UNREFERENCED_PARAMETER(MapRegisterBase);
 +    UNREFERENCED_PARAMETER(WriteToDevice);
 +
@@ -141,7 +149,7 @@
 +    }
 +
 +    LogicalAddress.HighPart = 0;
-+    LogicalAddress.LowPart = BUS_MEMORY_BASE | ((PageFrame[0] << PAGE_SHIFT) + Offset);
++    LogicalAddress.LowPart = AdapterObject->BusMemoryBase | ((PageFrame[0] << PAGE_SHIFT) + Offset);
 +    return LogicalAddress;
 +}
 +
@@ -180,7 +188,6 @@
 +    PHYSICAL_ADDRESS Physical;
 +    PVOID VirtualAddress;
 +    PVOID Uncached;
-=2 633 2
 +
 +    Limit.HighPart = 0;
 +    Limit.LowPart = BUS_MEMORY_LIMIT;
@@ -198,7 +205,7 @@
 +    }
 +
 +    LogicalAddress->HighPart = 0;
-+    LogicalAddress->LowPart = BUS_MEMORY_BASE | Physical.LowPart;
++    LogicalAddress->LowPart = AdapterObject->BusMemoryBase | Physical.LowPart;
 +    return VirtualAddress;
 +}
 +
@@ -212,12 +219,11 @@
 +    VirtualAddress - Supplies the virtual address of the common buffer.
 =1 692 10
 +    PHYSICAL_ADDRESS Physical;
-=2 633 2
 +
 +    if (!CacheEnabled) {
 +        MmUnmapIoSpace(VirtualAddress, Length);
 +        Physical.HighPart = 0;
-+        Physical.LowPart = LogicalAddress.LowPart & ~BUS_MEMORY_BASE;
++        Physical.LowPart = LogicalAddress.LowPart & ~AdapterObject->BusMemoryBase;
 +        VirtualAddress = (PVOID)(KSEG0_BASE | Physical.LowPart);
 +    }
 =2 757 2
@@ -247,6 +253,9 @@
 +
 =1 885 15
 +    MmMapIoSpace. The Internal bus addresses are system physical addresses.
++    The memory of the PCI bus translates to the virtual address of the HAL's
++    window, with the address space returned as I/O space (1), so that the
++    caller uses it as it is and does not call MmMapIoSpace.
 =1 901 26
 +    UNREFERENCED_PARAMETER(BusNumber);
 +
@@ -257,19 +266,23 @@
 +        return TRUE;
 +    }
 +
++    if (InterfaceType == PCIBus && HalpPCIPresent && *AddressSpace == 0 && BusAddress.HighPart == 0 &&
++        BusAddress.LowPart - HAL_PCI_MEMORY_BUS < HAL_PCI_MEMORY_LENGTH) {
++        *AddressSpace = 1;
++        TranslatedAddress->LowPart = HAL_PCI_MEMORY_VIRTUAL + (BusAddress.LowPart - HAL_PCI_MEMORY_BUS);
++        return TRUE;
++    }
++
 =1 949 2 -4
 =2 4175 3
 =1 2058 9
 =1 747 5
-+    The function returns the bus data for a slot or address. The Internal bus
-+    has no configuration data.
++    The function returns the bus data for a slot or address: the configuration
++    space of a PCI slot. The Internal bus has no configuration data.
 =1 2084 8
-+    UNREFERENCED_PARAMETER(BusDataType);
-+    UNREFERENCED_PARAMETER(BusNumber);
-+    UNREFERENCED_PARAMETER(SlotNumber);
-+    UNREFERENCED_PARAMETER(Buffer);
-+    UNREFERENCED_PARAMETER(Offset);
-=2 708 1
++    if (BusDataType == PCIConfiguration) {
++        return HalpGetPCIData(BusNumber, SlotNumber, Buffer, Offset, Length);
++    }
 +
 =2 3548 4
 =1 2105 7
@@ -281,15 +294,12 @@
 =1 2168 3
 =1 2131 8
 =1 747 5
-+    The function sets the bus data for a slot or address. The Internal bus
-+    has no configuration data.
++    The function sets the bus data for a slot or address: the configuration
++    space of a PCI slot. The Internal bus has no configuration data.
 =1 2084 8
-+    UNREFERENCED_PARAMETER(BusDataType);
-+    UNREFERENCED_PARAMETER(BusNumber);
-+    UNREFERENCED_PARAMETER(SlotNumber);
-+    UNREFERENCED_PARAMETER(Buffer);
-+    UNREFERENCED_PARAMETER(Offset);
-=2 708 1
++    if (BusDataType == PCIConfiguration) {
++        return HalpSetPCIData(BusNumber, SlotNumber, Buffer, Offset, Length);
++    }
 +
 =2 3548 11
 =1 747 5
@@ -301,28 +311,29 @@
 =1 2196 11
 =1 747 5
 =1 2211 5
-+    This HAL doesn't support any buses which support HalAssignSlotResources.
++    The PCI bus is the only bus which supports HalAssignSlotResources: the
++    firmware assigned the resources of its devices (HalpAssignPCISlotResources).
 =1 150 3
-+    STATUS_NOT_SUPPORTED
++    The status of the assignment, STATUS_NOT_SUPPORTED for the other buses.
 =1 158 4
-+    UNREFERENCED_PARAMETER(RegistryPath);
-+    UNREFERENCED_PARAMETER(DriverClassName);
-+    UNREFERENCED_PARAMETER(DriverObject);
-+    UNREFERENCED_PARAMETER(DeviceObject);
-+    UNREFERENCED_PARAMETER(BusType);
-+    UNREFERENCED_PARAMETER(BusNumber);
-+    UNREFERENCED_PARAMETER(SlotNumber);
-+    UNREFERENCED_PARAMETER(AllocatedResources);
-=1 2242 2
++    if (BusType != PCIBus || !HalpPCIPresent) {
+=1 2243 1 4
++    }
++
++    return HalpAssignPCISlotResources(BusNumber, RegistryPath, DriverClassName, DriverObject,
++                                      DeviceObject, SlotNumber, AllocatedResources);
 +}
 +
 =1 2247 4
 =1 747 5
 =1 2255 1
 +    it's corrisponding bus requirements. The Internal bus can support
-+    anything a device may ask for.
++    anything a device may ask for; the PCI bus has the limits of the root
++    complex (HalpAdjustPCIResourceList).
 =1 2257 7
-+    STATUS_SUCCESS
++    STATUS_SUCCESS, or the status of the adjustment of a PCI list.
 =1 158 4
-+    UNREFERENCED_PARAMETER(pResourceList);
++    if ((*pResourceList)->InterfaceType == PCIBus && HalpPCIPresent) {
++        return HalpAdjustPCIResourceList((*pResourceList)->BusNumber, pResourceList);
++    }
 =1 2273 3

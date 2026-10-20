@@ -6,14 +6,16 @@ Module Name:
 
 Abstract:
 
-    This is the keyboard and pointer port driver of the Raspberry Pi 2. Its
+    This is the keyboard and pointer port driver of the Raspberry Pi. Its
     keyboards and pointers are USB devices of the HID class behind the root
     port of the USB host of the BCM2835 (usbhost.c), a Synopsys DesignWare
     OTG core: the board's LAN9514 hub (or that of the emulator), and the
     hubs, keyboards, mice and KVMs plugged into its ports. The firmware
     describes the host as the keyboard and the pointer controller of the
     internal bus, with its registers, its interrupt and the VideoCore mailbox
-    through which it is powered.
+    through which it is powered. On a Raspberry Pi 4 Model B or 400 the host
+    is the USB 3 host of the USB-A ports, an xHCI (xhci.c) on the PCI bus,
+    found in the configuration space of its slots.
 
     The driver powers and brings up the host, which finds the devices, then a
     system thread polls the interrupt endpoints of the keyboards and pointers,
@@ -56,11 +58,21 @@ Environment:
 
 //
 // The common buffer: the buffer of the host, then the mailbox property
-// buffer.
+// buffer; that of an xHCI starts with the memory of the controller.
 //
 
 #define PROPERTY_OFFSET         USB_BUFFER_SIZE
 #define COMMON_BUFFER_SIZE      PAGE_SIZE
+#define XHCI_COMMON_BUFFER_SIZE (XHCI_MEMORY_SIZE + PAGE_SIZE)
+
+//
+// The class of an xHCI in the configuration space of its PCI slot: a serial
+// bus controller, USB, with the programming interface of an xHCI.
+//
+
+#define PCI_CLASS_SERIAL_BUS    0x0C
+#define PCI_SUBCLASS_USB        0x03
+#define PCI_INTERFACE_XHCI      0x30
 
 #define TIMEOUT_US              1000000
 #define POLL_INTERVAL_MS        8
@@ -900,6 +912,7 @@ UsbInternalDeviceControl(
 
 typedef struct _CONFIGURATION {
     BOOLEAN Found;
+    INTERFACE_TYPE Interface;
     ULONG BusNumber;
     PHYSICAL_ADDRESS Memory[2];
     ULONG MemoryLength[2];
@@ -943,14 +956,82 @@ UsbConfigurationCallout(
 
     if (Memory == 2) {
         Configuration->Found = TRUE;
+        Configuration->Interface = BusType;
         Configuration->BusNumber = BusNumber;
     }
 
     return STATUS_SUCCESS;
 }
 
+//
+// The xHCI on the PCI bus: the first slot of the configuration space with the
+// class of one, whose memory (the registers) the firmware assigned, reported
+// as the driver's (HalAssignSlotResources).
+//
+
+static BOOLEAN
+UsbFindXhci(
+    IN PDRIVER_OBJECT DriverObject,
+    IN PUNICODE_STRING RegistryPath,
+    OUT PCONFIGURATION Configuration
+    )
+{
+    PCI_COMMON_CONFIG Pci;
+    PCI_SLOT_NUMBER Slot;
+    PCM_RESOURCE_LIST Resources;
+    PCM_PARTIAL_RESOURCE_DESCRIPTOR Partial;
+    ULONG Bus;
+    ULONG Index;
+
+    Slot.u.AsULONG = 0;
+    for (Bus = 0; ; Bus += 1) {
+        for (Index = 0; Index < PCI_MAX_DEVICES * PCI_MAX_FUNCTION; Index += 1) {
+            Slot.u.bits.DeviceNumber = Index / PCI_MAX_FUNCTION;
+            Slot.u.bits.FunctionNumber = Index % PCI_MAX_FUNCTION;
+            if (HalGetBusData(PCIConfiguration, Bus, Slot.u.AsULONG, &Pci, PCI_COMMON_HDR_LENGTH) == 0) {
+                return FALSE;
+            }
+
+            if (Pci.VendorID != PCI_INVALID_VENDORID && Pci.BaseClass == PCI_CLASS_SERIAL_BUS &&
+                Pci.SubClass == PCI_SUBCLASS_USB && Pci.ProgIf == PCI_INTERFACE_XHCI) {
+                break;
+            }
+        }
+
+        if (Index < PCI_MAX_DEVICES * PCI_MAX_FUNCTION) {
+            break;
+        }
+    }
+
+    if (!NT_SUCCESS(HalAssignSlotResources(RegistryPath, NULL, DriverObject, NULL, PCIBus, Bus,
+                                           Slot.u.AsULONG, &Resources))) {
+        return FALSE;
+    }
+
+    Partial = Resources->List[0].PartialResourceList.PartialDescriptors;
+    for (Index = 0; Index < Resources->List[0].PartialResourceList.Count; Index += 1, Partial += 1) {
+        if (Partial->Type == CmResourceTypeMemory) {
+            Configuration->Found = TRUE;
+            Configuration->Interface = PCIBus;
+            Configuration->BusNumber = Bus;
+            Configuration->Memory[0] = Partial->u.Memory.Start;
+            Configuration->MemoryLength[0] = Partial->u.Memory.Length;
+            break;
+        }
+    }
+
+    ExFreePool(Resources);
+    return Configuration->Found;
+}
+
+//
+// Map registers: those of the PCI bus are in the HAL's window already, at the
+// address the translation gives (with the address space of I/O space).
+//
+
 static PVOID
 UsbMapRegisters(
+    IN INTERFACE_TYPE Interface,
     IN ULONG BusNumber,
     IN PHYSICAL_ADDRESS Address,
     IN ULONG Length
@@ -959,8 +1040,12 @@ UsbMapRegisters(
     PHYSICAL_ADDRESS Translated;
     ULONG AddressSpace = 0;
 
-    if (!HalTranslateBusAddress(Internal, BusNumber, Address, &AddressSpace, &Translated)) {
+    if (!HalTranslateBusAddress(Interface, BusNumber, Address, &AddressSpace, &Translated)) {
         return NULL;
+    }
+
+    if (AddressSpace != 0) {
+        return (PVOID)Translated.LowPart;
     }
 
     return MmMapIoSpace(Translated, Length, FALSE);
@@ -1002,6 +1087,7 @@ Return Value:
     DEVICE_DESCRIPTION Description;
     PADAPTER_OBJECT Adapter;
     PHYSICAL_ADDRESS Logical;
+    PUCHAR Buffer = NULL;
     LARGE_INTEGER Frequency;
     ULONG MapRegisters;
     UNICODE_STRING DeviceName;
@@ -1011,8 +1097,11 @@ Return Value:
     NTSTATUS Status;
 
     RtlZeroMemory(&Configuration, sizeof(Configuration));
-    IoQueryDeviceDescription(&Interface, NULL, &ControllerType, NULL, &PeripheralType, NULL,
-                             UsbConfigurationCallout, &Configuration);
+    if (!UsbFindXhci(DriverObject, RegistryPath, &Configuration)) {
+        IoQueryDeviceDescription(&Interface, NULL, &ControllerType, NULL, &PeripheralType, NULL,
+                                 UsbConfigurationCallout, &Configuration);
+    }
+
     if (!Configuration.Found) {
         return STATUS_NO_SUCH_DEVICE;
     }
@@ -1029,25 +1118,37 @@ Return Value:
     RtlZeroMemory(Extension, sizeof(DEVICE_EXTENSION));
     Extension->DeviceObject = DeviceObject;
 
-    Extension->Host.Registers = UsbMapRegisters(Configuration.BusNumber, Configuration.Memory[0],
-                                                Configuration.MemoryLength[0]);
-    Extension->Mailbox = UsbMapRegisters(Configuration.BusNumber, Configuration.Memory[1],
-                                         Configuration.MemoryLength[1]);
+    Extension->Host.Registers = UsbMapRegisters(Configuration.Interface, Configuration.BusNumber,
+                                                Configuration.Memory[0], Configuration.MemoryLength[0]);
+    if (Configuration.Interface == Internal) {
+        Extension->Mailbox = UsbMapRegisters(Internal, Configuration.BusNumber, Configuration.Memory[1],
+                                             Configuration.MemoryLength[1]);
+    }
 
     RtlZeroMemory(&Description, sizeof(Description));
     Description.Version = DEVICE_DESCRIPTION_VERSION;
     Description.Master = TRUE;
     Description.Dma32BitAddresses = TRUE;
-    Description.InterfaceType = Internal;
+    Description.InterfaceType = Configuration.Interface;
     Description.BusNumber = Configuration.BusNumber;
-    Description.MaximumLength = COMMON_BUFFER_SIZE;
+    Description.MaximumLength = Configuration.Interface == PCIBus ? XHCI_COMMON_BUFFER_SIZE : COMMON_BUFFER_SIZE;
     Adapter = HalGetAdapter(&Description, &MapRegisters);
     if (Adapter != NULL) {
-        Extension->Host.Buffer = HalAllocateCommonBuffer(Adapter, COMMON_BUFFER_SIZE, &Logical, FALSE);
-        Extension->Host.BufferAddress = Logical.LowPart;
+        Buffer = HalAllocateCommonBuffer(Adapter, Description.MaximumLength, &Logical, FALSE);
     }
 
-    if (Extension->Host.Registers == NULL || Extension->Mailbox == NULL || Extension->Host.Buffer == NULL ||
+    if (Buffer != NULL && Configuration.Interface == PCIBus) {
+        Extension->Host.Xhci = TRUE;
+        Extension->Host.Memory = Buffer;
+        Extension->Host.MemoryAddress = Logical.LowPart;
+        Buffer += XHCI_MEMORY_SIZE;
+        Logical.LowPart += XHCI_MEMORY_SIZE;
+    }
+
+    Extension->Host.Buffer = Buffer;
+    Extension->Host.BufferAddress = Logical.LowPart;
+    if (Extension->Host.Registers == NULL || (Configuration.Interface == Internal && Extension->Mailbox == NULL) ||
+        Extension->Host.Buffer == NULL ||
         !UsbInitializeQueue(&Extension->KeyboardQueue, sizeof(KEYBOARD_INPUT_DATA)) ||
         !UsbInitializeQueue(&Extension->MouseQueue, sizeof(MOUSE_INPUT_DATA))) {
         IoDeleteDevice(DeviceObject);
@@ -1075,7 +1176,10 @@ Return Value:
     KeQueryPerformanceCounter(&Frequency);
     Extension->Host.ClockRate = Frequency.LowPart / 1000;
     KeInitializeMutex(&Extension->HostLock, 0);
-    UsbPowerOn(Extension);
+    if (Extension->Mailbox != NULL) {
+        UsbPowerOn(Extension);
+    }
+
     if (!UsbHostInitialize(&Extension->Host)) {
         IoDeleteDevice(DeviceObject);
         return STATUS_NO_SUCH_DEVICE;

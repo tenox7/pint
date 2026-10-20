@@ -2,4 +2,5 @@
 =1 1 89
 +    MAKE_TABLE_ENTRY( ProcessorType,        PROCESSOR_ARM_CORTEX_A7               ),
 +    MAKE_TABLE_ENTRY( ProcessorType,        PROCESSOR_ARM_CORTEX_A53              ),
++    MAKE_TABLE_ENTRY( ProcessorType,        PROCESSOR_ARM_CORTEX_A72              ),
 =1 90 23

@@ -232,12 +232,14 @@
 +#define CACHED_POLICY 3                 // cached write-back
 +
 +//
-+// Physical addresses below 1 GB, including the BCM2835 peripherals and the
-+// VideoCore memory, are reached through the kernel direct map (KSEG0). The
-+// BCM2836 local peripherals, above 1 GB, are the HAL's fixed device window.
++// Physical addresses below 1 GB, memory and VideoCore memory, are reached
++// through the kernel direct map (KSEG0). The BCM2835 peripherals (at 0x3F000000
++// on the BCM2836 and BCM2837, 0xFE000000 on the BCM2711) and the per-core
++// block (0x40000000 or 0xFF800000) are the HAL's fixed device windows, above
++// the nonpaged pool.
 +//
 +
-+#define PERIPHERAL_VIRTUAL (KSEG0_BASE + 0x3F000000)
++#define PERIPHERAL_VIRTUAL 0xFEC00000
 +#define LOCAL_PERIPHERAL_VIRTUAL 0xFFD00000
 =1 1233 3
 +#endif // defined(_ARM_)

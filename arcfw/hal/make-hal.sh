@@ -11,7 +11,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../../.. && pwd)"
 [ -f "$NT35/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
 
-docker run --rm -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/hal \
+docker run --rm -e CJ="${CJ:-4}" -e INSTALL="${INSTALL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work -w /work/RASPI/arcfw/hal \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/arcfw/kernel/msvc.sh

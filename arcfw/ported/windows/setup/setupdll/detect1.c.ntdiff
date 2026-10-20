@@ -2,6 +2,7 @@
 =1 1 42
 +#define PROCESSOR_CORTEX_A7  "Cortex_A7"
 +#define PROCESSOR_CORTEX_A53 "Cortex_A53"
++#define PROCESSOR_CORTEX_A72 "Cortex_A72"
 =1 43 6
 +#define PLATFORM_ARM     "Arm"
 =1 49 199
@@ -11,8 +12,13 @@
 +
 +        case PROCESSOR_ARM_CORTEX_A53:
 +            szProcessor = PROCESSOR_CORTEX_A53;
++            break;
++
++        case PROCESSOR_ARM_CORTEX_A72:
++            szProcessor = PROCESSOR_CORTEX_A72;
 =1 246 45
 +        case PROCESSOR_ARM_CORTEX_A7:
 +        case PROCESSOR_ARM_CORTEX_A53:
++        case PROCESSOR_ARM_CORTEX_A72:
 +            szPlatform = PLATFORM_ARM;
 =1 289 719

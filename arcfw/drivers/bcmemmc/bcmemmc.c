@@ -8,7 +8,9 @@ Abstract:
 
     This is the miniport driver for the SD card on the EMMC controller (an
     Arasan SD host controller) of the BCM2835 in the Raspberry Pi 2 and 3, to
-    which the ARC firmware connects the card slot. The card is presented to
+    which the ARC firmware connects the card slot, or on the EMMC2 controller
+    of the BCM2711 in the Raspberry Pi 4 (SDHCI 3.0 too), which holds the card
+    slot of every BCM2711 board. The card is presented to
     the SCSI class drivers as a direct access device at target 0, as the ATAPI
     miniport presents IDE disks.
 
@@ -16,7 +18,8 @@ Abstract:
     with the controller registers and the VideoCore mailbox as its two memory
     ranges. Blocks move by programmed I/O through the data port, one block on
     each buffer ready interrupt. The controller's base clock is asked of the
-    VideoCore through the mailbox property channel.
+    VideoCore through the mailbox property channel; the EMMC2, 0x340000 into
+    the BCM2835 peripherals (the EMMC is at 0x300000), has a clock of its own.
 
 Environment:
 
@@ -104,6 +107,8 @@ Environment:
 #define TAG_GET_CLOCK_RATE  0x00030002
 #define TAG_GET_MAX_CLOCK_RATE 0x00030004
 #define CLOCK_EMMC          1
+#define CLOCK_EMMC2         12
+#define EMMC2_OFFSET        0x340000
 #define PROPERTY_LENGTH     8
 
 #define SECTOR_SIZE         512
@@ -119,6 +124,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     PULONG Mailbox;
     PULONG Property;
     ULONG PropertyAddress;
+    ULONG ClockId;
     ULONG BaseClock;
     ULONG WriteDelay;
     ULONG Rca;
@@ -226,7 +232,7 @@ EmmcGetClock(
     Request[2] = Tag;
     Request[3] = 2 * sizeof(ULONG);
     Request[4] = sizeof(ULONG);
-    Request[5] = CLOCK_EMMC;
+    Request[5] = DeviceExtension->ClockId;
     Request[6] = 0;
     Request[7] = 0;
     for (Index = 0; Index < PROPERTY_LENGTH; Index += 1) {
@@ -909,6 +915,11 @@ Return Value:
 
     DeviceExtension->PropertyAddress = ScsiPortConvertPhysicalAddressToUlong(
         ScsiPortGetPhysicalAddress(DeviceExtension, NULL, DeviceExtension->Property, &Length));
+    DeviceExtension->ClockId = CLOCK_EMMC;
+    if ((ScsiPortConvertPhysicalAddressToUlong(Range[0].RangeStart) & 0xFFFFFF) == EMMC2_OFFSET) {
+        DeviceExtension->ClockId = CLOCK_EMMC2;
+    }
+
     DeviceExtension->BaseClock = EmmcGetClock(DeviceExtension, TAG_GET_CLOCK_RATE);
     if (DeviceExtension->BaseClock == 0) {
         DeviceExtension->BaseClock = EmmcGetClock(DeviceExtension, TAG_GET_MAX_CLOCK_RATE);

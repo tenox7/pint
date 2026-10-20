@@ -50,7 +50,7 @@ a exception.ExceptionAddress = (PVOID) context->Pc;
 
 # ex/sysinfo.c: SystemProcessorInformation has per-machine processor types and an
 # "*** Error ***" trap for any other machine. ARM reports its core, as x86 its CPU
-# type: the part number of the MIDR (PROCESSOR_ARM_CORTEX_A7, PROCESSOR_ARM_CORTEX_A53).
+# type: the part number of the MIDR (PROCESSOR_ARM_CORTEX_A7, _A53, _A72).
 /^ *\*\*\* Error \*\*\* Processor Type not defined$/ {
 i #ifdef _ARM_
 i ProcessorInfo->ProcessorType = (PCR->ProcessorId >> 4) & 0xFFF;

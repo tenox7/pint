@@ -6,6 +6,7 @@
 =1 6 43
 +    "BCM2836-Internal Bus"
 +    "BCM2837-Internal Bus"
++    "BCM2711-Internal Bus"
 =1 50 11
 +    BCMETH
 =1 62 31

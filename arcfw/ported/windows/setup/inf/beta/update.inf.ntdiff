@@ -2,6 +2,7 @@
 =1 1 198
 +    ProcessorID_CortexA7  = Cortex_A7
 +    ProcessorID_CortexA53 = Cortex_A53
++    ProcessorID_CortexA72 = Cortex_A72
 =1 199 27
 +[FreeSpaceArm]
 =1 222 1

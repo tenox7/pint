@@ -128,14 +128,30 @@
 +ULONG
 +FwGetRelativeTime (
 =1 165 4
-+// Raspberry Pi 2 support routines: the VideoCore mailbox, the system timer,
++// Raspberry Pi support routines: the VideoCore mailbox, the system timer,
 +// the DWC2 USB host with its boot protocol keyboard, and the MMU.
 +//
++// The system on a chip follows from the core (FwSocInitialize reads the MIDR).
++// The Cortex-A7 and Cortex-A53 boards (BCM2836, BCM2837) have the BCM2835
++// peripherals at 0x3F000000 and the BCM2836 per-core block at 0x40000000. The
++// Cortex-A72 board, the Raspberry Pi 4 (BCM2711), has them at 0xFE000000 and
++// 0xFF800000 in its low peripheral mode, with its own peripherals (GENET,
++// PCIe) below them from 0xFC000000 and a GIC-400 in the per-core block.
++//
 +
-+#define PERIPHERAL_BASE         0x3F000000
++extern BOOLEAN FwBcm2711;
++extern ULONG FwPeripheralBase;
++
++#define PERIPHERAL_BASE         FwPeripheralBase
 +#define SERIAL_PORT0_BASE       (PERIPHERAL_BASE + 0x201000)
 +
-+ULONG
++VOID
++FwSocInitialize (
+=1 471 4
++FwSetScsiAdapter(
++    IN ULONG PhysicalBase,
++    IN BOOLEAN Emmc2
+=1 137 3
 +MailboxPropertyCall (
 +    IN OUT volatile ULONG *Buffer
 =1 137 3
@@ -149,6 +165,20 @@
 +    IN ULONG DeviceId,
 +    IN BOOLEAN On
 =1 137 3
++MailboxNotifyXhciReset (
++    IN ULONG DeviceAddress
+=1 477 3
++PcieInitialize (
++    OUT PULONG Registers
+=1 477 3
++FwProbeRead (
++    IN ULONG Address,
++    OUT PULONG Value
++    );
++
++extern UCHAR FwExceptionVectors[];
++
++ULONG
 +MailboxGetClockRate (
 +    IN ULONG ClockId
 =1 137 3
@@ -168,7 +198,10 @@
 =1 132 3
 +FwAddNetworkController (
 +    IN PCHAR Identifier
-=1 137 3
+=1 132 3
++FwAddPciBus (
+=1 116 3
++ULONG
 +FwGetMicroseconds (
 =1 476 4
 +UsbInitialize (

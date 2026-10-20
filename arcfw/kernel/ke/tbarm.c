@@ -21,9 +21,10 @@ Abstract:
     The kernel direct map (KSEG0: every physical address below 1 GB, with
     memory, VideoCore and device attributes) is a fixed part of every hardware
     table, like the unmapped KSEG0/KSEG1 of MIPS, and so are the HAL's device
-    window for the BCM2836 local peripherals and the second PCR page (the
-    shared user data page) at KIPCR2, like the fixed entries of the MIPS TB;
-    its read-only user alias at USPCR2 is refilled whenever it is missing.
+    windows for the BCM2835 peripherals and the per-core block and the second
+    PCR page (the shared user data page) at KIPCR2, like the fixed entries of
+    the MIPS TB; its read-only user alias at USPCR2 is refilled whenever it is
+    missing.
 
     Each process id (the MIPS PID, the ARMv7 ASID) owns one hardware
     first-level table, whose user and per-process system regions (the page
@@ -50,6 +51,8 @@ Environment:
 #define SECTION_XN          (1 << 4)
 #define SECTION_AP_PRIV_RW  (1 << 10)
 #define SECTION_TEX_NORMAL  (1 << 12)
+#define L1_SUPERSECTION     (1 << 18)
+#define SUPERSECTION_HIGH(High) ((High) << 20)
 
 #define L2_XN               0x00000001
 #define L2_SMALL            0x00000002
@@ -87,8 +90,29 @@ Environment:
 #define SHARED_SYSTEM_MEGABYTE  ((ULONG)MM_LOWEST_SYSTEM_ADDRESS >> 20)
 #define SHARED_SYSTEM_MEGABYTES (L1_ENTRIES - SHARED_SYSTEM_MEGABYTE)
 
-#define PERIPHERAL_PHYSICAL     0x3F000000
-#define LOCAL_PHYSICAL          0x40000000
+//
+// The peripherals of the system on a chip: the BCM2835 set and the per-core
+// block (which holds the GIC-400 of the BCM2711), at their physical addresses
+// on the Cortex-A7 and Cortex-A53 boards (BCM2836, BCM2837) and on the
+// Cortex-A72 one (BCM2711, in its low peripheral mode). The HAL reaches the
+// BCM2835 set through the fixed window at PERIPHERAL_VIRTUAL, above the
+// nonpaged pool, and the per-core block at LOCAL_PERIPHERAL_VIRTUAL.
+//
+// The memory of the PCI Express bus of the BCM2711 is the outbound window of
+// its root complex, at 0x6_0000_0000 in the 35-bit space of the Cortex-A72:
+// a supersection, which carries bits 35:32 of the address, maps its first
+// 16 MB at PCI_MEMORY_VIRTUAL, the HAL's window for the bus memory.
+//
+
+#define BCM2836_PERIPHERAL_PHYSICAL     0x3F000000
+#define BCM2836_LOCAL_PHYSICAL          0x40000000
+#define BCM2711_PERIPHERAL_PHYSICAL     0xFE000000
+#define BCM2711_LOCAL_PHYSICAL          0xFF800000
+#define BCM2711_PCI_MEMORY_HIGH         6
+#define PERIPHERAL_WINDOW_MEGABYTES     16
+#define PCI_MEMORY_VIRTUAL              0xFD000000
+#define SUPERSECTION_MEGABYTES          16
+#define CORTEX_A72                      0xD08
 
 //
 // Process ids and the second-level table pool.
@@ -642,6 +666,10 @@ Routine Description:
     HARDWARE_PTE Pde;
     ULONG TopPage = 0;
     ULONG MemoryTop;
+    ULONG PeripheralPhysical;
+    ULONG LocalPhysical;
+    ULONG DeviceStart;
+    BOOLEAN Bcm2711;
     ULONG Pages;
     ULONG BasePage;
     ULONG Megabyte;
@@ -690,9 +718,23 @@ Routine Description:
 
     //
     // The kernel-only table holds the fixed part of the TB: the direct map
-    // (memory, then VideoCore memory, then the BCM2835 peripherals), the HAL's
-    // device window, and the second PCR page.
+    // (memory, then VideoCore memory, then on the BCM2836 and BCM2837 their
+    // peripherals; the first gigabyte of a BCM2711 is all memory), the HAL's
+    // device windows (on a BCM2711 also the PCI memory window), and the second
+    // PCR page.
     //
+
+    Bcm2711 = (BOOLEAN)(((_MoveFromCoprocessor(15, 0, 0, 0, 0) >> 4) & 0xFFF) == CORTEX_A72);
+    if (Bcm2711) {
+        PeripheralPhysical = BCM2711_PERIPHERAL_PHYSICAL;
+        LocalPhysical = BCM2711_LOCAL_PHYSICAL;
+        DeviceStart = (KSEG2_MEGABYTE - KSEG0_MEGABYTE) << 20;
+
+    } else {
+        PeripheralPhysical = BCM2836_PERIPHERAL_PHYSICAL;
+        LocalPhysical = BCM2836_LOCAL_PHYSICAL;
+        DeviceStart = BCM2836_PERIPHERAL_PHYSICAL;
+    }
 
     MemoryTop = (TopPage + ((1 << (20 - PAGE_SHIFT)) - 1)) >> (20 - PAGE_SHIFT);
     for (Megabyte = 0; Megabyte < KSEG2_MEGABYTE - KSEG0_MEGABYTE; Megabyte += 1) {
@@ -701,7 +743,7 @@ Routine Description:
             KiKernelTable[KSEG0_MEGABYTE + Megabyte] = Physical | L1_SECTION |
                 SECTION_AP_PRIV_RW | SECTION_TEX_NORMAL | SECTION_C | SECTION_B;
 
-        } else if (Physical < PERIPHERAL_PHYSICAL) {
+        } else if (Physical < DeviceStart) {
             KiKernelTable[KSEG0_MEGABYTE + Megabyte] = Physical | L1_SECTION |
                 SECTION_AP_PRIV_RW | SECTION_TEX_NORMAL | SECTION_XN;
 
@@ -711,8 +753,19 @@ Routine Description:
         }
     }
 
-    KiKernelTable[LOCAL_PERIPHERAL_VIRTUAL >> 20] = LOCAL_PHYSICAL | L1_SECTION |
+    for (Megabyte = 0; Megabyte < PERIPHERAL_WINDOW_MEGABYTES; Megabyte += 1) {
+        KiKernelTable[(PERIPHERAL_VIRTUAL >> 20) + Megabyte] =
+            (PeripheralPhysical + (Megabyte << 20)) | L1_SECTION |
+            SECTION_AP_PRIV_RW | SECTION_B | SECTION_XN;
+    }
+
+    KiKernelTable[LOCAL_PERIPHERAL_VIRTUAL >> 20] = LocalPhysical | L1_SECTION |
         SECTION_AP_PRIV_RW | SECTION_B | SECTION_XN;
+
+    for (Megabyte = 0; Bcm2711 && Megabyte < SUPERSECTION_MEGABYTES; Megabyte += 1) {
+        KiKernelTable[(PCI_MEMORY_VIRTUAL >> 20) + Megabyte] = SUPERSECTION_HIGH(BCM2711_PCI_MEMORY_HIGH) |
+            L1_SUPERSECTION | L1_SECTION | SECTION_AP_PRIV_RW | SECTION_B | SECTION_XN;
+    }
 
     KiSharedDataPage = LoaderBlock->u.Arm.PcrPage2;
     Table = KiAllocateL2Table();

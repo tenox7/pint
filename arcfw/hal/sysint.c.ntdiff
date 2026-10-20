@@ -2,12 +2,13 @@
 =1 1 6
 +    sysint.c
 =1 8 3
-+    This module implements the HAL interrupt support for the Raspberry Pi 2:
-+    the BCM2835 interrupt controller behind the processor's IRQ input (the
-+    Jazz HAL's jxsysint.c and its device interrupt dispatch).
++    This module implements the HAL interrupt support for the Raspberry Pi:
++    the interrupt controller behind the processor's IRQ input (the Jazz HAL's
++    jxsysint.c and its device interrupt dispatch), the BCM2835 interrupt
++    controller of the BCM2836 and BCM2837 or the GIC-400 of the BCM2711.
 +
-+    The controller has no priority logic and no end of interrupt, and the
-+    processor has a single interrupt enable, so IRQL is held in the PCR and
++    The BCM2835 controller has no priority logic and no end of interrupt, and
++    the processor has a single interrupt enable, so IRQL is held in the PCR and
 +    enforced here as interrupts are dispatched (the lazy IRQL of the i386 HAL).
 +    The kernel dispatches an IRQ through PCR->InterruptRoutine[IRQ_VECTOR] to
 +    HalpInterruptDispatch, which takes the pending source of highest IRQL. If
@@ -19,6 +20,16 @@
 +    a requested level, the kernel calls PCR->InterruptRoutine[level],
 +    HalpUnmaskInterrupts, which unmasks them so they interrupt again. A source
 +    is acknowledged at the device.
++
++    The GIC-400 orders the sources itself: each is given the priority of its
++    IRQL, the CPU interface presents the pending source of highest priority,
++    and until its end of interrupt only sources of a higher priority are
++    presented. HalpGicInterruptDispatch takes the source presented, whose
++    vector is DEVICE_VECTORS + its interrupt ID. If its level is above the
++    current IRQL, IRQL is raised to it and the routine connected to its vector
++    is called with interrupts enabled, then its interrupt ends. Otherwise its
++    interrupt ends at once, masked, with its level requested in the PCR, as
++    above.
 =1 18 3
 +    Kernel mode only.
 =1 24 4
@@ -29,11 +40,11 @@
 +// for each IRQL, the enabled sources at or below it.
 +//
 +
-+static KIRQL HalpVectorIrql[HAL_MAXIMUM_BCM_VECTOR + 1];
-+static ULONG HalpEnabled[2];
-+static ULONG HalpMasked[2];
-+static ULONG HalpRequested[2];
-+static ULONG HalpLevelSources[HIGH_LEVEL + 1][2];
++static KIRQL HalpVectorIrql[HAL_MAXIMUM_GIC_VECTOR + 1];
++static ULONG HalpEnabled[HAL_VECTOR_BANKS];
++static ULONG HalpMasked[HAL_VECTOR_BANKS];
++static ULONG HalpRequested[HAL_VECTOR_BANKS];
++static ULONG HalpLevelSources[HIGH_LEVEL + 1][HAL_VECTOR_BANKS];
 +
 +//
 +// An interrupt routine is called with its own address, which locates the
@@ -55,39 +66,58 @@
 +
 +#define HalpEnableInterrupts() _enable()
 +
++//
++// The highest interrupt number of the controller, and the GIC-400 priority of
++// an IRQL (a lower value is a higher priority; the non-secure view of the
++// GIC-400 holds sixteen levels).
++//
++
++#define HalpMaximumVector() (HalpBcm2711 ? HAL_MAXIMUM_GIC_VECTOR : HAL_MAXIMUM_BCM_VECTOR)
++#define HalpGicPriority(Irql) ((UCHAR)(0xF0 - ((Irql) << 4)))
++
 +static VOID
 +HalpMaskSources (
-+    IN ULONG Bank1,
-+    IN ULONG Bank2
++    IN PULONG Sources
 +    )
 +{
-+    HalpMasked[0] |= Bank1;
-+    HalpMasked[1] |= Bank2;
-+    if (Bank1 != 0) {
-+        HAL_REG(HAL_IRQ_DISABLE1) = Bank1;
-+    }
++    ULONG Bank;
 +
-+    if (Bank2 != 0) {
-+        HAL_REG(HAL_IRQ_DISABLE2) = Bank2;
++    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++        if (Sources[Bank] == 0) {
++            continue;
++        }
++
++        HalpMasked[Bank] |= Sources[Bank];
++        if (HalpBcm2711) {
++            HAL_REG(HAL_GICD_ICENABLER(Bank)) = Sources[Bank];
++
++        } else {
++            HAL_REG(Bank == 0 ? HAL_IRQ_DISABLE1 : HAL_IRQ_DISABLE2) = Sources[Bank];
++        }
 +    }
 +}
 +
 +static VOID
 +HalpUnmaskSources (
-+    IN ULONG Bank1,
-+    IN ULONG Bank2
++    IN PULONG Sources
 +    )
 +{
-+    HalpMasked[0] &= ~Bank1;
-+    HalpMasked[1] &= ~Bank2;
-+    Bank1 &= HalpEnabled[0];
-+    Bank2 &= HalpEnabled[1];
-+    if (Bank1 != 0) {
-+        HAL_REG(HAL_IRQ_ENABLE1) = Bank1;
-+    }
++    ULONG Bank;
++    ULONG Bits;
 +
-+    if (Bank2 != 0) {
-+        HAL_REG(HAL_IRQ_ENABLE2) = Bank2;
++    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++        HalpMasked[Bank] &= ~Sources[Bank];
++        Bits = Sources[Bank] & HalpEnabled[Bank];
++        if (Bits == 0) {
++            continue;
++        }
++
++        if (HalpBcm2711) {
++            HAL_REG(HAL_GICD_ISENABLER(Bank)) = Bits;
++
++        } else {
++            HAL_REG(Bank == 0 ? HAL_IRQ_ENABLE1 : HAL_IRQ_ENABLE2) = Bits;
++        }
 +    }
 +}
 +
@@ -100,7 +130,7 @@
 +    ULONG Irql;
 +
 +    RtlZeroMemory(HalpLevelSources, sizeof(HalpLevelSources));
-+    for (Vector = 0; Vector <= HAL_MAXIMUM_BCM_VECTOR; Vector += 1) {
++    for (Vector = 0; Vector <= HalpMaximumVector(); Vector += 1) {
 +        if ((HalpEnabled[Vector / 32] & (1 << HAL_VECTOR_BIT(Vector))) == 0) {
 +            continue;
 +        }
@@ -111,12 +141,51 @@
 +    }
 +}
 +
++static VOID
++HalpRequestSources (
++    IN PULONG Sources
+=1 33 6
++    This routine masks sources at or below the current IRQL and requests their
++    levels, so that HalpUnmaskInterrupts unmasks them when IRQL drops below.
+=1 50 4
++    ULONG Bank;
++    ULONG Bits;
++
++    HalpMaskSources(Sources);
++    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++        HalpRequested[Bank] |= Sources[Bank];
++        for (Bits = Sources[Bank]; Bits != 0; Bits &= Bits - 1) {
++            PCR->InterruptRequest |= 1 << HalpVectorIrql[Bank * 32 + (31 - _CountLeadingZeros(Bits & -(LONG)Bits))];
++        }
++    }
++}
++
++static VOID
++HalpInitializeGic (
++    VOID
+=1 33 6
++    This routine masks every source of the GIC-400 and enables its distributor
++    and this processor's interface, which presents a source of any priority
++    the HAL gives.
+=1 50 4
++    ULONG Bank;
++
++    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++        HAL_REG(HAL_GICD_ICENABLER(Bank)) = 0xFFFFFFFF;
++    }
++
++    HAL_REG(HAL_GICD_CTLR) = 1;
++    HAL_REG(HAL_GICC_PMR) = 0xF0;
++    HAL_REG(HAL_GICC_BPR) = 0;
++    HAL_REG(HAL_GICC_CTLR) = 1;
++}
++
 +BOOLEAN
 +HalpInitializeInterrupts (
 +    VOID
 =1 33 6
-+    This function initializes interrupts for the Raspberry Pi 2: it masks every
-+    source at both controllers, connects the interrupt dispatcher to the
++    This function initializes interrupts for the Raspberry Pi: it masks every
++    source at the controllers, connects the interrupt dispatcher to the
 +    processor's IRQ vector and the unmask routine to the levels above
 +    DISPATCH_LEVEL, and starts the interval timer.
 =1 46 3
@@ -125,14 +194,20 @@
 +    PKPCR Pcr = PCR;
 +    ULONG Irql;
 +
-+    HAL_REG(HAL_FIQ_CONTROL) = 0;
-+    HAL_REG(HAL_IRQ_DISABLE1) = 0xFFFFFFFF;
-+    HAL_REG(HAL_IRQ_DISABLE2) = 0xFFFFFFFF;
-+    HAL_REG(HAL_IRQ_DISABLE_BASIC) = 0xFFFFFFFF;
-+    HAL_REG(HAL_CORE_TIMER_CTL(0)) = 0;
-+    HAL_REG(HAL_CORE_MBOX_CTL(0)) = 0;
++    if (HalpBcm2711) {
++        HalpInitializeGic();
++        Pcr->InterruptRoutine[IRQ_VECTOR] = (PKINTERRUPT_ROUTINE)HalpGicInterruptDispatch;
 +
-+    Pcr->InterruptRoutine[IRQ_VECTOR] = (PKINTERRUPT_ROUTINE)HalpInterruptDispatch;
++    } else {
++        HAL_REG(HAL_FIQ_CONTROL) = 0;
++        HAL_REG(HAL_IRQ_DISABLE1) = 0xFFFFFFFF;
++        HAL_REG(HAL_IRQ_DISABLE2) = 0xFFFFFFFF;
++        HAL_REG(HAL_IRQ_DISABLE_BASIC) = 0xFFFFFFFF;
++        HAL_REG(HAL_CORE_TIMER_CTL(0)) = 0;
++        HAL_REG(HAL_CORE_MBOX_CTL(0)) = 0;
++        Pcr->InterruptRoutine[IRQ_VECTOR] = (PKINTERRUPT_ROUTINE)HalpInterruptDispatch;
++    }
++
 +    Pcr->ReservedVectors |= (1 << IRQ_VECTOR);
 +    for (Irql = DISPATCH_LEVEL + 1; Irql <= HIGH_LEVEL; Irql += 1) {
 +        Pcr->InterruptRoutine[Irql] = (PKINTERRUPT_ROUTINE)HalpUnmaskInterrupts;
@@ -149,22 +224,22 @@
 +    IN PKTRAP_FRAME TrapFrame
 =1 33 6
 +    This function is entered from the kernel's IRQ entry with interrupts
-+    disabled. It takes the pending source with the highest IRQL. If its level
-+    is above the current IRQL, it masks the sources at or below the level,
-+    raises IRQL to it and calls the routine connected to the source's vector
-+    with interrupts enabled, then unmasks them; if no enabled source is above
-+    the level, the routine runs with interrupts disabled and nothing is
-+    masked. Otherwise it masks the pending sources at or below the current
-+    IRQL and requests their levels. It returns with interrupts disabled, and
-+    the kernel restores the previous IRQL.
++    disabled. It takes the pending source of the BCM2835 controller with the
++    highest IRQL. If its level is above the current IRQL, it masks the sources
++    at or below the level, raises IRQL to it and calls the routine connected
++    to the source's vector with interrupts enabled, then unmasks them; if no
++    enabled source is above the level, the routine runs with interrupts
++    disabled and nothing is masked. Otherwise it masks the pending sources at
++    or below the current IRQL and requests their levels. It returns with
++    interrupts disabled, and the kernel restores the previous IRQL.
 =1 40 3
 +    Routine - Supplies the address of this routine.
 +
 +    TrapFrame - Supplies a pointer to the trap frame of the interrupt.
 =1 46 8
 +    PHALP_INTERRUPT_ROUTINE Service;
-+    ULONG Pending[2];
-+    ULONG Masked[2];
++    ULONG Pending[HAL_VECTOR_BANKS];
++    ULONG Masked[HAL_VECTOR_BANKS];
 +    ULONG Vector;
 +    ULONG Best = (ULONG)-1;
 +    KIRQL OldIrql;
@@ -172,6 +247,7 @@
 +    ULONG Bank;
 +    ULONG Bits;
 +
++    RtlZeroMemory(Pending, sizeof(Pending));
 +    Pending[0] = HAL_REG(HAL_IRQ_PEND1) & HalpEnabled[0] & ~HalpMasked[0];
 +    Pending[1] = HAL_REG(HAL_IRQ_PEND2) & HalpEnabled[1] & ~HalpMasked[1];
 +
@@ -191,17 +267,11 @@
 +    OldIrql = PCR->CurrentIrql;
 +    Irql = HalpVectorIrql[Best];
 +    if (Irql <= OldIrql) {
-+        Masked[0] = Pending[0] & HalpLevelSources[OldIrql][0];
-+        Masked[1] = Pending[1] & HalpLevelSources[OldIrql][1];
-+        HalpMaskSources(Masked[0], Masked[1]);
-+        HalpRequested[0] |= Masked[0];
-+        HalpRequested[1] |= Masked[1];
-+        for (Bank = 0; Bank < 2; Bank += 1) {
-+            for (Bits = Masked[Bank]; Bits != 0; Bits &= Bits - 1) {
-+                PCR->InterruptRequest |= 1 << HalpVectorIrql[Bank * 32 + (31 - _CountLeadingZeros(Bits & -(LONG)Bits))];
-+            }
++        for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++            Masked[Bank] = Pending[Bank] & HalpLevelSources[OldIrql][Bank];
 +        }
 +
++        HalpRequestSources(Masked);
 +        return;
 +    }
 +
@@ -213,13 +283,67 @@
 +        return;
 +    }
 +
-+    Masked[0] = HalpLevelSources[Irql][0] & ~HalpMasked[0];
-+    Masked[1] = HalpLevelSources[Irql][1] & ~HalpMasked[1];
-+    HalpMaskSources(Masked[0], Masked[1]);
++    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++        Masked[Bank] = HalpLevelSources[Irql][Bank] & ~HalpMasked[Bank];
++    }
++
++    HalpMaskSources(Masked);
 +    HalpEnableInterrupts();
 +    Service((PVOID)Service, TrapFrame);
 +    HalpDisableInterrupts();
-+    HalpUnmaskSources(Masked[0], Masked[1]);
++    HalpUnmaskSources(Masked);
++}
++
++VOID
++HalpGicInterruptDispatch (
++    IN PVOID Routine,
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This function is entered from the kernel's IRQ entry with interrupts
++    disabled. It takes the source the GIC-400 presents. If its level is above
++    the current IRQL, it raises IRQL to it and calls the routine connected to
++    the source's vector with interrupts enabled; the GIC-400 presents only
++    sources of a higher priority until the end of interrupt that follows.
++    Otherwise it masks the source, requests its level and ends its interrupt.
++    It returns with interrupts disabled, and the kernel restores the previous
++    IRQL.
+=1 40 3
++    Routine - Supplies the address of this routine.
++
++    TrapFrame - Supplies a pointer to the trap frame of the interrupt.
+=1 46 8
++    PHALP_INTERRUPT_ROUTINE Service;
++    ULONG Acknowledge = HAL_REG(HAL_GICC_IAR);
++    ULONG Vector = Acknowledge & 0x3FF;
++    ULONG Sources[HAL_VECTOR_BANKS];
++    KIRQL OldIrql;
++    KIRQL Irql;
++
++    if (Vector >= HAL_GIC_SPURIOUS) {
++        return;
++    }
++
++    if ((Vector > HAL_MAXIMUM_GIC_VECTOR) ||
++        ((HalpEnabled[Vector / 32] & (1 << HAL_VECTOR_BIT(Vector))) == 0)) {
++        HAL_REG(HAL_GICC_EOIR) = Acknowledge;
++        return;
++    }
++
++    Irql = HalpVectorIrql[Vector];
++    if (Irql <= PCR->CurrentIrql) {
++        RtlZeroMemory(Sources, sizeof(Sources));
++        Sources[Vector / 32] = 1 << HAL_VECTOR_BIT(Vector);
++        HalpRequestSources(Sources);
++        HAL_REG(HAL_GICC_EOIR) = Acknowledge;
++        return;
++    }
++
++    Service = (PHALP_INTERRUPT_ROUTINE)PCR->InterruptRoutine[DEVICE_VECTORS + Vector];
++    KeRaiseIrql(Irql, &OldIrql);
++    HalpEnableInterrupts();
++    Service((PVOID)Service, TrapFrame);
++    HalpDisableInterrupts();
++    HAL_REG(HAL_GICC_EOIR) = Acknowledge;
 +}
 +
 +VOID
@@ -237,13 +361,15 @@
 +    TrapFrame - Not used.
 =1 46 8
 +    KIRQL Irql = PCR->CurrentIrql;
-+    ULONG Unmask[2];
++    ULONG Unmask[HAL_VECTOR_BANKS];
++    ULONG Bank;
 +
-+    Unmask[0] = HalpRequested[0] & ~HalpLevelSources[Irql][0];
-+    Unmask[1] = HalpRequested[1] & ~HalpLevelSources[Irql][1];
-+    HalpRequested[0] &= ~Unmask[0];
-+    HalpRequested[1] &= ~Unmask[1];
-+    HalpUnmaskSources(Unmask[0], Unmask[1]);
++    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++        Unmask[Bank] = HalpRequested[Bank] & ~HalpLevelSources[Irql][Bank];
++        HalpRequested[Bank] &= ~Unmask[Bank];
++    }
++
++    HalpUnmaskSources(Unmask);
 +}
 +
 =1 29 25
@@ -253,7 +379,7 @@
 +
 +    UNREFERENCED_PARAMETER(Irql);
 +
-+    if (Vector < DEVICE_VECTORS || Irq > HAL_MAXIMUM_BCM_VECTOR) {
++    if (Vector < DEVICE_VECTORS || Irq > HalpMaximumVector()) {
 +        return;
 +    }
 +
@@ -262,25 +388,32 @@
 +    HalpEnabled[Irq / 32] &= ~Bit;
 +    HalpMasked[Irq / 32] &= ~Bit;
 +    HalpRequested[Irq / 32] &= ~Bit;
-+    HAL_REG(HAL_VECTOR_BANK(Irq) == 2 ? HAL_IRQ_DISABLE2 : HAL_IRQ_DISABLE1) = Bit;
++    if (HalpBcm2711) {
++        HAL_REG(HAL_GICD_ICENABLER(Irq / 32)) = Bit;
++
++    } else {
++        HAL_REG(HAL_VECTOR_BANK(Irq) == 2 ? HAL_IRQ_DISABLE2 : HAL_IRQ_DISABLE1) = Bit;
++    }
++
 +    HalpComputeLevelSources();
 +    HalpRestoreInterrupts(Psr);
 +}
 +
 =1 95 11
-+    This routine enables the specified system interrupt. The controller has no
-+    edge or level configuration, so the interrupt mode needs no programming.
-+    A source interrupts above DISPATCH_LEVEL.
++    This routine enables the specified system interrupt. The BCM2835
++    controller has no edge or level configuration, so the interrupt mode needs
++    no programming there. The GIC-400 is given the source's priority, its
++    processor and, for a shared peripheral interrupt, its mode. A source
++    interrupts above DISPATCH_LEVEL.
 =1 107 12
 +    TRUE if the system interrupt was enabled.
 =1 50 4
 +    ULONG Irq = Vector - DEVICE_VECTORS;
++    ULONG Configuration;
 +    ULONG Bit;
 +    ULONG Psr;
 +
-+    UNREFERENCED_PARAMETER(InterruptMode);
-+
-+    if (Vector < DEVICE_VECTORS || Irq > HAL_MAXIMUM_BCM_VECTOR ||
++    if (Vector < DEVICE_VECTORS || Irq > HalpMaximumVector() ||
 +        Irql <= DISPATCH_LEVEL || Irql > HIGH_LEVEL) {
 +        return FALSE;
 +    }
@@ -289,7 +422,23 @@
 +    Psr = HalpDisableInterrupts();
 +    HalpVectorIrql[Irq] = Irql;
 +    HalpEnabled[Irq / 32] |= Bit;
-+    if ((HalpMasked[Irq / 32] & Bit) == 0) {
++    if (HalpBcm2711) {
++        HAL_REG8(HAL_GICD_IPRIORITYR(Irq)) = HalpGicPriority(Irql);
++        if (Irq >= HAL_GIC_FIRST_SPI) {
++            HAL_REG8(HAL_GICD_ITARGETSR(Irq)) = 1;
++            Configuration = HAL_REG(HAL_GICD_ICFGR(Irq / 16)) & ~(2 << ((Irq % 16) * 2));
++            if (InterruptMode == Latched) {
++                Configuration |= 2 << ((Irq % 16) * 2);
++            }
++
++            HAL_REG(HAL_GICD_ICFGR(Irq / 16)) = Configuration;
++        }
++
++        if ((HalpMasked[Irq / 32] & Bit) == 0) {
++            HAL_REG(HAL_GICD_ISENABLER(Irq / 32)) = Bit;
++        }
++
++    } else if ((HalpMasked[Irq / 32] & Bit) == 0) {
 +        HAL_REG(HAL_VECTOR_BANK(Irq) == 2 ? HAL_IRQ_ENABLE2 : HAL_IRQ_ENABLE1) = Bit;
 +    }
 +
@@ -306,18 +455,21 @@
 +    system interrupt vector and IRQL are suitable for use in a subsequent
 +    call to KeInitializeInterrupt.
 +
-+    The only bus is the Internal bus, whose interrupt vectors are the
-+    interrupt controller's IRQ numbers.
++    The interrupt vectors of the Internal bus are the interrupt controller's
++    IRQ numbers or interrupt IDs, at the level the bus gives. The PCI bus
++    gives the interrupt ID of the line a device interrupts on (its interrupt
++    line, which the firmware sets); its interrupts are at DEVICE_LEVEL.
 =1 183 22
 +    UNREFERENCED_PARAMETER(BusNumber);
 +
 +    *Affinity = 1;
-+    if (InterfaceType != Internal || BusInterruptVector > HAL_MAXIMUM_BCM_VECTOR) {
++    if ((InterfaceType != Internal && (InterfaceType != PCIBus || !HalpPCIPresent)) ||
++        BusInterruptVector > HalpMaximumVector()) {
 =1 227 2
 +        return 0;
 +    }
 +
-=1 217 1 -4
++    *Irql = InterfaceType == PCIBus ? DEVICE_LEVEL : (KIRQL)BusInterruptLevel;
 +    return DEVICE_VECTORS + BusInterruptVector;
 +}
 +

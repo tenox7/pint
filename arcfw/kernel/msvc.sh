@@ -51,6 +51,22 @@ ntas() {
     armasm -nologo -g $o.asm $o > $o.err 2>&1 || { echo "   AS FAIL $(basename $s): $(grep -m1 -E "error" $o.err)"; return 1; }
 }
 
+# par COMMAND...: the compile of one source in the background, at most CJ (default 4) at
+# once; pwait waits for them all and sets PAROK and PARFAIL to the numbers that succeeded
+# and failed.
+CJ=${CJ:-4}
+PARD=$(mktemp -d)
+par() {
+    while [ $(jobs -rp | wc -l) -ge $CJ ]; do wait -n || true; done
+    { "$@" && touch $PARD/ok.$BASHPID || touch $PARD/fail.$BASHPID; } &
+}
+pwait() {
+    wait
+    PAROK=$(ls $PARD | grep -c "^ok" || true)
+    PARFAIL=$(ls $PARD | grep -c "^fail" || true)
+    rm -f $PARD/*
+}
+
 # ntlib LIB OBJ...: a library. Of the definitions of a symbol in more than one
 # object the 1994 LIB indexed the first, that of today indexes the last: it gets
 # the objects in reverse order.

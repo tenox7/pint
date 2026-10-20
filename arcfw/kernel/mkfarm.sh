@@ -7,6 +7,8 @@
 # #include names. Then adds what the build generates: the headers and sources of
 # its header pass (mkgen.sh, obj/gen/farm, made again when an input of the ARM
 # port is newer), version.h, the MIDL pass (obj/gen/midl) and GENERR's error.h.
+# The farm of a SUBSYS is kept as obj/farm/<key>.tar, which the next builds unpack: the
+# NT tree does not change, and the farm is made again when an input of the port is newer.
 set -u
 F=${1:-/tmp/f}
 W=${NTROOT:-/work}
@@ -18,6 +20,18 @@ SUBSYS=${SUBSYS:-KE RTL EX OB PS MM IO SE CONFIG LPC CACHE FSRTL RAW DBGK KD VDM
 # makefiles, the filters, the tools) are newer than its output
 if [ -z "${MKGEN:-}" ] && { [ ! -f $G/.stamp ] || [ -n "$(find $K/inc $W/RASPI/arcfw/inc $W/RASPI/arcfw/ported/ntos/makefil0 $W/RASPI/arcfw/ported/windows/makefil0 $K/*.sed $K/nmk.awk $K/mkgen.sh $(for t in mc hextract hsplit wcshdr zwapi listmung; do echo $W/RASPI/obj/host/$(echo $t | tr a-z A-Z).EXE; done) -newer $G/.stamp -print -quit 2>/dev/null)" ]; }; then
     bash $K/mkgen.sh >&2 || exit 1
+fi
+
+# What the builds of other components generated for the ones that include it (gensave.sh).
+tree() {
+    [ ! -d $W/RASPI/obj/gen/tree ] || { mkdir -p $F/gen && cp -r $W/RASPI/obj/gen/tree/. $F/gen/; }
+    touch $F/.genbase
+}
+
+T=$W/RASPI/obj/farm/$(echo "$SUBSYS" | md5sum | cut -c1-12).tar
+if [ -z "${MKGEN:-}" ] && [ -f $T ] && [ -z "$(find $K/*.sed $K/mkfarm.sh $W/RASPI/arcfw/inc $G/.stamp $W/RASPI/obj/gen/midl $W/RASPI/obj/gen/error.h -newer $T -print -quit 2>/dev/null)" ]; then
+    mkdir -p $F && tar -xf $T -C $F && tree
+    exit 0
 fi
 
 filt() { tr -d '\032\r' < "$1" | sed -E -f "$K/riscgate.sed" -f "$K/msvcgate.sed" -f "$K/incfix.sed" | sed -f "$K/armport.sed" -f "$K/msc2.sed"; }
@@ -77,7 +91,6 @@ if [ -f $W/RASPI/obj/gen/error.h ]; then
     mkdir -p $F/gen/NTOS/RTL && cp $W/RASPI/obj/gen/error.h $F/gen/NTOS/RTL/error.h
 fi
 
-# What the builds of other components generated for the ones that include it (gensave.sh).
-[ ! -d $W/RASPI/obj/gen/tree ] || { mkdir -p $F/gen && cp -r $W/RASPI/obj/gen/tree/. $F/gen/; }
-touch $F/.genbase
+[ -n "${MKGEN:-}" ] || { mkdir -p $(dirname $T) && t=$(mktemp $T.XXXXXX) && tar -cf $t -C $F . && mv $t $T; }
+tree
 exit 0

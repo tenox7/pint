@@ -8,13 +8,18 @@ Abstract:
 
     This module is the USB host of the firmware (usbhost.c, shared with the
     keyboard and pointer port driver): the DesignWare OTG core of the BCM2835
-    at 0x3F980000, powered through the mailbox, and the keyboards behind its
-    root port, which the keyboard driver (jxkbd.c) reads as one keyboard of
-    the boot protocol. The hubs are looked at now and then, so that a
-    keyboard can be plugged in at the boot menu, which lists the devices.
+    peripherals (0x980000 into them), powered through the mailbox, or on a
+    Raspberry Pi 4 Model B or 400 the VL805 USB 3 host of the USB-A ports,
+    an xHCI (xhci.c) on the PCI Express link (pcie.c); and the keyboards
+    behind its root ports, which the keyboard driver (jxkbd.c) reads as one
+    keyboard of the boot protocol. The hubs are looked at now and then, so
+    that a keyboard can be plugged in at the boot menu, which lists the
+    devices. On a Raspberry Pi 4 the core drives the USB-C port, and on a
+    Compute Module 4 its USB 2.0 port.
 
     The core masters the bus, so its buffer is given to it at its uncached
-    VideoCore bus address, as the mailbox does.
+    VideoCore bus address, as the mailbox does; the PCI Express bus reaches
+    memory at its physical addresses.
 
 --*/
 
@@ -24,13 +29,15 @@ Abstract:
 #include "../drivers/bcmusb/usbhost.h"
 #include "bcmethhw.h"
 
-#define USB_BASE                0x3F980000
+#define USB_BASE                (PERIPHERAL_BASE + 0x980000)
 #define POWER_DEVICE_USB        3
 #define SCAN_INTERVAL_MS        250
 #define KEYBOARD_WAIT_MS        2000
+#define XHCI_PORTSC(Port)       (0x400 + ((Port) - 1) * 0x10)
 
 static USB_HOST UsbHost;
 static __declspec(align(64)) UCHAR UsbBuffer[USB_BUFFER_SIZE];
+static __declspec(align(4096)) UCHAR UsbXhciMemory[XHCI_MEMORY_SIZE];
 static UCHAR UsbKeys[USB_MAXIMUM_HIDS][USB_KEY_BYTES];
 static UCHAR UsbGeneration[USB_MAXIMUM_HIDS];
 static ULONG UsbScanTime;
@@ -107,9 +114,11 @@ UsbInitialize (
 
 Routine Description:
 
-    This routine powers the USB host and brings it up, which finds the
-    devices behind its root port. If no keyboard is among them, it looks for
-    one coming up for a while, as the console is chosen by it.
+    This routine brings up the USB host, which finds the devices behind its
+    root ports: on a Raspberry Pi 4 the USB 3 host on the PCI Express link if
+    there is one (the VL805 of the USB-A ports), else the OTG core, powered
+    through the mailbox. If no keyboard is among the devices, it looks for one
+    coming up for a while, as the console is chosen by it.
 
 Return Value:
 
@@ -118,19 +127,31 @@ Return Value:
 --*/
 
 {
+    ULONG Registers;
     ULONG Start;
 
-    if (MailboxSetPowerState(POWER_DEVICE_USB, TRUE) != 0) {
-        FwPrint("USB: power on failed\r\n");
+    if (FwBcm2711 && PcieInitialize(&Registers)) {
+        UsbHost.Xhci = TRUE;
+        UsbHost.Registers = (PUCHAR)Registers;
+        UsbHost.Memory = UsbXhciMemory;
+        UsbHost.MemoryAddress = (ULONG)UsbXhciMemory;
+        UsbHost.BufferAddress = (ULONG)UsbBuffer;
+    } else {
+        if (MailboxSetPowerState(POWER_DEVICE_USB, TRUE) != 0) {
+            FwPrint("USB: power on failed\r\n");
+        }
+
+        FwStallExecution(40 * 1000);
+        UsbHost.Registers = (PUCHAR)USB_BASE;
+        UsbHost.BufferAddress = MailboxPhysicalToBus((ULONG)UsbBuffer);
     }
 
-    FwStallExecution(40 * 1000);
-    UsbHost.Registers = (PUCHAR)USB_BASE;
     UsbHost.Buffer = UsbBuffer;
-    UsbHost.BufferAddress = MailboxPhysicalToBus((ULONG)UsbBuffer);
     UsbHost.ClockRate = 1000;
     UsbReady = UsbHostInitialize(&UsbHost);
-    if (!UsbReady) {
+    if (!UsbReady && UsbHost.Xhci) {
+        FwPrint("USB: the xHCI failed at step %lu\r\n", UsbHost.Interrupt);
+    } else if (!UsbReady) {
         FwPrint("USB: no host\r\n");
     }
 
@@ -282,22 +303,24 @@ UsbPrintDevices (
 Routine Description:
 
     This routine lists the USB devices for the boot menu, which redraws it
-    every second: the frame interval of the host, then for each device the
-    path of hub ports to it (0 is the hub on the root port), its vendor and
-    product, speed and use, or the step of its enumeration it failed at, with
-    the interrupts of the host channel, and the counts of the reads of each
-    of its keyboards and pointers. The lines of devices that went are
-    cleared.
+    every second: the frame interval of the core (or the version of the xHCI
+    and the status registers of its root ports), then for each device the
+    path of hub ports to it (0 is the hub on the root port of the core; on an
+    xHCI the path starts at its root port), its vendor and product, speed and
+    use, or the step of its enumeration it failed at, with the interrupts of
+    the host channel (on an xHCI the type and completion code of the command
+    or transfer that failed), and the counts of the reads of each of its
+    keyboards and pointers. The lines of devices that went are cleared.
 
 --*/
 
 {
-    static PCHAR Speeds[] = {"high", "full", "low"};
+    static PCHAR Speeds[] = {"high", "full", "low", "super"};
     static ULONG LastLines;
     PUSB_DEVICE Device;
     PUSB_HID Hid;
-    CHAR Path[3 * USB_MAXIMUM_DEPTH + 4];
-    UCHAR Ports[USB_MAXIMUM_DEPTH + 1];
+    CHAR Path[3 * USB_MAXIMUM_DEPTH + 8];
+    UCHAR Ports[USB_MAXIMUM_DEPTH + 2];
     ULONG Index;
     ULONG Parent;
     ULONG Depth;
@@ -308,9 +331,19 @@ Routine Description:
         return;
     }
 
-    FwPrint(" USB frame interval %lu, %u frames in 1 ms (at reset %lu, %u)\x9bK\r\n",
-            UsbHost.FrameInterval - 1, UsbHost.Frames, UsbHost.ResetFrameInterval,
-            UsbHost.ResetFrames);
+    if (UsbHost.Xhci) {
+        FwPrint(" USB xHCI %lx.%02lx, ports", UsbHost.Xhc.Version >> 8, UsbHost.Xhc.Version & 0xFF);
+        for (Index = 1; Index <= UsbHost.Xhc.Ports; Index += 1) {
+            FwPrint(" %08lx", *(volatile ULONG *)(UsbHost.Registers + UsbHost.Xhc.Operational + XHCI_PORTSC(Index)));
+        }
+
+        FwPrint("\x9bK\r\n");
+    } else {
+        FwPrint(" USB frame interval %lu, %u frames in 1 ms (at reset %lu, %u)\x9bK\r\n",
+                UsbHost.FrameInterval - 1, UsbHost.Frames, UsbHost.ResetFrameInterval,
+                UsbHost.ResetFrames);
+    }
+
     for (Index = 0; Index < USB_MAXIMUM_DEVICES; Index += 1) {
         Device = &UsbHost.Devices[Index];
         if (!Device->Present) {
@@ -320,6 +353,10 @@ Routine Description:
         Depth = 0;
         for (Parent = Index; UsbHost.Devices[Parent].Parent != USB_ROOT && Depth <= USB_MAXIMUM_DEPTH;
              Parent = UsbHost.Devices[Parent].Parent) {
+            Ports[Depth++] = UsbHost.Devices[Parent].Port;
+        }
+
+        if (UsbHost.Xhci) {
             Ports[Depth++] = UsbHost.Devices[Parent].Port;
         }
 
