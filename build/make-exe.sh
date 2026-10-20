@@ -129,11 +129,13 @@ incl() {
   return 1
 }
 for rc in $RCS; do incl $rc || RES="$RES $(bash rc.sh $D $rc $DEFS $INCS)" || exit 1; done
-# the program file, .exe or its UMAPPLEXT
+# the program file, .exe or its UMAPPLEXT; its .pdb and .map made beside it, which names the
+# obj/<program>.pdb they then are (a DLL of its name, winmsd.dll, may link at once)
 X=$(macro UMAPPLEXT | tr -d " "); F=$(echo $PROG${X:-.exe} | tr a-z A-Z)
 link -nologo -machine:arm -release -force:multiple -subsystem:$SUB -entry:$ENTRY -base:$BASE ${STACK:+-stack:$STACK} ${STUB:+-stub:$STUB} -nodefaultlib \
-     -debug -pdb:$O/$PROG.pdb -map:$O/$PROG.map -out:$DIR/$F $DIR/obj/*.obj $LIBS $RES > $DIR/link.err 2>&1 \
+     -debug -pdb:$DIR/$PROG.pdb -pdbaltpath:"Z:$(echo $O/$PROG.pdb | tr / "\\\\")" -map:$DIR/$PROG.map -out:$DIR/$F $DIR/obj/*.obj $LIBS $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
+cp $DIR/$PROG.pdb $DIR/$PROG.map $O/
 bash /work/RASPI/tools/host.sh pe2img -version 3.50 $DIR/$F || exit 1
 OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/$DEST && mkdir -p $OUT
 cp $DIR/$F $OUT/$F

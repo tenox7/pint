@@ -3,18 +3,18 @@
 # SOURCES) with Microsoft C for ARM, as build.exe does, plus its ARM sources listed
 # in kernel/<component>.arm or the sources.arm of its port directory (portdir.sh)
 # (a line per source, relative to the list; the ARM_SOURCES NT's SOURCES would carry).
-# Output obj/<targetname>.lib, user mode libraries in obj/um.
+# Output obj[/um]/dir/<component>/<targetname>.lib, where build.exe left it (user mode
+# libraries in obj/um), also obj/<targetname>.lib in kernel mode and obj/um/<targetname>.lib
+# for a library of the public TARGETPATH.
 #
 # Usage:  cd RASPI/build && ./make-lib.sh RTL/BOOT               # -> obj/bldrrtl.lib
 #         ROOT=/work/PRIVATE ./make-lib.sh URTL         # a component outside PRIVATE/NTOS
-#         LOCAL=1 ROOT=/work/PRIVATE ./make-lib.sh SDKTOOLS/SLMNEW/UTIL   # a library of TARGETPATH obj
-#                       only in obj/um/dir/<component>, where build.exe left it (not obj/um/util.lib)
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT35="$(cd ../.. && pwd)"
 COMP=${1:?usage: make-lib.sh COMPONENT}
 
-docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -e LOCAL="${LOCAL:-0}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
+docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/PRIVATE/NTOS}" -v "$NT35/msvc":/opt/msvc -v "$NT35":/work \
     -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -77,15 +77,14 @@ echo "   $((n+nr)) compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1
 # (a library of no sources is made of libraries by its makefile.inc: uimisc.lib of NET UI)
 if [ $n -gt 0 ]; then
-  # (LOCAL=1: a library of TARGETPATH obj only as that of its directory)
+  # the library and objects of its directory (libpath.sh), where two components share a
+  # name or a program links an object of another, the library also that of its TARGETPATH
+  # (..\bin) and of obj (kernel mode) or obj/um (the public TARGETPATH)
+  L=$OUT/dir/${D#/work/}
   T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
-  L=$OUT; [ "$LOCAL" = 1 ] && [ "$T" = $D ] && L=$OUT/dir/${D#/work/}
-  mkdir -p $OUT/dir/${D#/work/} && ntlib $L/$NAME.lib $DIR/obj/*.obj || exit 1
-  # and as the library and objects of its directory (libpath.sh), where two
-  # components share a name or a program links an object of another, and as the
-  # library of its TARGETPATH (..\bin)
-  cp $DIR/obj/*.obj $OUT/dir/${D#/work/}/ && { [ $L != $OUT ] || cp $L/$NAME.lib $OUT/dir/${D#/work/}/; }
+  mkdir -p $L && ntlib $L/$NAME.lib $DIR/obj/*.obj && cp $DIR/obj/*.obj $L/ || exit 1
   case $T in /work/PUBLIC/*|$D) ;; *) mkdir -p $OUT/dir/${T#/work/} && cp $L/$NAME.lib $OUT/dir/${T#/work/}/ ;; esac
+  case $OUT:$T in /work/RASPI/obj:*|*:/work/PUBLIC/*) cp $L/$NAME.lib $OUT/ ;; esac
 fi
 bash nttarget.sh $D post $OUT || exit 1
 [ $n -eq 0 ] || echo "   wrote ${L#/work/RASPI/}/$NAME.lib"

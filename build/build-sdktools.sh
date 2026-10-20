@@ -12,13 +12,13 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
 P=/work/PRIVATE S=SDKTOOLS
 export DEST=SDKTOOLS
-# lib COMPONENT [PROGRAM...]: its library (in its directory, LOCAL=1), and its programs;
+# lib COMPONENT [PROGRAM...]: its library, and its programs;
 # dll COMPONENT [PROGRAM...]: its DLL and its programs; exe COMPONENT PROGRAM...: its
 # programs, a step for each. PHASE libs builds the libraries and DLLs, PHASE exes the programs.
 lib() { local c=$1; shift; if [ $PHASE = libs ]; then job lib/$c libstep $c; else exe $c "$@"; fi; }
 dll() { local c=$1; shift; if [ $PHASE = libs ]; then job dll/$c dllstep $c; else exe $c "$@"; fi; }
 exe() { local c=$1; shift; [ $PHASE = exes ] && [ $# -gt 0 ] || return 0; job exe/$c exesteps $c "$@"; }
-libstep() { LOCAL=1 ROOT=$P cstep lib $P $S/$1 -- $B/make-lib.sh $S/$1; }
+libstep() { ROOT=$P cstep lib $P $S/$1 -- $B/make-lib.sh $S/$1; }
 dllstep() { INSTALL=1 ROOT=$P cstep dll $P $S/$1 link -- $B/make-dll.sh $S/$1; }
 exesteps() {
     local c=$1 p; shift
@@ -67,7 +67,7 @@ lib MIP2COFF mip2coff; exe OBJDIR objdir; exe READLINE readline; exe SETLINK set
 lib SLMNEW/SLM slm sadmin slmck execslm
 lib SLMNEW/UTIL merge unmerge slmdiff cookie; exe SLMNEW/SLMED/DAYTONA slmed; exe SLMNEW/FIXDIFF fixdiff
 exe SLEEP sleep; dll SPY/DLL; lib SPY/APP spy; exe RANDOM random; exe SECLIST seclist; exe SIMBAD simbad
-exe TAKEOWN takeown; exe RCDUMP rcdump; lib VI vi; exe NEWINVTP winvtp; lib WZMAIL/DH.NEW/LIB; lib WZMAIL/MAIL1.0 wzmail
+exe TAKEOWN takeown; lib TLIBS/NB3LIB/SRC; exe RCDUMP rcdump; lib VI vi; exe NEWINVTP winvtp; lib WZMAIL/DH.NEW/LIB; lib WZMAIL/MAIL1.0 wzmail
 dll FASTIMER; barrier; lib WAP/DUMP apf32dmp; lib WAP/CONVERT apf32cvt; for c in FERNEL BASE ADVAPI CRTDLL; do dll WAP/$c; done
 exe WINDIFF/WINDIFF windiff; lib WINDIFF/CLIENT; exe WINDIFF/SERVER sumserve; lib ZOOMIN zoomin; lib COMPDIR compdir
 lib PVIEWER pviewer; exe ROSHARE roshare; exe A2COFF a2coff; lib CLEARMEM clearmem; lib EDITREG editreg; lib XEROX xerox
@@ -77,7 +77,7 @@ exe TILE tile
 lib CNTFS cntfs; exe DETAB detab; exe DIS32 dis32; exe DISKGEOM diskgeom; lib FILEVER filever; exe FLEX flex; exe GETBIN getbin
 exe LOGOFF logoff; exe MODSEL modesel; lib MPTEST mptest; exe MRGSCOMP mrgscomp mrgdiff; exe MHLSRV/CLIENT mhlcli
 exe MHLSRV/SERVER mhlsrv; exe NEWER newer; exe NTFSDUMP ntfsdump; lib OWNTREE owntree; exe RSHELL/NTCLIENT rcmd
-lib RSHELL/SERVER rcmdsrv; lib SFS sfs-gate sfs-page; lib SYMREF/SRDAEM srdaem; exe SYMREF/SYMREF symref; lib TIMTP timtp
+lib RSHELL/SERVER rcmdsrv; lib SFS sfs-gate sfs-page; lib TIMTP timtp
 lib LZTEST lztest; exe VMTESTS poolkill vmperf32 vmtest vmstress tfork pageit color; exe XMAS xmas; exe YACC yacc
 lib ZD zdsim
 }

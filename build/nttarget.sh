@@ -45,24 +45,23 @@ outlib() { echo $OUT/$(basename "$1" .lib | tr A-Z a-z).lib; }
 # a library a recipe names (..\buffer\obj\arm\buffer.lib): the one made for that directory
 # (libpath.sh), else that of its name
 inlib() { local l; l=$(bash $B/libpath.sh $D "$(echo "$1" | sed -E 's#(^|/)obj/arm/#\1obj/*/#')"); echo ${l:-$(outlib "$1")}; }
-# a library of libraries, given to lib in reverse order as ntlib (msvc.sh) does; one of a
-# directory (obj\arm\uimisc.lib) is also the library of that directory (libpath.sh)
+# a library of libraries, given to lib in reverse order as ntlib (msvc.sh) does: the library of
+# the directory it names (obj\arm\uimisc.lib: the component's, ..\lib\arm\x.lib; libpath.sh -d),
+# one of the public libraries <out>/<name>.lib, one of kernel mode both
 nmk_lib() {
     local a o p= d l=
     for a in "$@"; do
         case $a in
-        -out:*) p=${a#-out:}; o=$(outlib "$p") ;;
+        -out:*) p=${a#-out:} ;;
         *.lib) l="$(inlib "$a") $l" ;;
         esac
     done
-    rm -f $o
+    d=$(dirname "$p"); case $d in [Aa][Rr][Mm]|*/[Aa][Rr][Mm]) d=$(dirname "$d") ;; esac
+    d=$(bash $B/libpath.sh -d $D "$(echo "$d" | sed 's/^BASEDIR/$(BASEDIR)/')")
+    case $d in /work/PUBLIC/*) o=$(outlib "$p") ;; *) o=$OUT/dir/${d#/work/}/$(basename "$p" | tr A-Z a-z) ;; esac
+    mkdir -p $(dirname $o) && rm -f $o
     MSVC_ENV=0 WINEDEBUG=-all lib -nologo -out:$o $l > /tmp/nttarget.err 2>&1 || { cat /tmp/nttarget.err >&2; return 1; }
-    case $p in
-    [Oo][Bb][Jj]/*) d=$D ;;
-    */[Oo][Bb][Jj]/*) d=$(resolve "${p%/[Oo][Bb][Jj]/*}") || return 0 ;;
-    *) return 0 ;;
-    esac
-    mkdir -p $OUT/dir/${d#/work/} && cp $o $OUT/dir/${d#/work/}/
+    [ $OUT != /work/RASPI/obj ] || [ $o = $(outlib "$p") ] || cp $o $OUT/
 }
 # link32 -dump -symbols: the symbol tables of libraries, by the linker of Microsoft C
 nmk_link32() {

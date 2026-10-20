@@ -6,8 +6,9 @@
 # TARGETLIBS (obj/um/<name>.lib) at its COFFBASE.TXT base, entry DLLENTRY. ntdll's exports are NTDLLDEF.SRC + dll/armdef.src +
 # GENSRV's ntdll.xtr, preprocessed as its MAKEFILE.INC does; another DLL's come
 # from its <name>.def or <name>.src, and it imports ntdll, as makefile.def links
-# every DLL. The import library is obj/um/<name>.lib; with PRIVATE exports there
-# is also obj/um/<name>p.lib, which has all of them.
+# every DLL. The import library is obj/um/<name>.lib, that of a DLL of a TARGETPATH
+# other than the public one is that of its directory (libpath.sh); with PRIVATE exports
+# there is also <name>p.lib, which has all of them.
 #
 # Usage:  cd RASPI/build && ./make-dll.sh DLL/DAYTONA                # ntdll
 #         INSTALL=1 ./make-dll.sh DLL/DAYTONA                         # also install
@@ -69,19 +70,23 @@ else
   ntsrc $f $DIR/$NAME.src
   cl -nologo -EP -D_ARM_ -DDBG=0 -DDEVL=1 -DNT_UP=1 $DEFS $DIR/$NAME.src 2>/dev/null | sed -f deffix.sed > $DIR/$NAME.def
 fi
-# The import library of the DLL leaves out its PRIVATE exports; when it has any, the
-# private import library <name>p (user32p.lib, gdi32p.lib) has them all.
+# The import library, of the public TARGETPATH in obj/um, else that of its TARGETPATH
+# (libpath.sh), as build.exe left it. It leaves out the PRIVATE exports of the DLL;
+# when it has any, the private import library <name>p (user32p.lib, gdi32p.lib) has them all.
+T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
+I=$U; case $T in /work/PUBLIC/*) ;; *) I=$U/dir/${T#/work/} ;; esac
+mkdir -p $I
 privlib() {
   grep -q PRIVATE $DIR/$NAME.def || return 0
   sed "s/[[:space:]]PRIVATE//" $DIR/$NAME.def > $DIR/${NAME}p.def
   lib -nologo -machine:arm -def:$DIR/${NAME}p.def -name:$NAME.$EXT -out:$DIR/${NAME}p.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
-  ntimplib $DIR/${NAME}p.def $DIR/${NAME}p.lib $U/${NAME}p.lib
+  ntimplib $DIR/${NAME}p.def $DIR/${NAME}p.lib $I/${NAME}p.lib
 }
 if [ "$IMPLIB" = 1 ]; then
   lib -nologo -machine:arm -def:$DIR/$NAME.def -name:$NAME.$EXT -out:$DIR/$NAME.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
-  ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
+  ntimplib $DIR/$NAME.def $DIR/$NAME.lib $I/$NAME.lib
   privlib
-  echo "   wrote obj/um/$NAME.lib (the import library of the .def)"
+  echo "   wrote ${I#/work/RASPI/}/$NAME.lib (the import library of the .def)"
   exit 0
 fi
 
@@ -159,18 +164,15 @@ for l in $RESLIBS; do
 done
 set +f
 F=$(echo $NAME.$EXT | tr a-z A-Z)
+# (the .pdb and .map are made beside the image, which names the obj/<name>.pdb they then are:
+# two images of a name, msacm32.dll and msacm32.drv, may link at once)
 link -nologo -machine:arm -release -force:multiple -dll $E -base:$BASE -subsystem:console -nodefaultlib \
-     -debug -pdb:$O/$NAME.pdb -map:$O/$NAME.map -def:$DIR/$NAME.def -implib:$DIR/$NAME.lib -out:$DIR/$F \
-     $DIR/obj/*.obj $LIBS $DIR/newarray.lib $RES > $DIR/link.err 2>&1 \
+     -debug -pdb:$DIR/$NAME.pdb -pdbaltpath:"Z:$(echo $O/$NAME.pdb | tr / "\\\\")" -map:$DIR/$NAME.map \
+     -def:$DIR/$NAME.def -implib:$DIR/$NAME.lib -out:$DIR/$F $DIR/obj/*.obj $LIBS $DIR/newarray.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
+cp $DIR/$NAME.pdb $DIR/$NAME.map $O/
 bash /work/RASPI/tools/host.sh pe2img -version 3.50 $DIR/$F || exit 1
-# The import library: that of a .dll in obj/um, that of another (a .drv or .cpl is loaded,
-# not linked, and may have the name of a DLL: msacm32.drv) only as the library of its
-# TARGETPATH (libpath.sh), as also the import library of a DLL of a TARGETPATH other than
-# the public one (obj).
-T=$(bash libpath.sh -d $D "$(macro TARGETPATH)")
-case $T in /work/PUBLIC/*) ;; *) mkdir -p $U/dir/${T#/work/} && cp $DIR/$NAME.lib $U/dir/${T#/work/}/ ;; esac
-[ "$EXT" != dll ] || ntimplib $DIR/$NAME.def $DIR/$NAME.lib $U/$NAME.lib
+ntimplib $DIR/$NAME.def $DIR/$NAME.lib $I/$NAME.lib
 privlib
 OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/$DEST && mkdir -p $OUT
 cp $DIR/$F $OUT/$F
