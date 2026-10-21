@@ -87,12 +87,14 @@ lib $W NETDDE/SRC/TOOLKIT; dll $W NETDDE/SRC/NDEAPI/CLIENT; lib $W NETDDE/SRC/ND
 lib $W NETDDE/SRC/NTDDECMN; dll $W NETDDE/SRC/NDDENB32; lib $W NETDDE/SRC/NDEAPI/SERVER
 for a in NETDDE:netdde DDESHARE:ddeshare; do lib $W NETDDE/SRC/${a%%:*}; exe $W NETDDE/SRC/${a%%:*} ${a#*:}; done
 
-# the common controls and the cards, then the accessories, the games, File Manager, the task list and winver
+# the common controls and the cards, then the accessories, the games, File Manager and winver; the task manager
+# (apps/taskman) in place of the Task List, which Program Manager does not start when Winlogon\Taskman names it
 dll $W SHELL/MSCTLS; dll $W EP/CARDDLL; dll $W EP/ABOUTWEP
 for a in SHELL/ACCESORY/NOTEPAD:notepad SHELL/ACCESORY/CALC:calc SHELL/ACCESORY/CLOCK:clock SHELL/ACCESORY/SPECHARS:charmap \
-         SHELL/GAMES/SOL:sol EP/WINMINE:winmine EP/FREECELL:freecell SHELL/TASKMAN:taskman SHELL/WINFILE:winfile \
+         SHELL/GAMES/SOL:sol EP/WINMINE:winmine EP/FREECELL:freecell SHELL/WINFILE:winfile \
          SHELL/WINVER:winver SHELL/GAMES/REVERSI:reversi EP/CRUEL:cruel EP/GOLF:golf EP/PEGGED:pegged EP/SNAKE:snake \
          EP/TICTAC:tictac EP/OLDTP:taipei; do pair $W $a; done
+exe /work/RASPI/apps taskman taskman
 
 # WinHelp and its full-text search
 for c in MVAPI FTENGINE FTUI; do dll $W WINHELP/$c; done

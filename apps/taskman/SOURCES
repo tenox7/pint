@@ -1,0 +1,14 @@
+MAJORCOMP=shell
+MINORCOMP=taskman
+
+TARGETNAME=taskman
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+C_DEFINES=-DNTPERF_USE_CRT
+
+SOURCES=ntperf3x.c \
+        nt3x.c
+
+UMTYPE=windows
+UMENTRY=winmain

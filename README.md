@@ -69,6 +69,13 @@ or `net use`), shares its own folders (`net share`), and has ping, ipconfig and 
 bindings, computer name and workgroup. Its Add Software > TCP/IP Protocol installs the FTP Server and the Simple TCP/IP
 Services.
 
+## Task Manager
+
+Ctrl+Esc, or a double-click on the desktop, opens an NT 4-style task manager (`apps/taskman`, TASKMAN.EXE) in place of
+Program Manager's Task List: Applications (Switch To, End Task), Processes (End Process, Set Priority, more columns
+under View) and Performance (CPU and memory history, a graph per CPU). The default hive names it in
+`Winlogon\Taskman`; unchecking its Options > Replace Task List brings the Task List back at the next logon.
+
 ## SDK tools
 
 The tools of the NT source's `PRIVATE\SDKTOOLS` that build for ARM are in `\SDKTOOLS` (`build/build-sdktools.sh`), not on

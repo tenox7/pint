@@ -15,7 +15,11 @@
 +                            class = REG_MULTI_SZ "bcmethAdapter basic"
 +                            InfOption = BCMETH
 +#endif // defined(_RASPI_) && !defined(_NETIDW_SETUP_)
-=1 881 891
+=1 881 365
++#if defined(_RASPI_)
++                    Taskman=taskman.exe /tasklist
++#endif // defined(_RASPI_)
+=1 1246 526
 +#if defined(_RASPI_) && !defined(_NETIDW_SETUP_)
 +                ncacn_nb_tcp0 = REG_DWORD 0x00000000
 +#endif // defined(_RASPI_) && !defined(_NETIDW_SETUP_)
