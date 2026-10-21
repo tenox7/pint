@@ -618,8 +618,14 @@ Lan9500Start(
     WriteRegister(Adapter, L95_ADDRH, Address[4] | (Address[5] << 8));
     WriteRegister(Adapter, L95_BURST_CAP, 0);
     WriteRegister(Adapter, L95_BULK_IN_DLY, L95_BULK_IN_DELAY);
-    ChangeRegister(Adapter, L95_HW_CFG, L95_HW_CFG_BIR | L95_HW_CFG_MEF | L95_HW_CFG_BCE | L95_HW_CFG_RXDOFF,
-                   L95_HW_CFG_RXDOFF_2);
+
+    //
+    // BIR: an IN token with no frame waiting gets a NAK, which the host retries by
+    // itself. A zero length packet instead completes each receive at once.
+    //
+
+    ChangeRegister(Adapter, L95_HW_CFG, L95_HW_CFG_MEF | L95_HW_CFG_BCE | L95_HW_CFG_RXDOFF,
+                   L95_HW_CFG_BIR | L95_HW_CFG_RXDOFF_2);
     WriteRegister(Adapter, L95_INT_STS, 0xFFFFFFFF);
     WriteRegister(Adapter, L95_LED_GPIO_CFG, L95_LED_SPD | L95_LED_LNK | L95_LED_FDX);
     WriteRegister(Adapter, L95_FLOW, 0);
@@ -654,7 +660,7 @@ Lan7800Start(
         return FALSE;
     }
 
-    ChangeRegister(Adapter, L78_USB_CFG0, L78_USB_CFG0_BIR, 0);
+    ChangeRegister(Adapter, L78_USB_CFG0, 0, L78_USB_CFG0_BIR);
     WriteRegister(Adapter, L78_RX_ADDRL, Low);
     WriteRegister(Adapter, L78_RX_ADDRH, High);
     WriteRegister(Adapter, L78_MAF_LO0, Low);

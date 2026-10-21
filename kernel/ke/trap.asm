@@ -16,9 +16,9 @@
 ;    trapped r0 and r1, resume address, status and fault address and status
 ;    are parked in the PCR meanwhile (the MIPS SavedT7/SavedEpc), as building
 ;    the frame may itself take a TB miss. KiTrapDispatch then saves the
-;    nonvolatile state in an exception frame below the trap frame and calls a
-;    C handler that resolves the trap or describes an exception, which is
-;    dispatched by KiDispatchException.
+;    volatile floating state in the trap frame and the nonvolatile state in an
+;    exception frame below it, and calls a C handler that resolves the trap or
+;    describes an exception, which is dispatched by KiDispatchException.
 ;
 ;    A system service enters KiSystemService by an svc from user mode, with
 ;    the service number in r12, or by a branch to KiServiceInternal from a
@@ -271,14 +271,16 @@ KiArmVectorTable
 
 ;
 ; KiTrapDispatch - entered with sp = the trap frame and r12 = the handler.
-; The nonvolatile state is saved in the exception frame below the trap frame,
+; The volatile floating state is saved in the trap frame, as the handler may
+; wait and another thread run (the MIPS general exception saves it for every
+; trap), the nonvolatile state in the exception frame below the trap frame,
 ; and below it are the exception record and the fifth argument of
 ; KiDispatchException. The handler is called with interrupts as they were at
-; the trap.
+; the trap. A resolved trap resumes through KiExceptionExit.
 ;
-; KiExceptionDispatch saves the volatile floating state in the trap frame and
-; calls KiDispatchException(ExceptionRecord, ExceptionFrame, TrapFrame,
-; PreviousMode, TRUE), then resumes through KiExceptionExit.
+; KiExceptionDispatch calls KiDispatchException(ExceptionRecord,
+; ExceptionFrame, TrapFrame, PreviousMode, TRUE), then resumes through
+; KiExceptionExit.
 ;
 
         NESTED_ENTRY KiTrapDispatch
@@ -287,6 +289,9 @@ KiArmVectorTable
         PROLOG_PUSH {r4-r11}
         PROLOG_VPUSH {d8-d15}
         PROLOG_STACK_ALLOC ExceptionRecordLength + 8
+        add     r0, sp, #TdTrapFrame + TrVolatileD ; save the volatile floating state
+        vstm    r0!, {d0-d7}
+        vstm    r0, {d16-d31}
         ldr     r0, [sp, #TdTrapFrame + TrCpsr]
         mrs     r1, cpsr
         bic     r1, r1, #CPSR_IRQ_DISABLE | CPSR_ABORT_DISABLE
@@ -299,17 +304,11 @@ KiArmVectorTable
         cmp     r0, #0
         bne     KiExceptionDispatch
         add     sp, sp, #ExceptionRecordLength + 8
-        vpop    {d8-d15}
-        pop     {r4-r11}
-        add     sp, sp, #16
-        b       KiTrapExit
+        b       KiExceptionExit
 
         EXPORT  KiExceptionDispatch
 KiExceptionDispatch
         add     r2, sp, #TdTrapFrame
-        add     r0, r2, #TrVolatileD            ; save the volatile floating state
-        vstm    r0!, {d0-d7}
-        vstm    r0, {d16-d31}
         add     r0, sp, #8                      ; exception record
         add     r1, sp, #8 + ExceptionRecordLength ; exception frame
         ldr     r3, [r2, #TrPreviousMode]
@@ -323,10 +322,15 @@ KiExceptionDispatch
 ;
 ; KiExceptionExit - restore the volatile floating state from the trap frame
 ; and the nonvolatile state from the exception frame at sp, and exit through
-; KiTrapExit. Also the exit of a user thread's startup.
+; KiTrapExit. Also the exit of a user thread's startup and of the continue
+; and raise exception services. Interrupts are disabled first, as the MIPS
+; exception exit does: an interrupt taken once the exception frame is
+; released would build its own frames over it, and KiTrapExit reloads the
+; user nonvolatile state from there.
 ;
 
         LEAF_ENTRY_NO_PDATA KiExceptionExit
+        cpsid   i
         add     r1, sp, #ExceptionFrameLength   ; trap frame
         add     r0, r1, #TrVolatileD
         vldm    r0!, {d0-d7}
