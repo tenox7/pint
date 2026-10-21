@@ -237,7 +237,13 @@ BcmethStartTransmit(
 {
     ULONG Address = Adapter->TransmitPhysical.LowPart + Adapter->TransmitHead * TRANSMIT_SLOT_SIZE;
 
-    if (Adapter->TransmitStopped || (!Adapter->TransmitZero && Adapter->TransmitCount == 0)) {
+    //
+    // One transfer at a time: the NdisMSendResourcesAvailable of a transmit
+    // completion calls the send handler, which may start it first.
+    //
+
+    if (Adapter->TransmitBusy || Adapter->TransmitStopped ||
+        (!Adapter->TransmitZero && Adapter->TransmitCount == 0)) {
         return;
     }
 
