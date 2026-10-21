@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Build the system disk: MBR + one FAT16 partition holding the Pi GPU firmware,
 # config.txt, the ARC firmware (arcfw.bin, the kernel= image) and the NT tree in
-# sdcard/root (\WINNT\...) with the registry hives of obj/gen/hives, the NLS tables and OEM font
+# sdcard/root (\WINNT\...) with the registry hives of obj/gen/hives, the NLS tables and fonts
 # of the NT tree, the help files of the programs and the setup aid of a developer install
 # (ported/oak/registry.ini, the program groups in \WINNT\IDW). FAT16 because both
 # the GPU firmware and NT 3.5 read it.
 # Flash it for a real Pi 2, 3 or 4, or attach it in QEMU with -drive if=sd. With -u the disk of
 # the last build is updated in place, keeping what NT wrote on it: the files built since
-# go in (a new disk when the hives changed).
+# go in (a new disk when the hives or this script changed).
 #
 # Usage:  cd RASPI/sdcard && ./make-sd-image.sh [-u]           # -> ../obj/nt-arcfw-sd.img
 # Flash:  sudo dd if=../obj/nt-arcfw-sd.img of=/dev/rdiskN bs=4m   (diskutil list)
@@ -34,7 +34,7 @@ for f in bootcode.bin start.elf fixup.dat bcm2709-rpi-2-b.dtb start4.elf fixup4.
   [[ -s "$FWCACHE/$f" ]] || { echo ">> fetching $f"; curl -fsSL -o "$FWCACHE/$f" "$base/$f"; }
 done
 
-if [[ "${1:-}" = -u && -f "$IMG" && -f "$STAMP" && -z "$(find ../obj/gen/hives ../ported/oak -newer "$STAMP" -print -quit)" ]]; then
+if [[ "${1:-}" = -u && -f "$IMG" && -f "$STAMP" && -z "$(find ../obj/gen/hives ../ported/oak make-sd-image.sh -newer "$STAMP" -print -quit)" ]]; then
   new=$(cd .. && find sdcard/root sdcard/config.txt sdcard/firmware obj/arcfw.bin -type f -newer obj/stamp/sd-image)
   echo ">> updating $IMG: $(echo $new | wc -w | tr -d ' ') files"
   [[ -z "$new" ]] || docker run --rm -v "$ROOT":/work -w /work --entrypoint bash tenox7/msvc-arm32 -c '
@@ -60,7 +60,16 @@ cp config.txt ../obj/arcfw.bin /tmp/sd/
 cp -r root/* /tmp/sd/
 mkdir -p /tmp/sd/WINNT/System /tmp/sd/WINNT/System32 /tmp/sd/TMP
 cp /nt/PRIVATE/WINDOWS/WINNLS/DATA/{C_1252,C_437,CTYPE,L_INTL,LOCALE,SORTKEY,SORTTBLS,UNICODE}.NLS /tmp/sd/WINNT/System32/
-cp /nt/PRIVATE/WINDOWS/GDI/FONTS/VGAOEM.FON /tmp/sd/WINNT/System/
+# the fonts Setup copies to \system (TXTSETUP.SIF directory 5): the VGA resolution set the registry names,
+# the TrueType fonts with Lucida Console, the DOS window fonts
+F=/nt/PRIVATE/WINDOWS/GDI/FONTS
+for f in VGASYS VGAFIX VGAOEM VGA850 VGA860 VGA861 VGA863 VGA865 SSERIFE SERIFE COURE SMALLE SMALLF SYMBOLE SYMBOLF \
+         ROMAN SCRIPT MODERN APP850 DOSAPP CGA40850 CGA40WOA CGA80850 CGA80WOA EGA40850 EGA40WOA EGA80850 EGA80WOA \
+         8514FIX 8514OEM 8514SYS; do cp $F/$f.FON /tmp/sd/WINNT/System/; done
+for f in ARIAL ARIALBD ARIALBI ARIALI COUR COURBD COURBI COURI TIMES TIMESBD TIMESBI TIMESI SYMBOL WINGDING LUCON; do
+  cp $F/$f.TTF $F/$f.FOT /tmp/sd/WINNT/System/
+done
+cp $F/L_10646.TTF /tmp/sd/WINNT/System/
 mkdir -p /tmp/sd/WINNT/System32/config
 cp ../obj/gen/hives/SYSTEM ../obj/gen/hives/SOFTWARE ../obj/gen/hives/DEFAULT /tmp/sd/WINNT/System32/config/
 perl ../tools/ntdiff.pl apply /nt ../ported/oak/registry.ini.ntdiff
