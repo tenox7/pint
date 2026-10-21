@@ -115,10 +115,11 @@ typedef struct _HID_FIELD {
 } HID_FIELD, *PHID_FIELD;
 
 //
-// An interface of the HID class: its interrupt endpoint, the delay of the
-// next read after errors, the counts of its reads (which the boot menu
-// shows), and the layout of its keyboard and pointer reports, those of the
-// boot protocol or parsed from its report descriptor.
+// An interface of the HID class: its interrupt endpoint, the errors of its
+// last reads and the delay of the next read after them, the counts of its
+// reads (which the boot menu shows), and the layout of its keyboard and
+// pointer reports, those of the boot protocol or parsed from its report
+// descriptor.
 //
 
 typedef struct _USB_HID {
@@ -133,6 +134,7 @@ typedef struct _USB_HID {
     BOOLEAN ReportIds;
     UCHAR Generation;
     UCHAR RetryDelay;
+    UCHAR Errors;
     ULONG RetryTime;
     USHORT Reports;
     USHORT Naks;
