@@ -1,0 +1,11 @@
+MAJORCOMP=games
+MINORCOMP=bubbles
+
+TARGETNAME=bubbles
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+SOURCES=bubbles.c
+
+UMTYPE=windows
+UMENTRY=winmain

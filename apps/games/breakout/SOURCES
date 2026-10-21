@@ -1,0 +1,11 @@
+MAJORCOMP=games
+MINORCOMP=breakout
+
+TARGETNAME=breakout
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+SOURCES=breakout.c
+
+UMTYPE=windows
+UMENTRY=winmain

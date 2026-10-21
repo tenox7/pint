@@ -1,0 +1,11 @@
+MAJORCOMP=games
+MINORCOMP=missile
+
+TARGETNAME=misl
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+SOURCES=misl.c
+
+UMTYPE=windows
+UMENTRY=winmain

@@ -76,6 +76,14 @@ Program Manager's Task List: Applications (Switch To, End Task), Processes (End 
 under View) and Performance (CPU and memory history, a graph per CPU). The default hive names it in
 `Winlogon\Taskman`; unchecking its Options > Replace Task List brings the Task List back at the next logon.
 
+## Games
+
+Program Manager's Games group has, beside Solitaire, Minesweeper and FreeCell, the games of `apps/games`: 2048,
+Breakout, Bubble Breaker, Moon Lander, Missile Command, Snake (NTSNAKE.EXE: SNAKE.EXE is the Entertainment Pack's),
+Tankz, NT Rigue, RISCque, Sokoban, RISCoban and WiNTown, a port of Micropolis. They were written for NT 4 and changed to
+the API of NT 3.5 in October 2026. WiNTown and the Micropolis simulator are under the GPL 3.0 with Electronic Arts'
+additional terms (`apps/games/wintown/LICENSE`); the other games are public domain.
+
 ## SDK tools
 
 The tools of the NT source's `PRIVATE\SDKTOOLS` that build for ARM are in `\SDKTOOLS` (`build/build-sdktools.sh`), not on

@@ -1,0 +1,12 @@
+MAJORCOMP=games
+MINORCOMP=snake
+
+# not snake: SNAKE.EXE is the Entertainment Pack game (EP\SNAKE)
+TARGETNAME=ntsnake
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+SOURCES=snake.c
+
+UMTYPE=windows
+UMENTRY=winmain

@@ -1,0 +1,13 @@
+MAJORCOMP=games
+MINORCOMP=sokoban
+
+TARGETNAME=sokoban
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+INCLUDES=..
+
+SOURCES=sokoban.c sokoban.rc
+
+UMTYPE=windows
+UMENTRY=winmain
