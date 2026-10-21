@@ -13,6 +13,11 @@ Windows NT 3.5 ported to 32-bit ARM (ARMv7-A) on the Raspberry Pi 2 and 3, with 
   - Pi 1, Zero, Zero W: ARMv6 (ARM1176), no Thumb-2.
   - Pi 5, Pi 500: the Cortex-A76 runs 32-bit code only in user mode.
 
+## Why not Pi 1 or Pi 5
+
+Microsoft's compiler, the only 32-bit ARM compiler with NT's exception handling, makes only Thumb-2 code, not the ARMv6
+code the Pi 1 and Zero need, and the Pi 5 cannot run a 32-bit kernel at all.
+
 ## Build
 
 The NT 3.5 source (`PRIVATE`, `PUBLIC`) and DEC's ADK (`arc/adk`, for the ARC DOS shell) go beside this tree and are
