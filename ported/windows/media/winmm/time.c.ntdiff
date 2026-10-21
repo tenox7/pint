@@ -1,0 +1,21 @@
+#ntdiff PRIVATE/WINDOWS/MEDIA/WINMM/TIME.C
+=1 1 42
++#if defined(_ARM_)
++
++//
++// The kernel stores the parts of a shared time with barriers between them
++// (High2Time, LowPart, High1Time): they are read back in the opposite order
++// with barriers too, so that a value read while it changes is seen as such.
++//
++
++void __dmb(unsigned int);
++#pragma intrinsic(__dmb)
++#define ReadBarrier() __dmb(0xB)
+=1 154 3
++#define ReadBarrier()
+=1 161 3
+=1 43 116
++        ReadBarrier();
+=1 159 1
++        ReadBarrier();
+=1 160 1208

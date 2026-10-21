@@ -110,11 +110,14 @@
 =1 94 3
 +        LEAF_ENTRY RtlpGetStackLimits
 +#if defined(NTOS_KERNEL_RUNTIME)
++        mrs     r3, cpsr                        ; the PCR of the processor run on
++        cpsid   i
 +        CP_READ r12, 15, 0, 13, 0, 4            ; PCR
 +        ldr     r2, [r12, #PcInitialStack]      ; high limit of the kernel stack
++        msr     cpsr_c, r3
 +        sub     r3, r2, #KERNEL_STACK_SIZE      ; low limit of the kernel stack
 +#else
-+        CP_READ r12, 15, 0, 13, 0, 3            ; TEB
++        CP_READ r12, 15, 0, 13, 0, 2            ; TEB
 +        ldr     r2, [r12, #TeStackBase]         ; high limit of the user stack
 +        ldr     r3, [r12, #TeStackLimit]        ; low limit of the user stack
 +#endif

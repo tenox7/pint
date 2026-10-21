@@ -50,8 +50,6 @@ static CONFIGURATION_COMPONENT_DATA ArcNetworkNode;
 // geometry (lines per block << 24 | log2 line size << 16 | log2 pages).
 //
 
-#define ARC_PROCESSORS 4
-
 static CONFIGURATION_COMPONENT_DATA ArcCpuNode[ARC_PROCESSORS];
 static CONFIGURATION_COMPONENT_DATA ArcFpuNode[ARC_PROCESSORS];
 static CONFIGURATION_COMPONENT_DATA ArcIcacheNode[ARC_PROCESSORS];

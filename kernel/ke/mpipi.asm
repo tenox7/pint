@@ -10,9 +10,9 @@
 ;
 ;    A request to a processor is posted in its PRCB: the request summary and,
 ;    above it, the address of the packet entry of the sending processor,
-;    updated together with ldrexd/strexd (the MIPS lld/scd). The kernel is
-;    built for a uniprocessor (NT_UP), so requests are never sent, as in the
-;    NT_UP build of the MIPS routines.
+;    updated together with ldrexd/strexd (the MIPS lld/scd). The requests are
+;    made visible before the HAL interrupts the targets. In the NT_UP build
+;    requests are never sent, as in the NT_UP build of the MIPS routines.
 ;
 ;--
 
@@ -21,6 +21,8 @@
 
         IMPORT  KiFreezeTargetExecution
         IMPORT  KiRequestSoftwareInterrupt
+        IMPORT  HalRequestIpi
+        IMPORT  KiProcessorBlock
 
         TEXTAREA
 
@@ -136,13 +138,79 @@
 ; Routine Description:
 ;
 ;    These routines request an operation, or the execution of a worker
-;    function, on the target processors. There are none on a uniprocessor.
+;    function, on the target processors. A packet is posted in the PRCB of the
+;    sending processor: the worker and its parameters, and in the request
+;    packet entry of each target the sending PRCB, whose address the target
+;    receives with its request; the target clears the entry when done
+;    (KiIpiStallOnPacketTargets). A target with a packet pending is waited for.
 ;
 ;--
+
+#if defined(NT_UP)
 
         LEAF_ENTRY KiIpiSend
         ALTERNATE_ENTRY KiIpiSendPacket
         bx      lr
         LEAF_END KiIpiSend
+
+#else
+
+        NESTED_ENTRY KiIpiSend
+        PROLOG_PUSH {r4-r7, lr}
+        mov     r4, r0                          ; target set
+        ldr     r5, =KiProcessorBlock
+10      tst     r4, #1
+        beq     %F30
+        ldr     r6, [r5]                        ; target PRCB
+        add     r6, r6, #PbRequestSummary
+20      ldrexd  r2, r3, [r6]                    ; request summary, packet entry
+        orr     r2, r2, r1                      ; merge the request
+        strexd  r7, r2, r3, [r6]
+        cmp     r7, #0
+        bne     %B20
+30      add     r5, r5, #4
+        lsrs    r4, r4, #1
+        bne     %B10
+        dsb                                     ; requests visible before the interrupt
+        EPILOG_POP {r4-r7, lr}
+        EPILOG_BRANCH HalRequestIpi             ; interrupt the targets (r0)
+        NESTED_END KiIpiSend
+
+        NESTED_ENTRY KiIpiSendPacket
+        PROLOG_PUSH {r4-r9, lr}
+        ldr     r12, [sp, #7 * 4]               ; Parameter3
+        CP_READ r4, 15, 0, 13, 0, 4             ; PCR
+        ldr     r4, [r4, #PcPrcb]               ; sending PRCB
+        str     r1, [r4, #PbWorkerRoutine]
+        str     r2, [r4, #PbCurrentPacket]
+        str     r3, [r4, #PbCurrentPacket + 4]
+        str     r12, [r4, #PbCurrentPacket + 8]
+        add     r5, r4, #PbRequestPacket        ; packet entry of processor 0
+        ldr     r6, =KiProcessorBlock
+        mov     r7, r0                          ; target set
+10      tst     r7, #1
+        beq     %F30
+        str     r4, [r5]                        ; sending PRCB in the entry
+        dmb                                     ; packet before the request
+        ldr     r8, [r6]                        ; target PRCB
+        add     r8, r8, #PbRequestSummary
+20      ldrexd  r2, r3, [r8]                    ; request summary, packet entry
+        tst     r2, #IPI_PACKET_READY
+        bne     %B20                            ; the target has a packet pending
+        orr     r2, r2, #IPI_PACKET_READY
+        mov     r3, r5                          ; packet entry address
+        strexd  r9, r2, r3, [r8]
+        cmp     r9, #0
+        bne     %B20
+30      add     r5, r5, #4
+        add     r6, r6, #4
+        lsrs    r7, r7, #1
+        bne     %B10
+        dsb                                     ; requests visible before the interrupt
+        EPILOG_POP {r4-r9, lr}
+        EPILOG_BRANCH HalRequestIpi             ; interrupt the targets (r0)
+        NESTED_END KiIpiSendPacket
+
+#endif
 
         END

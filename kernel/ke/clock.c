@@ -24,14 +24,36 @@ Environment:
 #include "ki.h"
 
 //
+// Order the stores of a lock-free time value for the other processors.
+//
+
+#if defined(NT_UP)
+#define KiOrderStores()
+#else
+#define KiOrderStores() __dmb(_ARM_BARRIER_SY)
+#endif
+
+//
+// Add a tick to the run time of a process.
+//
+
+#if defined(NT_UP)
+#define KiAddProcessTime(Time) (*(Time) += 1)
+#else
+#define KiAddProcessTime(Time) InterlockedIncrement((PLONG)(Time))
+#endif
+
+//
 // KeUpdateSystemTime - the clock tick, ported from KE/MIPS/XXCLOCK.S. Called
 // from the clock ISR each interrupt with the time increment in 100-ns units.
 //
 // Every interrupt advances InterruptTime. KiTickOffset counts the increment down
 // to a full tick; on a full tick SystemTime advances by KeTimeAdjustment and
 // KeTickCount by one, its low part mirrored into SharedUserData->TickCountLow.
-// The 64-bit times are stored High2 -> Low -> High1 so the lock-free readers
-// (arm.h), which retry while High1Time != High2Time, never see a torn value.
+// The 64-bit times are stored High2 -> Low -> High1, with a barrier between
+// the stores for the other processors, so the lock-free readers (arm.h),
+// which retry while High1Time != High2Time, never see a torn value. Only the
+// processor that keeps the system time calls it.
 //
 // If the timer at the current hand (or, on a full tick, the next hand) has
 // expired, the timer expiration DPC is queued with the hand value. A full tick
@@ -73,7 +95,9 @@ KeUpdateSystemTime (
                     (ULONGLONG)SharedUserData->InterruptTime.LowPart;
     InterruptTime += TimeIncrement;
     SharedUserData->InterruptTime.High2Time = (LONG)(InterruptTime >> 32);
+    KiOrderStores();
     SharedUserData->InterruptTime.LowPart   = (ULONG)InterruptTime;
+    KiOrderStores();
     SharedUserData->InterruptTime.High1Time = (LONG)(InterruptTime >> 32);
 
     Hand = KeTickCount.LowPart;
@@ -85,7 +109,9 @@ KeUpdateSystemTime (
                (ULONGLONG)SharedUserData->SystemTime.LowPart;
         Time += KeTimeAdjustment;
         SharedUserData->SystemTime.High2Time = (LONG)(Time >> 32);
+        KiOrderStores();
         SharedUserData->SystemTime.LowPart   = (ULONG)Time;
+        KiOrderStores();
         SharedUserData->SystemTime.High1Time = (LONG)(Time >> 32);
 
         Time = ((ULONGLONG)(ULONG)KeTickCount.High1Time << 32) |
@@ -93,7 +119,9 @@ KeUpdateSystemTime (
         Time += 1;
         SharedUserData->TickCountLow = (ULONG)Time;
         KeTickCount.High2Time = (LONG)(Time >> 32);
+        KiOrderStores();
         KeTickCount.LowPart   = (ULONG)Time;
+        KiOrderStores();
         KeTickCount.High1Time = (LONG)(Time >> 32);
 
         KiTickOffset += KeMaximumIncrement;
@@ -108,13 +136,14 @@ KeUpdateSystemTime (
     }
 
     //
-    // Put the timer expiration DPC in the DPC list and request a dispatch
-    // interrupt.
+    // Put the timer expiration DPC in the DPC list, under the DPC lock, and
+    // request a dispatch interrupt.
     //
 
     if (Expired != FALSE) {
         Prcb = KeGetCurrentPrcb();
         Enable = KiDisableInterrupts();
+        KiAcquireSpinLock(&Prcb->DpcLock);
         if (KiTimerExpireDpc.Lock == NULL) {
             KiTimerExpireDpc.Lock = &Prcb->DpcLock;
             KiTimerExpireDpc.SystemArgument1 = (PVOID)Hand;
@@ -122,6 +151,7 @@ KeUpdateSystemTime (
             KiRequestSoftwareInterrupt(DISPATCH_LEVEL);
         }
 
+        KiReleaseSpinLock(&Prcb->DpcLock);
         KiRestoreInterrupts(Enable);
     }
 
@@ -137,7 +167,9 @@ KeUpdateSystemTime (
 // on a quantum end. The accounting bucket is selected by the interrupted context
 // captured in the trap frame (ke/trap.S): the saved CPSR's mode field gives kernel
 // vs user, and the recorded OldIrql distinguishes thread-kernel / DPC / interrupt
-// time. A uniprocessor kernel, so the process-time updates need no interlock.
+// time. Each processor runs it on its own clock interrupt: the times of a
+// process, whose threads may run on several processors at once, are added
+// interlocked (the MIPS ll/sc of XXCLOCK.S).
 //
 
 VOID
@@ -163,7 +195,7 @@ KeUpdateRunTime (
         //
 
         Thread->UserTime += 1;
-        Process->UserTime += 1;
+        KiAddProcessTime(&Process->UserTime);
         Prcb->UserTime += 1;
 
     } else {
@@ -185,7 +217,7 @@ KeUpdateRunTime (
             Prcb->KernelTime += 1;
         } else {
             Thread->KernelTime += 1;
-            Process->KernelTime += 1;
+            KiAddProcessTime(&Process->KernelTime);
             Prcb->KernelTime += 1;
         }
     }
@@ -236,8 +268,10 @@ KeProfileInterrupt (
     IN PKTRAP_FRAME TrapFrame
     )
 {
+    KiAcquireSpinLock(&KiProfileLock);
     KiProcessProfileList(TrapFrame,
                          &KeGetCurrentThread()->ApcState.Process->ProfileListHead);
 
     KiProcessProfileList(TrapFrame, &KiProfileListHead);
+    KiReleaseSpinLock(&KiProfileLock);
 }

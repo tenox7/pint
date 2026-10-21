@@ -65,6 +65,7 @@ kernel/inc/ntos.h
 kernel/inc/stdarg.h
 kernel/kd/kdcpuapi.c
 kernel/kd/kdtrap.c
+kernel/ke/allproc.c
 kernel/ke/apcuser.c
 kernel/ke/buserror.c
 kernel/ke/dmpstate.c
@@ -107,6 +108,7 @@ ported/crt32nt/convert/wcstombs.c
 ported/lsa/msv1_0/nlpcache.c
 ported/lsa/server/adtlog.c
 ported/lsa/server/aucred.c
+ported/ntos/ke/procobj.c
 ported/ntos/rtl/rxact.c
 ported/sm/server/sminit.c
 ported/windows/base/server/srvini.c
@@ -230,3 +232,5 @@ apps/sdktools/imagehlp/binplace.c
 apps/sdktools/slmnew/slm/glob.c
 apps/sdktools/slmnew/slm/diff.c
 apps/sdktools/slmnew/slm/delproj.c
+ported/windows/base/client/daytona/datetime.c
+ported/windows/media/winmm/time.c

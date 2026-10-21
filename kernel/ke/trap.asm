@@ -51,6 +51,16 @@
 #define SCTLR_V 0x2000
 #define SCTLR_TE 0x40000000
 
+;
+; The processors, and the sizes of the abort and undefined mode stacks of each.
+;
+
+#define KI_ARM_PROCESSORS 4
+#define ABORT_STACK_SHIFT 12
+#define ABORT_STACK_SIZE 4096
+#define UNDEFINED_STACK_SHIFT 6
+#define UNDEFINED_STACK_SIZE 64
+
 #define UserMode 1
 #define KernelMode 0
 
@@ -597,11 +607,12 @@ KiSystemServiceEndAddress
         EXPORT  KiSystemServiceExit
 KiSystemServiceExit
         str     r0, [r4, #TrR0]
+        cpsid   i
+        CP_READ r5, 15, 0, 13, 0, 4             ; PCR of the processor run on now
         ldr     r1, [r5, #PcPrcb]
         ldr     r2, [r1, #PbSystemCalls]
         adds    r2, r2, #1
         str     r2, [r1, #PbSystemCalls]
-        cpsid   i
         ldr     r3, [r4, #TrPreviousMode]
         strb    r3, [r6, #ThPreviousMode]       ; restore the old previous mode
         add     sp, sp, #TrapFrameArguments
@@ -778,9 +789,10 @@ KiSystemServiceExit
         LEAF_END KiPassiveRelease
 
 ;
-; VOID KiArmInitializeVectors(VOID) - take exceptions in Thumb state through
-; the vector table at VBAR, and set the stacks of the abort and undefined
-; modes.
+; VOID KiArmInitializeVectors(ULONG Number) - take exceptions in Thumb state
+; through the vector table at VBAR, and set the stacks of the abort and
+; undefined modes, those of the processor (the registers of each processor
+; are its own).
 ;
 
         LEAF_ENTRY KiArmInitializeVectors
@@ -789,30 +801,34 @@ KiSystemServiceExit
         orr     r1, r1, #SCTLR_TE               ; exceptions are taken in Thumb state
         CP_WRITE r1, 15, 0, 1, 0, 0
         isb
-        ldr     r0, =KiArmVectorTable
-        bic     r0, r0, #1
-        CP_WRITE r0, 15, 0, 12, 0, 0            ; VBAR
+        ldr     r1, =KiArmVectorTable
+        bic     r1, r1, #1
+        CP_WRITE r1, 15, 0, 12, 0, 0            ; VBAR
         isb
+        adds    r0, r0, #1
         mrs     r2, cpsr
         cps     #MODE_ABT
-        ldr     sp, =KiArmAbortStackTop
+        ldr     r1, =KiArmAbortStacks
+        add     r1, r1, r0, lsl #ABORT_STACK_SHIFT
+        mov     sp, r1
         cps     #MODE_UND
-        ldr     sp, =KiArmUndefinedStackTop
+        ldr     r1, =KiArmUndefinedStacks
+        add     r1, r1, r0, lsl #UNDEFINED_STACK_SHIFT
+        mov     sp, r1
         msr     cpsr_c, r2
         bx      lr
         LEAF_END KiArmInitializeVectors
 
 ;
 ; The stacks of the abort mode, on which the TB miss handler runs, and of the
-; undefined mode.
+; undefined mode, one of each per processor: the four cores of a Raspberry Pi
+; (the firmware has a restart block for each).
 ;
 
-        AREA    |.data|, DATA, READWRITE, ALIGN=3
-KiArmAbortStack
-        SPACE   4096
-KiArmAbortStackTop
-KiArmUndefinedStack
-        SPACE   64
-KiArmUndefinedStackTop
+        AREA    |.bss|, NOINIT, READWRITE, ALIGN=3
+KiArmAbortStacks
+        SPACE   ABORT_STACK_SIZE * KI_ARM_PROCESSORS
+KiArmUndefinedStacks
+        SPACE   UNDEFINED_STACK_SIZE * KI_ARM_PROCESSORS
 
         END

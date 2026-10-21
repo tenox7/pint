@@ -11,13 +11,18 @@ K=/work/RASPI/kernel B=/work/RASPI/build
 # over the NT tree (tools/ntdiff.pl).
 perl /work/RASPI/tools/ntdiff.pl apply /work /work/RASPI
 
+# NT_UP: as in makefile.def, 1 builds for a uniprocessor and 0 for a multiprocessor;
+# every Raspberry Pi has four cores, so the default here is 0.
+NT_UP=${NT_UP:-0}
+NTUPDEFINE=; [ "$NT_UP" = 0 ] || NTUPDEFINE=-DNT_UP=1
+
 # The machine and build defines of makefile.def (_ARM_ for the RISC machine), and
 # the options: no default libraries, wchar_t as NT's unsigned short, no security
 # checks, function-level linking, string literals writable and unpooled as the MIPS
 # compiler placed them (-GF- after -O2, which pools them read-only), debug
 # information in the objects, the C++ of MSVC 2.0: implicit int, no RTTI, no sized
 # delete, no thread safe statics, and the warnings of level 1.
-NTDEFINES="-D_ARM_=1 -DNT_UP=1 -DNT_INST=0 -DCONDITION_HANDLING=1 -DWIN32_LEAN_AND_MEAN=1 -DWIN32=100 -D_NT1X_=100 -DDBG=0 -DDEVL=1 -DFPO=1"
+NTDEFINES="-D_ARM_=1 $NTUPDEFINE -DNT_INST=0 -DCONDITION_HANDLING=1 -DWIN32_LEAN_AND_MEAN=1 -DWIN32=100 -D_NT1X_=100 -DDBG=0 -DDEVL=1 -DFPO=1"
 CLOPTS="-nologo -c -Zl -Zc:wchar_t- -Zc:forScope- -GS- -Gy -O2 -GF- -Oy- -Z7 -W1 -wd4430 -GR- -Zc:sizedDealloc- -Zc:threadSafeInit-"
 
 # ntsrc SOURCE OUT: the source as NT's build compiles it for ARM: the RISC and

@@ -214,7 +214,34 @@
 +UsbPrintDevices (
 =1 471 4
 +FwMmuInitialize (
+=1 471 4
++FwMmuInitializeProcessor (
 =1 165 4
++// The processors: the four cores of every board, processor n the core with
++// affinity n. Each has a restart block after the system parameter block; the
++// boot processor releases the others into the firmware, where each waits for
++// the start bit of its block (FwProcessorSystemBoot), as processor B of a Duo
++// does. The Raspberry Pi firmware holds a secondary core until its mailbox 3
++// in the per-core block receives the address it is to run.
++//
++
++#define ARC_PROCESSORS          4
++
++#define LOCAL_PERIPHERAL_BASE   (FwBcm2711 ? 0xFF800000 : 0x40000000)
++#define LOCAL_MAILBOX3_SET(n)   (*(volatile ULONG *)(LOCAL_PERIPHERAL_BASE + 0x8C + 0x10 * (n)))
++#define LOCAL_MAILBOX3_CLEAR(n) (*(volatile ULONG *)(LOCAL_PERIPHERAL_BASE + 0xCC + 0x10 * (n)))
++
++extern char FwStart[];
++extern volatile ULONG FwProcessorsReleased;
++
++VOID
++FwStartProcessors (
+=1 471 4
++FwProcessorSystemBoot (
++    IN ULONG Number
+=1 132 3
++VenRestartBlock (
+=1 122 4
 =1 616 6
 =1 629 23
 +#endif // _FWP_

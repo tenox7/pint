@@ -22,8 +22,9 @@ Environment:
 
 #include "ki.h"
 
-extern VOID KiArmInitializeVectors(VOID);
+extern VOID KiArmInitializeVectors(ULONG Number);
 extern VOID KiArmStartTranslation(PLOADER_PARAMETER_BLOCK LoaderBlock);
+extern VOID KiArmStartProcessorTranslation(PKPROCESS Process);
 
 //
 // KiApcInterrupt - the APC_LEVEL software interrupt (PCR->InterruptRoutine
@@ -93,16 +94,23 @@ static VOID KiArmEnableCaches(VOID)
 // parameter block: install the exception vectors, initialize the PCR from the
 // structures the OS Loader allocated, start translation, turn on the caches,
 // and initialize the kernel (the KE/MIPS X4START.S KiSystemBegin sequence).
-// Returns as the idle thread at HIGH_LEVEL.
+// Returns as the idle thread at HIGH_LEVEL. Another processor runs it from
+// KiInitializeSystem with the structures KeStartAllProcessors allocated and
+// its number in its processor block (HalStartNextProcessor); its startup has
+// taken the kernel-only table and turned its caches on, and it takes the
+// table of the idle process.
 //
 
 VOID KiArmInitialize(PLOADER_PARAMETER_BLOCK LoaderBlock)
 {
     PKPCR Pcr = (PKPCR)(KSEG0_BASE | (LoaderBlock->u.Arm.PcrPage << PAGE_SHIFT));
+    CCHAR Number = ((PKPRCB)LoaderBlock->Prcb)->Number;
     ULONG Midr;
 
-    KiArmInitializeVectors();
+    KiArmInitializeVectors(Number);
     KiSetProcessorControlRegion(Pcr);
+    KiSetCurrentThread(LoaderBlock->Thread);
+    KiSetCurrentTeb(NULL);
 
     //
     // Initialize the PCR from the structures and stacks the OS Loader allocated
@@ -118,9 +126,8 @@ VOID KiArmInitialize(PLOADER_PARAMETER_BLOCK LoaderBlock)
     Pcr->InterruptStack = LoaderBlock->u.Arm.InterruptStack;
     Pcr->CurrentThread = (PKTHREAD)LoaderBlock->Thread;
     Pcr->Teb = NULL;
-    _MoveToCoprocessor(0, 15, 0, 13, 0, 3);
     Pcr->ProcessorId = Midr;
-    Pcr->Number = 0;
+    Pcr->Number = Number;
     Pcr->CurrentIrql = HIGH_LEVEL;
     Pcr->CachePolicy = CACHED_POLICY;
     Pcr->AlignedCachePolicy = CACHED_POLICY << 3;
@@ -147,16 +154,27 @@ VOID KiArmInitialize(PLOADER_PARAMETER_BLOCK LoaderBlock)
     Pcr->IcacheAlignment = Pcr->IcacheFillSize - 1;
 
     //
-    // Build and load the kernel's translation tables and the page directory.
+    // Build and load the kernel's translation tables and the page directory,
+    // or, on another processor, take the table of the idle process.
     //
 
-    KiArmStartTranslation(LoaderBlock);
-    KiArmEnableCaches();
+    if (Number == 0) {
+        KiArmStartTranslation(LoaderBlock);
+        KiArmEnableCaches();
+
+#if !defined(NT_UP)
+
+    } else {
+        KiArmStartProcessorTranslation((PKPROCESS)LoaderBlock->Process);
+
+#endif
+
+    }
 
     KiInitializeKernel((PKPROCESS)LoaderBlock->Process,
                        (PKTHREAD)LoaderBlock->Thread,
                        (PVOID)LoaderBlock->KernelStack,
                        (PKPRCB)LoaderBlock->Prcb,
-                       0,
+                       Number,
                        LoaderBlock);
 }

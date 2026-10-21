@@ -91,19 +91,21 @@
 =1 389 2
 =1 396 2
 +//
-+// The current thread environment block: in the kernel runtime from the PCR;
-+// elsewhere, in user and kernel mode, from the user read-only thread id
-+// register, which the context switch sets as it sets the PCR (the MIPS
-+// USER_PCR->Teb).
++// The current thread environment block: in the kernel runtime that of the
++// current thread; elsewhere, in user and kernel mode, from the user read/write
++// thread id register, which the context switch loads with it (the MIPS
++// USER_PCR->Teb), as Windows on ARM does.
 =2 180 3
-=1 399 5
++
++#define NtCurrentTeb() ((PTEB)(KeGetCurrentThread()->Teb))
+=1 401 3
 +#ifdef __cplusplus
 +extern "C" unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
 +#else
 +unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
 +#endif
 +#pragma intrinsic(_MoveFromCoprocessor)
-+#define NtCurrentTeb() ((PTEB)_MoveFromCoprocessor(15, 0, 13, 0, 3))
++#define NtCurrentTeb() ((PTEB)_MoveFromCoprocessor(15, 0, 13, 0, 2))
 =1 405 5
 +#if defined(_ARM_)
 =1 411 6

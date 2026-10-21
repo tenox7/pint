@@ -1,0 +1,12 @@
+#ntdiff PRIVATE/NTOS/KE/PROCOBJ.C
+=1 1 365
++#if !defined(NT_UP) && (defined(_MIPS_) || defined(_ALPHA_) || defined(_ARM_))
+=1 367 389
++#if !defined(NT_UP) && (defined(_MIPS_) || defined(_ALPHA_) || defined(_ARM_))
+=1 757 36
++            //      to tag TB entries are globally assigned. Nor on ARM,
++            //      whose ASIDs are assigned as the MIPS PIDs.
++            //
++
++#if !defined(_MIPS_) && !defined(_ALPHA_) && !defined(_ARM_)
+=1 797 81

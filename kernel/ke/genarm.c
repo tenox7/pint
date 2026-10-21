@@ -78,6 +78,7 @@ GEN_ASSERT(FIELD_OFFSET(EEVENT_PAIR, KernelEventPair) == 0,
     //
 
     OFF(LpbKernelStack, LOADER_PARAMETER_BLOCK, KernelStack);
+    OFF(LpbPrcb, LOADER_PARAMETER_BLOCK, Prcb);
 
     //
     // String.
@@ -106,6 +107,7 @@ GEN_ASSERT(FIELD_OFFSET(EEVENT_PAIR, KernelEventPair) == 0,
     OFF(InSynchronizeIrql, KINTERRUPT, SynchronizeIrql);
     OFF(InFloatingSave, KINTERRUPT, FloatingSave);
     OFF(InMode, KINTERRUPT, Mode);
+    OFF(InActualLock, KINTERRUPT, ActualLock);
     OFF(InDispatchCode, KINTERRUPT, DispatchCode[0]);
     DEF(InLevelSensitive, LevelSensitive);
     DEF(InLatched, Latched);
@@ -132,6 +134,9 @@ GEN_ASSERT(FIELD_OFFSET(EEVENT_PAIR, KernelEventPair) == 0,
     OFF(PcPanicStack, KPCR, PanicStack);
     OFF(PcOnInterruptStack, KPCR, OnInterruptStack);
     OFF(PcSavedInitialStack, KPCR, SavedInitialStack);
+    OFF(PcNumber, KPCR, Number);
+    OFF(PcSetMember, KPCR, SetMember);
+    OFF(PcCurrentTb, KPCR, CurrentTb);
 
     //
     // Processor control block.
@@ -148,6 +153,10 @@ GEN_ASSERT(FIELD_OFFSET(EEVENT_PAIR, KernelEventPair) == 0,
     OFF(PbCurrentPacket, KPRCB, CurrentPacket);
     OFF(PbWorkerRoutine, KPRCB, WorkerRoutine);
     OFF(PbRequestSummary, KPRCB, RequestSummary);
+    OFF(PbRequestPacket, KPRCB, RequestPacket);
+    OFF(PbDpcLock, KPRCB, DpcLock);
+    OFF(PbNumber, KPRCB, Number);
+    OFF(PbSetMember, KPRCB, SetMember);
 
     //
     // Process and thread objects, and APC state.

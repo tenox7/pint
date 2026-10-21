@@ -52,11 +52,14 @@ archc() {
   ntsrc $f $DIR/src/arch_${s}_$b.c && ntcc $DIR/arch/arch_${s}_$b.obj $DIR/src/arch_${s}_$b.c $MODE $DEFS $(cdefs $S) -I/tmp/f/$s $COMMON
 }
 for c in ke/kearm.c ke/initkr.c ke/thredini.c ke/timindex.c ke/clock.c ke/tbarm.c ke/trapc.c ke/exceptn.c \
-         ke/buserror.c ke/dmpstate.c ke/mpipi.c ke/apcuser.c; do
+         ke/buserror.c ke/dmpstate.c ke/mpipi.c ke/apcuser.c ke/allproc.c; do
   par kec $c
 done
 # The ARM sources of the components (their ARM_SOURCES): ports of the MIPS ones, and
 # the machine-neutral C NT keeps in its MIPS and Alpha directories.
+# A uniprocessor kernel flushes the TB through KE\MIPS\XXFLSHTB.C, a multiprocessor one
+# through ke/tbarm.c (the ARMv7 TB maintenance reaches every processor).
+FLUSHTB=; [ "$NT_UP" = 0 ] || FLUSHTB=KE:/work/PRIVATE/NTOS/KE/MIPS/XXFLSHTB.C
 for e in EX:/work/PRIVATE/NTOS/EX/MIPS/SPLOCKS.C EX:/work/PRIVATE/NTOS/EX/MIPS/PROBE.C \
          PS:/work/PRIVATE/NTOS/PS/MIPS/KULOOKUP.C PS:/work/PRIVATE/NTOS/PS/MIPS/PSLDT.C \
          PS:/work/PRIVATE/NTOS/PS/MIPS/PSVDM.C CONFIG:config/initarm.c \
@@ -65,8 +68,8 @@ for e in EX:/work/PRIVATE/NTOS/EX/MIPS/SPLOCKS.C EX:/work/PRIVATE/NTOS/EX/MIPS/P
          MM:/work/PRIVATE/NTOS/MM/MIPS/SETDIRTY.C MM:/work/PRIVATE/NTOS/MM/MIPS/DEBUGSUP.C LPC:lpc/lpcmove.c \
          KD:/work/PRIVATE/NTOS/KD/MIPS/KDCMSUP.C KD:/work/PRIVATE/NTOS/KD/MIPS/KDREBOOT.C \
          KD:kd/kdtrap.c KD:kd/kdcpuapi.c RTL:/work/PRIVATE/NTOS/RTL/MIPS/DEBUG.C KE:/work/PRIVATE/NTOS/KE/MIPS/FLUSH.C \
-         KE:/work/PRIVATE/NTOS/KE/MIPS/XXFLSHTB.C KE:ke/intobj.c PS:ps/psctxarm.c \
-         RTL:rtl/context.c RTL:rtl/largeint.c RTL:rtl/movemem.c RTL:rtl/exdsptch.c RTL:rtl/vunwind.c RTL:rtl/chandler.c RTL:rtl/getcalr.c; do
+         KE:ke/intobj.c PS:ps/psctxarm.c \
+         RTL:rtl/context.c RTL:rtl/largeint.c RTL:rtl/movemem.c RTL:rtl/exdsptch.c RTL:rtl/vunwind.c RTL:rtl/chandler.c RTL:rtl/getcalr.c $FLUSHTB; do
   par archc $e
 done
 pwait; fail=$((fail+PARFAIL))

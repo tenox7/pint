@@ -56,7 +56,35 @@
 +
 +#define HAL_CORE_TIMER_CTL(c)   (LOCAL_PERIPHERAL_VIRTUAL + 0x40u + 4u * (c))
 +#define HAL_CORE_MBOX_CTL(c)    (LOCAL_PERIPHERAL_VIRTUAL + 0x50u + 4u * (c))
++#define HAL_GPU_INT_ROUTING     (LOCAL_PERIPHERAL_VIRTUAL + 0x0Cu)
 +#define HAL_CORE_IRQ_SRC(c)     (LOCAL_PERIPHERAL_VIRTUAL + 0x60u + 4u * (c))
++#define HAL_CORE_MBOX_SET(c, m) (LOCAL_PERIPHERAL_VIRTUAL + 0x80u + 0x10u * (c) + 4u * (m))
++#define HAL_CORE_MBOX_CLR(c, m) (LOCAL_PERIPHERAL_VIRTUAL + 0xC0u + 0x10u * (c) + 4u * (m))
++
++//
++// The per-core interrupts of the BCM2836 and BCM2837: each core has an IRQ
++// source register, the timer and mailbox enables of its own, and four
++// mailboxes another core sets bits of; the interrupts of the VideoCore and
++// the BCM2835 peripherals reach the one core GPU_INT_ROUTING names, core 0. A
++// processor is interrupted by another through its mailbox 0 (the IPI) and
++// keeps its run time by its generic virtual timer.
++//
++
++#define HAL_IRQ_SRC_CNTV        0x008u
++#define HAL_IRQ_SRC_MAILBOX0    0x010u
++#define HAL_IRQ_SRC_GPU         0x100u
++#define HAL_TIMER_CTL_CNTV_IRQ  0x008u
++#define HAL_MBOX_CTL_MAILBOX0_IRQ 0x001u
++
++//
++// The interrupts of a processor itself, by the levels they interrupt at, and
++// those of them masked because they arrived at or below the current IRQL, in
++// the HAL part of its PCR.
++//
++
++#define HAL_LOCAL_IPI           0x1u
++#define HAL_LOCAL_CLOCK         0x2u
++#define HalpLocalMasked         (PCR->HalReserved[0])
 +
 +//
 +// The GIC-400 of the BCM2711: its distributor and CPU interface are in the
@@ -71,6 +99,7 @@
 +#define HAL_GICD_IPRIORITYR(i)  (HAL_GICD_BASE + 0x400u + (i))
 +#define HAL_GICD_ITARGETSR(i)   (HAL_GICD_BASE + 0x800u + (i))
 +#define HAL_GICD_ICFGR(n)       (HAL_GICD_BASE + 0xC00u + 4u * (n))
++#define HAL_GICD_SGIR           (HAL_GICD_BASE + 0xF00u)
 +
 +#define HAL_GICC_BASE           (LOCAL_PERIPHERAL_VIRTUAL + 0x42000u)
 +#define HAL_GICC_CTLR           (HAL_GICC_BASE + 0x00u)
@@ -82,6 +111,7 @@
 +#define HAL_GIC_SPURIOUS        1020u
 +#define HAL_GIC_FIRST_SPI       32u
 +#define HAL_VIRTUAL_TIMER_ID    27u
++#define HAL_IPI_SGI             0u
 +#define HAL_VIDEOCORE_ID(n)     (96u + (n))
 +
 +//
@@ -274,6 +304,18 @@
 =2 121 4
 +HalpStartClock (
 =1 78 4
++HalpStartProcessorClock (
+=1 78 4
++HalpProcessorClockInterrupt (
++    IN PVOID Routine,
+=2 121 4
++HalpIpiInterrupt (
++    IN PVOID Routine,
+=2 121 4
++HalSweepDcacheRange (
++    IN PVOID BaseAddress,
++    IN ULONG Length
+=1 69 3
 +HalFlushDcachePage (
 +    IN PVOID Color,
 +    IN ULONG PageFrame,
@@ -290,6 +332,13 @@
 +    IN ULONG Length
 =3 168 6
 =3 176 1
++
++//
++// The spin locks of the HAL: the interrupt controller state, the display.
++//
++
+=3 184 1
+=3 177 1
 +extern BOOLEAN HalpDisplaySerial;
 +
 +#endif // _HALP_

@@ -8,13 +8,14 @@ Abstract:
 
     Executive interlocked operations for ARM (the ARM EX/MIPS/X4INTRLK.S).
     These may be called at any IRQL and from interrupt service routines, so
-    each sequence runs with interrupts disabled; on a multiprocessor build
-    the supplied spin lock would additionally be held. The single-word
-    increment/decrement/exchange forms are ke/interlock.S (LDREX/STREX).
+    each sequence runs with interrupts disabled and, on a multiprocessor,
+    holds the supplied spin lock. The single-word increment/decrement/exchange
+    forms are ke/interlock.asm (LDREX/STREX), and a large statistic is added
+    with them, as it needs no lock.
 
 Environment:
 
-    Kernel mode only, uniprocessor.
+    Kernel mode only.
 
 --*/
 
@@ -30,8 +31,18 @@ KiRestoreInterrupts (
     IN BOOLEAN Enable
     );
 
-#define ExpDisableInterrupts() KiDisableInterrupts()
-#define ExpRestoreInterrupts(Enable) KiRestoreInterrupts((BOOLEAN)(Enable))
+//
+// Disable interrupts and acquire the spin lock; release it and restore
+// interrupts.
+//
+
+#define ExpLock(Lock, Enable) \
+    (Enable) = KiDisableInterrupts(); \
+    KiAcquireSpinLock(Lock)
+
+#define ExpUnlock(Lock, Enable) \
+    KiReleaseSpinLock(Lock); \
+    KiRestoreInterrupts(Enable)
 
 ULONG
 ExInterlockedAddUlong (
@@ -40,11 +51,13 @@ ExInterlockedAddUlong (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    ULONG Value = *Addend;
+    BOOLEAN Enable;
+    ULONG Value;
 
+    ExpLock(Lock, Enable);
+    Value = *Addend;
     *Addend = Value + Increment;
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return Value;
 }
 
@@ -55,11 +68,13 @@ ExInterlockedAddLargeInteger (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    LARGE_INTEGER Value = *Addend;
+    BOOLEAN Enable;
+    LARGE_INTEGER Value;
 
+    ExpLock(Lock, Enable);
+    Value = *Addend;
     Addend->QuadPart = Value.QuadPart + Increment.QuadPart;
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return Value;
 }
 
@@ -68,11 +83,22 @@ ExInterlockedAddLargeStatistic (
     IN PLARGE_INTEGER Addend,
     IN ULONG Increment
     )
-{
-    ULONG Cpsr = ExpDisableInterrupts();
 
-    Addend->QuadPart += Increment;
-    ExpRestoreInterrupts(Cpsr);
+/*++
+
+Routine Description:
+
+    This function adds a value to a large statistic: interlocked to the low
+    part, and a carry out of it interlocked to the high part.
+
+--*/
+
+{
+    ULONG Low = (ULONG)InterlockedExchangeAdd((PLONG)&Addend->LowPart, (LONG)Increment);
+
+    if (Low + Increment < Low) {
+        InterlockedIncrement(&Addend->HighPart);
+    }
 }
 
 PLIST_ENTRY
@@ -82,14 +108,16 @@ ExInterlockedInsertHeadList (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    PLIST_ENTRY First = ListHead->Flink;
+    BOOLEAN Enable;
+    PLIST_ENTRY First;
 
+    ExpLock(Lock, Enable);
+    First = ListHead->Flink;
     ListEntry->Flink = First;
     ListEntry->Blink = ListHead;
     First->Blink = ListEntry;
     ListHead->Flink = ListEntry;
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return (First == ListHead) ? NULL : First;
 }
 
@@ -100,14 +128,16 @@ ExInterlockedInsertTailList (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    PLIST_ENTRY Last = ListHead->Blink;
+    BOOLEAN Enable;
+    PLIST_ENTRY Last;
 
+    ExpLock(Lock, Enable);
+    Last = ListHead->Blink;
     ListEntry->Flink = ListHead;
     ListEntry->Blink = Last;
     Last->Flink = ListEntry;
     ListHead->Blink = ListEntry;
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return (Last == ListHead) ? NULL : Last;
 }
 
@@ -117,9 +147,11 @@ ExInterlockedRemoveHeadList (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    PLIST_ENTRY Entry = ListHead->Flink;
+    BOOLEAN Enable;
+    PLIST_ENTRY Entry;
 
+    ExpLock(Lock, Enable);
+    Entry = ListHead->Flink;
     if (Entry == ListHead) {
         Entry = NULL;
 
@@ -128,7 +160,7 @@ ExInterlockedRemoveHeadList (
         Entry->Flink->Blink = ListHead;
     }
 
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return Entry;
 }
 
@@ -138,14 +170,16 @@ ExInterlockedPopEntryList (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    PSINGLE_LIST_ENTRY First = ListHead->Next;
+    BOOLEAN Enable;
+    PSINGLE_LIST_ENTRY First;
 
+    ExpLock(Lock, Enable);
+    First = ListHead->Next;
     if (First != NULL) {
         ListHead->Next = First->Next;
     }
 
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return First;
 }
 
@@ -156,11 +190,13 @@ ExInterlockedPushEntryList (
     IN PKSPIN_LOCK Lock
     )
 {
-    ULONG Cpsr = ExpDisableInterrupts();
-    PSINGLE_LIST_ENTRY First = ListHead->Next;
+    BOOLEAN Enable;
+    PSINGLE_LIST_ENTRY First;
 
+    ExpLock(Lock, Enable);
+    First = ListHead->Next;
     ListEntry->Next = First;
     ListHead->Next = ListEntry;
-    ExpRestoreInterrupts(Cpsr);
+    ExpUnlock(Lock, Enable);
     return First;
 }

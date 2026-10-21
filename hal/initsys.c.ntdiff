@@ -14,8 +14,9 @@
 +//
 +
 +BOOLEAN HalpBcm2711;
-=1 39 8
-=1 91 6
+=1 62 5
+=1 68 3
+=1 339 13
 +    This function provides the default bus error handling routine for the
 +    Raspberry Pi 2: an external abort on a data or instruction access, which
 +    the system cannot recover from.
@@ -40,6 +41,7 @@
 =1 140 4
 =1 155 1
 =1 171 1
+=1 180 2
 =1 195 1
 +            HalpInitializeClock(LoaderBlock);
 +        }
@@ -61,21 +63,69 @@
 +    UNREFERENCED_PARAMETER(Number);
 +}
 +
-=1 441 10
-+    This function is called to start the next processor. This HAL runs one
-+    processor.
-=1 105 3
-+    FALSE: there is no other processor to start.
++static VOID
++HalpFlushRestartBlock (
++    IN PRESTART_BLOCK RestartBlock
+=1 91 6
++    This function writes back and invalidates the data cache lines of a
++    restart block: the firmware reads and writes it with its caches off.
 =1 110 4
++    HalSweepDcacheRange(RestartBlock, sizeof(RESTART_BLOCK));
++}
++
+=1 441 10
++    This function is called to start the next processor: the firmware has a
++    restart block for each, the first for the boot master, processor 0, and
++    each other processor waits in the firmware with ready set in its boot
++    status (the Duo HAL). The restart state of the first processor ready but
++    not started is filled from the processor state, its logical number set,
++    and start set in its boot status; the processor then runs the state.
++
++    The processor runs with its caches off until its startup turns them on,
++    so the data cache is written back first: what it reads before is in
++    memory.
+=1 452 5
++    ProcessorState - Supplies a pointer to the processor state to be used to
++        start the processor.
+=1 459 4
++    returned. Otherwise a value of FALSE is returned. If a value of TRUE is
++    returned, then the logical processor number is stored in the processor
++    control block specified by the loader block.
+=1 110 5
++#if !defined(NT_UP)
+=1 472 2
++    BOOT_STATUS BootStatus;
+=1 474 3
+=1 487 5
++    Number = 0;
++    do {
++        HalpFlushRestartBlock(NextRestartBlock);
++        BootStatus = NextRestartBlock->BootStatus;
++        if ((BootStatus.ProcessorReady != FALSE) && (BootStatus.ProcessorStart == FALSE)) {
++            RtlZeroMemory(&NextRestartBlock->u.Arm, sizeof(ARM_RESTART_STATE));
++            NextRestartBlock->u.Arm.R0 = ProcessorState->ContextFrame.R0;
++            NextRestartBlock->u.Arm.Sp = ProcessorState->ContextFrame.Sp;
++            NextRestartBlock->u.Arm.Pc = ProcessorState->ContextFrame.Pc;
++            NextRestartBlock->u.Arm.Cpsr = ProcessorState->ContextFrame.Cpsr;
+=1 506 3
++            HalSweepDcache();
++            BootStatus.ProcessorStart = 1;
++            NextRestartBlock->BootStatus = BootStatus;
++            HalpFlushRestartBlock(NextRestartBlock);
++            __sev();
+=1 510 7
++#else
++
 +    UNREFERENCED_PARAMETER(LoaderBlock);
 +    UNREFERENCED_PARAMETER(ProcessorState);
-=1 407 3
+=1 516 5
 +
 +BOOLEAN
 +HalAllProcessorsStarted (
 =1 524 7
 +    This function executes platform specific operations when all processors
-+    have been started. Device interrupts go to the boot processor already.
++    have been started; it is called on each. Device interrupts go to the boot
++    processor already.
 =1 105 3
 +    TRUE.
 =1 110 4
@@ -86,8 +136,19 @@
 +    This function is called when the current processor is idle with
 +    interrupts disabled. It waits for an interrupt and returns with
 +    interrupts enabled.
++
++    On a multiprocessor it waits for an event with interrupts enabled: a
++    thread readied for this processor, or a DPC it may run, is made so under
++    a spin lock, whose release signals one. The kernel sends no
++    interprocessor interrupt for them, so the x86 and MIPS MP HALs do not
++    halt here.
 =1 110 4
++#if defined(NT_UP)
 +    __dsb(_ARM_BARRIER_SY);
 +    __wfi();
 +    _enable();
++#else
++    _enable();
++    __wfe();
++#endif
 +}

@@ -22,6 +22,7 @@
 
 #include "ksarm.h"
 #include "kxarm.h"
+#include "kxspin.h"
 
         IMPORT  KeRaiseIrql
         IMPORT  KeLowerIrql
@@ -64,8 +65,9 @@
 ;    This function synchronizes the execution of the specified routine with
 ;    the execution of the service routine associated with the specified
 ;    interrupt object: IRQL is raised to the synchronization level of the
-;    object, the routine is called with the context, and IRQL is lowered to
-;    its previous value. The value the routine returns is returned.
+;    object and, on a multiprocessor, its spin lock acquired, the routine is
+;    called with the context, the lock released and IRQL lowered to its
+;    previous value. The value the routine returns is returned.
 ;
 ;--
 
@@ -74,12 +76,16 @@
         PROLOG_STACK_ALLOC 8                    ; saved IRQL
         mov     r4, r1
         mov     r5, r2
+        ldr     r6, [r0, #InActualLock]         ; spin lock
         ldrb    r0, [r0, #InSynchronizeIrql]
         mov     r1, sp
         bl      KeRaiseIrql
+        SPIN_LOCK_ACQUIRE r6, r6, r0
         mov     r0, r5
         blx     r4                              ; call the synchronization routine
         mov     r4, r0
+        movs    r0, #0
+        SPIN_LOCK_RELEASE r6, r0
         ldrb    r0, [sp]
         bl      KeLowerIrql
         mov     r0, r4
@@ -125,10 +131,16 @@
         mov     r1, sp
         bl      KeRaiseIrql                     ; raise to the synchronization level
         sub     r0, r5, #InInterruptListEntry
-25      ldr     r2, [r0, #InServiceRoutine]
+25      ldr     r2, [r0, #InActualLock]
+        SPIN_LOCK_ACQUIRE r2, r2, r1
+        ldr     r2, [r0, #InServiceRoutine]
         ldr     r1, [r0, #InServiceContext]
         blx     r2                              ; call the service routine
         and     r11, r0, #0xff
+        sub     r0, r5, #InInterruptListEntry
+        ldr     r0, [r0, #InActualLock]
+        movs    r1, #0
+        SPIN_LOCK_RELEASE r0, r1
         cmp     r8, r9
         beq     %F30
         mov     r0, r8
@@ -171,9 +183,14 @@
         mov     r1, sp
         bl      KeRaiseIrql                     ; raise to the synchronization level
 10      mov     r0, r4
+        ldr     r2, [r0, #InActualLock]
+        SPIN_LOCK_ACQUIRE r2, r2, r1
         ldr     r2, [r0, #InServiceRoutine]
         ldr     r1, [r0, #InServiceContext]
         blx     r2                              ; call the service routine
+        ldr     r0, [r4, #InActualLock]
+        movs    r1, #0
+        SPIN_LOCK_RELEASE r0, r1
         ldrb    r0, [r4, #InIrql]
         ldrb    r1, [r4, #InSynchronizeIrql]
         cmp     r0, r1
@@ -204,9 +221,14 @@
         mov     r1, sp
         bl      KeRaiseIrql                     ; raise to the synchronization level
         mov     r0, r4
+        ldr     r2, [r0, #InActualLock]
+        SPIN_LOCK_ACQUIRE r2, r2, r1
         ldr     r2, [r0, #InServiceRoutine]
         ldr     r1, [r0, #InServiceContext]
         blx     r2                              ; call the service routine
+        ldr     r0, [r4, #InActualLock]
+        movs    r1, #0
+        SPIN_LOCK_RELEASE r0, r1
         ldrb    r0, [sp]
         bl      KeLowerIrql                     ; lower to the previous level
         EPILOG_STACK_FREE 8
@@ -221,15 +243,36 @@
 ;
 ;    An interrupt on a vector connected to an interrupt object whose
 ;    synchronization level is the interrupt source level: control transfers
-;    directly to the service routine.
+;    directly to the service routine; on a multiprocessor it is called with
+;    the spin lock of the object acquired.
 ;
 ;--
+
+#if defined(NT_UP)
 
         LEAF_ENTRY KiInterruptDispatchSame
         ldr     r2, [r0, #InServiceRoutine]
         ldr     r1, [r0, #InServiceContext]
         bx      r2
         LEAF_END KiInterruptDispatchSame
+
+#else
+
+        NESTED_ENTRY KiInterruptDispatchSame
+        PROLOG_PUSH {r4, lr}
+        mov     r4, r0
+        ldr     r2, [r0, #InActualLock]
+        SPIN_LOCK_ACQUIRE r2, r2, r1
+        ldr     r2, [r0, #InServiceRoutine]
+        ldr     r1, [r0, #InServiceContext]
+        blx     r2                              ; call the service routine
+        ldr     r1, [r4, #InActualLock]
+        movs    r2, #0
+        SPIN_LOCK_RELEASE r1, r2
+        EPILOG_POP {r4, pc}
+        NESTED_END KiInterruptDispatchSame
+
+#endif
 
 ;++
 ;

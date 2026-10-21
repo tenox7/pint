@@ -8,7 +8,7 @@
 ;
 ;    Critical sections: the ARM port of DLL\MIPS\CRITSECT.S. The lock count is
 ;    updated with ldrex/strex (the MIPS ll/sc); the unique id of the current
-;    thread comes from its TEB, which the user read only thread id register
+;    thread comes from its TEB, which the user read/write thread id register
 ;    holds.
 ;
 ;--
@@ -44,7 +44,7 @@
         cmp     r2, #0
         bne     %B10
         dmb
-        CP_READ r2, 15, 0, 13, 0, 3             ; current TEB
+        CP_READ r2, 15, 0, 13, 0, 2             ; current TEB
         ldr     r2, [r2, #TeClientId + 4]       ; current thread unique id
         cbnz    r1, %F20
         str     r2, [r0, #CsOwningThread]       ; not owned: set the owner

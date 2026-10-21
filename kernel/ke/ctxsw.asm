@@ -18,10 +18,16 @@
 ;    frame KiInitializeContextThread built. Across SwapContext r4 holds the
 ;    PRCB, r5 the previous thread and r6 the next thread (the MIPS s0-s2).
 ;
+;    On a multiprocessor the dispatcher database lock is held into
+;    SwapContext, which releases it once the previous thread's state is saved
+;    and its stack left: the thread, readied before, may then run on another
+;    processor. The DPC list of a processor is changed under its DPC lock.
+;
 ;--
 
 #include "ksarm.h"
 #include "kxarm.h"
+#include "kxspin.h"
 
         IMPORT  KeLowerIrql
         IMPORT  KiReadyThread
@@ -30,6 +36,14 @@
         IMPORT  KiRequestSoftwareInterrupt
         IMPORT  KiDisableInterrupts
         IMPORT  KiRestoreInterrupts
+
+#if !defined(NT_UP)
+
+        IMPORT  KiDispatcherLock
+        IMPORT  KiProcessIdWrapLock
+        IMPORT  KiSynchronizeProcessIds
+
+#endif
 
 ;
 ; Build and remove an exception frame: the link register, the continuation,
@@ -50,6 +64,20 @@
         EPILOG_POP {r4-r11}
         EPILOG_STACK_FREE 12
         EPILOG_POP {pc}
+        MEND
+
+;
+; Release the dispatcher database lock: the address of the lock in $Lock and
+; zero in $Zero.
+;
+
+        MACRO
+        RELEASE_DISPATCHER_LOCK $Lock, $Zero
+#if !defined(NT_UP)
+        ldr     $Lock, =KiDispatcherLock
+        movs    $Zero, #0
+        SPIN_LOCK_RELEASE $Lock, $Zero
+#endif
         MEND
 
         TEXTAREA
@@ -76,14 +104,16 @@
         CP_READ r1, 15, 0, 13, 0, 4             ; PCR
         ldr     r2, [r1, #PcPrcb]
         ldr     r3, [r2, #PbNextThread]
-        cmp     r3, #0
-        beq     KeLowerIrql                     ; no new thread: restore the previous IRQL
+        cbz     r3, %F10                        ; no new thread: restore the previous IRQL
         cmp     r0, #DISPATCH_LEVEL
         blo     KxUnlockDispatcherDatabase      ; a context switch can be initiated
         ldr     r12, [r1, #PcDpcRoutineActive]
         cmp     r12, #0
-        bne     KeLowerIrql                     ; a DPC routine is active
+        bne     %F10                            ; a DPC routine is active
+        RELEASE_DISPATCHER_LOCK r2, r3
         b       KxRequestDispatchInterrupt
+10      RELEASE_DISPATCHER_LOCK r2, r3
+        b       KeLowerIrql
         LEAF_END KiUnlockDispatcherDatabase
 
         NESTED_ENTRY KxRequestDispatchInterrupt
@@ -106,7 +136,7 @@
         str     r6, [r4, #PbCurrentThread]
         mov     r0, r5
         bl      KiReadyThread                   ; reready the previous thread
-        bl      SwapContext
+        bl      SwapContext                     ; releases the dispatcher database lock
         ldrb    r0, [r0, #ThWaitIrql]
         bl      KeLowerIrql                     ; restore the wait IRQL
         EPILOG_EXCEPTION_FRAME
@@ -125,7 +155,8 @@
 ;    This routine is entered at DISPATCH_LEVEL with the dispatcher database
 ;    locked. It switches to the specified thread, readying the previous one
 ;    if requested. When this thread runs again, IRQL is lowered to its wait
-;    IRQL and the wait completion status is returned.
+;    IRQL and the wait completion status is returned; SwapContext has
+;    released the dispatcher database lock.
 ;
 ;--
 
@@ -159,7 +190,10 @@
 ;    The DISPATCH_LEVEL software interrupt: process the DPC list, then
 ;    process a quantum end or switch to the thread selected to run on this
 ;    processor. The volatile floating state of an interrupted thread is
-;    preserved across the switch.
+;    preserved across the switch. Entered at DISPATCH_LEVEL with the
+;    dispatcher database unlocked: on a multiprocessor it is locked to switch
+;    (a quantum end that selects a thread returns it locked), and if it is
+;    owned the DPC list is processed again rather than spinning on it.
 ;
 ;--
 
@@ -171,21 +205,25 @@
         ldr     r4, [r1, #PcPrcb]
 
 ;
-; Process the DPC list with interrupts disabled.
+; Process the DPC list with interrupts disabled, under its lock.
 ;
 
-        bl      KiDisableInterrupts
+5       bl      KiDisableInterrupts
         mov     r6, r0                          ; previous interrupt enable
         CP_READ r1, 15, 0, 13, 0, 4
         ldr     r2, [r1, #PcInterruptRequest]
         bic     r2, r2, #1 << DISPATCH_LEVEL
         str     r2, [r1, #PcInterruptRequest]   ; clear dispatch interrupt pending
         add     r5, r4, #PbDpcListHead
+        add     r10, r4, #PbDpcLock
+        SPIN_LOCK_ACQUIRE r10, r10, r0
         ldr     r0, [r5, #LsFlink]
         cmp     r0, r5
         beq     %F10
         bl      KiProcessDpcList
-10      mov     r0, r6
+10      movs    r0, #0
+        SPIN_LOCK_RELEASE r10, r0
+        mov     r0, r6
         bl      KiRestoreInterrupts
 
 ;
@@ -197,10 +235,19 @@
         movs    r0, #0
         str     r0, [r4, #PbQuantumEnd]
         bl      KiQuantumEnd                    ; process quantum end
-        cbnz    r0, %F40
+        cbnz    r0, %F40                        ; a thread was selected, the database locked
         b       %F50
 30      ldr     r0, [r4, #PbNextThread]
         cbz     r0, %F50
+
+#if !defined(NT_UP)
+
+        ldr     r8, =KiDispatcherLock
+        SPIN_LOCK_TRY r8, r8, r9
+        bne     %B5                             ; the dispatcher database is locked
+
+#endif
+
 40      CP_READ r1, 15, 0, 13, 0, 4
         ldr     r5, [r1, #PcCurrentThread]      ; previous thread
         ldr     r6, [r4, #PbNextThread]         ; next thread
@@ -225,7 +272,13 @@
 ;
 ; Routine Description:
 ;
-;    This routine swaps context from the previous thread to the next.
+;    This routine swaps context from the previous thread to the next, which
+;    becomes this processor's current thread (in the PCR and in the user read
+;    only thread id register; its TEB in the user read/write one). On a
+;    multiprocessor it releases the dispatcher database lock, after the
+;    previous thread's state is saved, its stack left and the address space
+;    swapped; a process id rollover is first synchronized with the other
+;    processors, with interrupts enabled.
 ;
 ; Arguments:
 ;
@@ -253,6 +306,7 @@
         str     r0, [r6, #ThContextSwitches]
         CP_READ r7, 15, 0, 13, 0, 4             ; PCR
         str     r6, [r7, #PcCurrentThread]
+        CP_WRITE r6, 15, 0, 13, 0, 3            ; user read only thread id = thread
         movs    r0, #Running
         strb    r0, [r6, #ThState]
 
@@ -266,15 +320,18 @@
         mrs     r0, cpsr
         str     r0, [sp, #ExPsr]
         cpsid   i
+        clrex                                   ; no exclusive access continues
         ldr     r1, [r6, #ThInitialStack]
         str     sp, [r5, #ThKernelStack]        ; save old kernel stack pointer
         ldr     sp, [r6, #ThKernelStack]        ; get new kernel stack pointer
         str     r1, [r7, #PcInitialStack]
+        movs    r10, #0                         ; no process id rollover
         cmp     r8, r9
         beq     %F20
         mov     r0, r8
         mov     r1, r9
         bl      KiSwapProcess
+        mov     r10, r0                         ; process id rollover
 
 ;
 ; If the new thread has a kernel mode APC pending, request an APC interrupt.
@@ -287,9 +344,27 @@
         bl      KiRequestSoftwareInterrupt
 30      ldr     r1, [r6, #ThTeb]
         str     r1, [r7, #PcTeb]
-        CP_WRITE r1, 15, 0, 13, 0, 3            ; user read only thread id = TEB
+        CP_WRITE r1, 15, 0, 13, 0, 2            ; user read/write thread id = TEB
         ldr     r0, [sp, #ExPsr]
         msr     cpsr_c, r0                      ; restore the new thread's PSR
+
+#if !defined(NT_UP)
+
+;
+; Synchronize the process ids of the other processors after a rollover and
+; release the process id wrap lock, then release the dispatcher database lock.
+;
+
+        cmp     r10, #0
+        beq     %F40
+        bl      KiSynchronizeProcessIds
+        ldr     r0, =KiProcessIdWrapLock
+        movs    r1, #0
+        SPIN_LOCK_RELEASE r0, r1
+40      RELEASE_DISPATCHER_LOCK r0, r1
+
+#endif
+
         ldr     r0, [sp, #ExFpscr]
         vmsr    fpscr, r0
         mov     r0, r6                          ; current thread
@@ -307,8 +382,9 @@
 ; Routine Description:
 ;
 ;    This routine processes the DPC list on the interrupt stack. It is
-;    entered and left with interrupts disabled; each DPC routine runs with
-;    interrupts enabled as they were at entry to the dispatch interrupt.
+;    entered and left with interrupts disabled and the DPC lock held; each
+;    DPC routine runs with the lock released and interrupts enabled as they
+;    were at entry to the dispatch interrupt.
 ;
 ; Arguments:
 ;
@@ -316,6 +392,7 @@
 ;    r4 - PRCB
 ;    r5 - DPC listhead
 ;    r6 - interrupt enable at entry to the dispatch interrupt
+;    r10 - DPC lock
 ;
 ;--
 
@@ -338,6 +415,7 @@
         ldr     r12, [r0, #DpDeferredRoutine]
         mov     lr, #0
         str     lr, [r0, #DpLock]               ; clear DPC inserted state
+        SPIN_LOCK_RELEASE r10, lr
         cbz     r6, %F20
         cpsie   i
 20      mov     lr, #1
@@ -346,6 +424,7 @@
         movs    r0, #0
         str     r0, [r7, #PcDpcRoutineActive]
         cpsid   i
+        SPIN_LOCK_ACQUIRE r10, r10, r0
         ldr     r0, [r5, #LsFlink]
         cmp     r0, r5
         bne     %B10

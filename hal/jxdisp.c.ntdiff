@@ -125,8 +125,10 @@
 +    KIRQL OldIrql;
 +
 +    //
-+    // Raise IRQL to the highest level so the output is not interleaved.
-=1 1442 4
++    // Raise IRQL to the highest level and acquire the display adapter lock,
++    // so the output is not interleaved.
+=1 1442 3
+=1 1448 2
 +    if (HalpDisplaySerial) {
 +        HalpSerialOutput(String);
 +    }
@@ -142,7 +144,8 @@
 =1 697 1 8
 =1 1468 9 4
 +    }
-=1 1492 2
+=1 1488 2
+=1 1493 1
 +}
 =1 49 4
 =1 1500 22

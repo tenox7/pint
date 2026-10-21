@@ -10,12 +10,15 @@
 ;    the first bytes of the image, which the Raspberry Pi firmware loads at
 ;    0x8000 and enters in the ARM state, as QEMU does. Its two ARM instructions
 ;    switch to the Thumb state; the word after them is the size of the image,
-;    which the build writes (pe2img). Every core enters here; the secondary ones
-;    wait, and the first one leaves the hypervisor mode for the supervisor mode,
-;    allows unaligned accesses, every IT instruction and the CP15 barriers (an
-;    ARMv8 core, the Cortex-A53, can disable both), takes exceptions in the
-;    Thumb state through VBAR, enables the floating point unit, sets up its
-;    stack and calls the firmware.
+;    which the build writes (pe2img). Every core enters here: QEMU starts them
+;    all at the entry, the Raspberry Pi firmware holds the secondary ones until
+;    the boot processor writes this address to their mailboxes. Each core
+;    leaves the hypervisor mode for the supervisor mode, allows unaligned
+;    accesses, every IT instruction and the CP15 barriers (an ARMv8 core, the
+;    Cortex-A53, can disable both), takes exceptions in the Thumb state through
+;    VBAR and enables the floating point unit. The first one then sets up its
+;    stack and calls the firmware; a secondary one takes its own stack and
+;    waits in the firmware for its restart block (FwSecondaryStartup).
 ;
 ;--
 
@@ -24,6 +27,14 @@
         EXPORT  FwStart
         EXPORT  FwInitialStackTop
         IMPORT  cmain
+        IMPORT  FwSecondaryStartup
+
+;
+; The stack of each secondary processor.
+;
+
+#define FW_PROCESSOR_STACK 0x1000
+#define FW_SECONDARY_PROCESSORS 3
 
         AREA    |.text|, CODE, READONLY, ALIGN=5
         THUMB
@@ -34,13 +45,7 @@ FwStart
         DCD     0                               ; the size of the image
 
 FwStart1
-        mrc     p15, 0, r0, c0, c0, 5           ; multiprocessor affinity
-        ands    r0, r0, #3
-        beq     %F2
-1       wfi                                     ; the secondary cores wait
-        b       %B1
-
-2       mrs     r0, cpsr                        ; leave the hypervisor mode
+        mrs     r0, cpsr                        ; leave the hypervisor mode
         and     r1, r0, #0x1f
         cmp     r1, #0x1a
         bne     %F3
@@ -68,27 +73,39 @@ FwStart1
         mov     r0, #0x40000000
         vmsr    fpexc, r0
 
-        ldr     r0, =FwInitialStackTop
-        mov     sp, r0
         mov     r0, #0
         mcr     p15, 0, r0, c7, c5, 0           ; invalidate the instruction cache
         mcr     p15, 0, r0, c7, c5, 6           ; and the branch predictor
         dsb
         isb
 
+        mrc     p15, 0, r0, c0, c0, 5           ; multiprocessor affinity
+        ands    r0, r0, #3
+        bne     %F5
+
+        ldr     r1, =FwInitialStackTop
+        mov     sp, r1
         bl      cmain
 4       wfi
+        b       %B4
+
+5       ldr     r1, =FwProcessorStacks          ; processor n: the top of stack n
+        add     r1, r1, r0, lsl #12
+        mov     sp, r1
+        bl      FwSecondaryStartup              ; r0 = processor number
         b       %B4
 
         LTORG
 
 ;
-; The stack of the firmware.
+; The stack of the firmware, and those of the secondary processors.
 ;
 
         AREA    |.bss|, NOINIT, READWRITE, ALIGN=3
 FwInitialStack
         SPACE   0x10000
 FwInitialStackTop
+FwProcessorStacks
+        SPACE   FW_PROCESSOR_STACK * FW_SECONDARY_PROCESSORS
 
         END

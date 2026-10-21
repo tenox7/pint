@@ -32,21 +32,36 @@ KiRestoreInterrupts (
 #define ExpDisableInterrupts() KiDisableInterrupts()
 #define ExpRestoreInterrupts(Enable) KiRestoreInterrupts((BOOLEAN)(Enable))
 
+PVOID
+InterlockedCompareExchange (
+    IN OUT PVOID *Destination,
+    IN PVOID Exchange,
+    IN PVOID Comperand
+    );
+
+//
+// Decrement the count of a fast mutex if it is free, interlocked with the
+// other processors (the MIPS ll/sc of FMUTEX.S).
+//
+
 static __inline BOOLEAN
 ExpTryDecrementCount (
     IN PFAST_MUTEX FastMutex
     )
 {
-    ULONG Enable = ExpDisableInterrupts();
-    BOOLEAN Acquired = FALSE;
+    LONG Count;
 
-    if (FastMutex->Count > 0) {
-        FastMutex->Count -= 1;
-        Acquired = TRUE;
-    }
+    do {
+        Count = FastMutex->Count;
+        if (Count <= 0) {
+            return FALSE;
+        }
 
-    ExpRestoreInterrupts(Enable);
-    return Acquired;
+    } while ((LONG)InterlockedCompareExchange((PVOID *)&FastMutex->Count,
+                                              (PVOID)(Count - 1),
+                                              (PVOID)Count) != Count);
+
+    return TRUE;
 }
 
 VOID

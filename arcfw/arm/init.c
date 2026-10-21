@@ -20,6 +20,11 @@ PVOID GlobalFirmwareVectors[MaximumRoutine];
 ULONG BlDcacheFillSize;
 
 VOID
+FwRestartBlockInitialize (
+    VOID
+    );
+
+VOID
 FwSystemBlockInitialize (
     VOID
     )
@@ -47,7 +52,59 @@ Routine Description:
     SYSTEM_BLOCK->Revision = ARC_REVISION;
     SYSTEM_BLOCK->FirmwareVectorLength = sizeof(GlobalFirmwareVectors);
     SYSTEM_BLOCK->FirmwareVector = GlobalFirmwareVectors;
+    FwRestartBlockInitialize();
     FwVendorInitialize();
+}
+
+VOID
+FwRestartBlockInitialize (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine builds the restart blocks after the system parameter block,
+    one per processor, each in its own cache line: the first is the boot
+    master's, processor 0, which is ready, running and started (the Jazz
+    selftest); a secondary processor sets ready in its block when it waits in
+    the firmware to be started.
+
+--*/
+
+{
+    PRESTART_BLOCK RestartBlock;
+    ULONG Number;
+    ULONG Size = (sizeof(RESTART_BLOCK) + 63) & ~63;
+    BOOT_STATUS BootStatus;
+
+    RestartBlock = (PRESTART_BLOCK)(((ULONG)SYSTEM_BLOCK + sizeof(SYSTEM_PARAMETER_BLOCK) + 63) & ~63);
+    SYSTEM_BLOCK->RestartBlock = RestartBlock;
+    for (Number = 0; Number < ARC_PROCESSORS; Number += 1) {
+        RtlZeroMemory(RestartBlock, sizeof(RESTART_BLOCK));
+        RestartBlock->Signature = ARC_RESTART_BLOCK_SIGNATURE;
+        RestartBlock->Length = sizeof(RESTART_BLOCK);
+        RestartBlock->Version = ARC_VERSION;
+        RestartBlock->Revision = ARC_REVISION;
+        RestartBlock->BootMasterId = 0;
+        RestartBlock->ProcessorId = Number;
+        RestartBlock->SaveAreaLength = sizeof(ARM_RESTART_STATE);
+        if (Number == 0) {
+            *(PULONG)&BootStatus = 0;
+            BootStatus.ProcessorReady = 1;
+            BootStatus.ProcessorRunning = 1;
+            BootStatus.ProcessorStart = 1;
+            BootStatus.BootStarted = 1;
+            RestartBlock->BootStatus = BootStatus;
+        }
+
+        if (Number + 1 < ARC_PROCESSORS) {
+            RestartBlock->NextRestartBlock = (PRESTART_BLOCK)((PUCHAR)RestartBlock + Size);
+        }
+
+        RestartBlock = (PRESTART_BLOCK)((PUCHAR)RestartBlock + Size);
+    }
 }
 
 static VOID

@@ -255,7 +255,9 @@
 ;
 ; VOID HalZeroPage(PVOID NewColor, PVOID OldColor, ULONG PageFrame)
 ;
-; Zero a physical page through its KSEG0 alias.
+; Zero a physical page through its KSEG0 alias. On a multiprocessor the zeroes
+; are made visible before the caller publishes a PTE that maps the page, which
+; another processor may fill its TB from at once.
 ;
 
         NESTED_ENTRY HalZeroPage
@@ -274,6 +276,9 @@
 10      stm     r0!, {r2-r9}
         cmp     r0, r1
         blo     %B10
+#if !defined(NT_UP)
+        dmb
+#endif
         EPILOG_POP {r4-r10, pc}
         NESTED_END HalZeroPage
 

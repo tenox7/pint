@@ -22,6 +22,12 @@
 ;    interrupts are enabled. One above is a hardware interrupt the HAL masked;
 ;    PCR->InterruptRoutine[level] unmasks its sources so they interrupt again.
 ;
+;    The PCR is the one of the processor whose privileged thread id register
+;    holds its address. A thread below DISPATCH_LEVEL with interrupts enabled
+;    may be switched to another processor between reading that register and
+;    using the PCR, so these routines read and change the PCR with interrupts
+;    disabled, and read the register again after any call that may switch.
+;
 ;--
 
 #include "ksarm.h"
@@ -30,6 +36,28 @@
 #define CPSR_IRQ_DISABLE 0x80
 
         TEXTAREA
+
+;++
+;
+; KIRQL
+; KeGetCurrentIrql (
+;    VOID
+;    )
+;
+; Routine Description:
+;
+;    This function returns the current IRQL of the processor it runs on.
+;
+;--
+
+        LEAF_ENTRY KeGetCurrentIrql
+        mrs     r1, cpsr
+        cpsid   i
+        CP_READ r3, 15, 0, 13, 0, 4             ; PCR
+        ldrb    r0, [r3, #PcCurrentIrql]
+        msr     cpsr_c, r1
+        bx      lr
+        LEAF_END KeGetCurrentIrql
 
 ;++
 ;
@@ -46,14 +74,17 @@
 ;--
 
         LEAF_ENTRY KeLowerIrql
+        mrs     r12, cpsr
+        cpsid   i
         CP_READ r3, 15, 0, 13, 0, 4             ; PCR
         strb    r0, [r3, #PcCurrentIrql]
         ldr     r1, [r3, #PcInterruptRequest]
+        msr     cpsr_c, r12
         lsrs    r1, r1, r0
         lsrs    r1, r1, #1
         it      eq
         bxeq    lr                              ; no request above the new IRQL
-        mrs     r1, cpsr
+        mov     r1, r12
         b       KiDispatchInterruptRequest
         LEAF_END KeLowerIrql
 
@@ -73,9 +104,12 @@
 ;--
 
         LEAF_ENTRY KeRaiseIrql
+        mrs     r12, cpsr
+        cpsid   i
         CP_READ r3, 15, 0, 13, 0, 4             ; PCR
         ldrb    r2, [r3, #PcCurrentIrql]
         strb    r0, [r3, #PcCurrentIrql]
+        msr     cpsr_c, r12
         strb    r2, [r1]
         bx      lr
         LEAF_END KeRaiseIrql
@@ -104,8 +138,8 @@
         ldr     r12, [r3, #PcInterruptRequest]
         orr     r12, r12, r1
         str     r12, [r3, #PcInterruptRequest]
-        msr     cpsr_c, r2
         ldrb    r1, [r3, #PcCurrentIrql]
+        msr     cpsr_c, r2
         cmp     r0, r1
         it      ls
         bxls    lr                              ; at or below the current IRQL
@@ -132,9 +166,10 @@
 ;    interrupts disabled. A software request is dispatched only if interrupts
 ;    are enabled in Psr: it is cleared, IRQL raised to its level, then
 ;    interrupts are enabled and PCR->InterruptRoutine[level] called, which may
-;    switch context. Interrupts stay disabled until IRQL is raised, so an
-;    interrupt taken during the dispatch nests above the level of the request.
-;    Returns at Irql with interrupts as at the call.
+;    switch context, here or on return on another processor. Interrupts stay
+;    disabled until IRQL is raised, so an interrupt taken during the dispatch
+;    nests above the level of the request. Returns at Irql with interrupts as
+;    at the call.
 ;
 ;--
 
@@ -143,7 +178,6 @@
         mrs     r7, cpsr
         cpsid   i
         mov     r4, r0
-        CP_READ r5, 15, 0, 13, 0, 4             ; PCR
         movs    r6, #2
         lsls    r6, r6, r4
         subs    r6, r6, #1                      ; the levels at or below Irql
@@ -151,6 +185,7 @@
         it      ne
         orrne   r6, r6, #(1 << APC_LEVEL) | (1 << DISPATCH_LEVEL) ; disabled: no software interrupts
 10      cpsid   i
+        CP_READ r5, 15, 0, 13, 0, 4             ; PCR of the processor run on now
         ldr     r1, [r5, #PcInterruptRequest]
         bics    r2, r1, r6
         beq     %F20
@@ -169,6 +204,7 @@
         cpsie   i
         blx     r0                              ; software interrupt
         cpsid   i
+        CP_READ r5, 15, 0, 13, 0, 4             ; PCR of the processor run on now
         strb    r4, [r5, #PcCurrentIrql]
         b       %B10
 15      blx     r0                              ; unmask the hardware interrupt

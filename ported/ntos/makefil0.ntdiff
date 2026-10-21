@@ -25,13 +25,15 @@
 +unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
 +#pragma intrinsic(_MoveFromCoprocessor)
 +#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
-=1 307 2
++#define KeGetCurrentThread() ((struct _KTHREAD *)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 301 1
 +#endif // defined(_ARM_)
 =1 310 599
 +#if defined(_ARM_)
 +unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
 +#pragma intrinsic(_MoveFromCoprocessor)
 +#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
-=1 307 2
++#define KeGetCurrentThread() ((struct _KTHREAD *)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 301 1
 +#endif // defined(_ARM_)
 =1 908 482

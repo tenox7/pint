@@ -55,6 +55,13 @@
 +static LARGE_INTEGER HalpClockBase;
 +static BOOLEAN HalpClockBaseValid;
 +
++//
++// The realtime clock lock: one processor at a time transfers the clock
++// registers over the I2C bus and changes the memory clock.
++//
++
++static KSPIN_LOCK HalpRtcLock;
++
 =1 46 21
 +    If the realtime clock is present and running, then the time values are
 +    read from the realtime clock and a value of TRUE is returned. Otherwise,
@@ -71,8 +78,10 @@
 +    // its time at the start of the read. Without a running clock, the memory
 +    // clock gives the time.
 =1 82 3
++    KiAcquireSpinLock(&HalpRtcLock);
 +    Valid = HalpReadClockRegisters(Registers);
 +    Time = HalpSystemTimerTime();
++    KiReleaseSpinLock(&HalpRtcLock);
 =1 108 1 -4
 +    if (!Valid || (Registers[RTC_SECOND] & RTC_CLOCK_HALT) != 0) {
 +        if (!HalpClockBaseValid) {
@@ -116,8 +125,10 @@
 +        return FALSE;
 +    }
 =1 83 2
++    KiAcquireSpinLock(&HalpRtcLock);
 +    HalpClockBase.QuadPart = Time.QuadPart - HalpSystemTimerTime().QuadPart;
 +    HalpClockBaseValid = TRUE;
++    KiReleaseSpinLock(&HalpRtcLock);
 =1 108 1 -4
 +    if (TimeFields->Year < 2000 || TimeFields->Year > 2099) {
 +        return TRUE;
@@ -131,7 +142,9 @@
 +    Registers[RTC_MONTH] = BINARY_TO_BCD(TimeFields->Month);
 +    Registers[RTC_YEAR] = BINARY_TO_BCD(TimeFields->Year - 2000);
 =1 84 1
++    KiAcquireSpinLock(&HalpRtcLock);
 +    HalpWriteClockRegisters(Registers);
++    KiReleaseSpinLock(&HalpRtcLock);
 =1 108 2 -4
 +}
 +

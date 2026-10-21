@@ -8,7 +8,6 @@
 =1 24 16
 +
 +#define PSR_MODE_SVC 0x13
-+#define PSR_I        0x80
 +#define PSR_F        0x40
 +#define PSR_A        0x100
 +
@@ -24,9 +23,10 @@
 +        TrFrame = NULL;
 +        CxFrame = (PKEXCEPTION_FRAME)((InitialStack -
 =1 139 11
-+    // The thread starts in supervisor mode with interrupts disabled, which
-+    // KiThreadStartup enables as it lowers IRQL to APC_LEVEL; asynchronous
-+    // aborts and fast interrupts stay masked, as in all kernel code.
++    // The thread starts in supervisor mode with interrupts enabled, as a
++    // thread that switched in KiSwapThread resumes, at DISPATCH_LEVEL until
++    // KiThreadStartup lowers IRQL to APC_LEVEL; asynchronous aborts and fast
++    // interrupts stay masked, as in all kernel code.
 =1 150 3
 +    CxFrame->R11 = (ULONG)TrFrame;
 +    CxFrame->R4 = (ULONG)ContextRecord;
@@ -34,7 +34,7 @@
 +    CxFrame->R6 = (ULONG)StartRoutine;
 +    CxFrame->R7 = (ULONG)SystemRoutine;
 +    CxFrame->Fpscr = 0;
-+    CxFrame->Psr = PSR_A | PSR_F | PSR_I | PSR_MODE_SVC;
++    CxFrame->Psr = PSR_A | PSR_F | PSR_MODE_SVC;
 =1 184 8
 +
 =1 193 121

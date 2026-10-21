@@ -7,8 +7,7 @@ Module Name:
 Abstract:
 
     The ARM translation buffer: the TB miss handling of KE/MIPS/X4TRAP.S, the TB
-    primitives the genuine KE\MIPS\XXFLSHTB.C flushes through (KeFlushCurrentTb,
-    KiFlushMultipleTb, KiFlushSingleTb), and KiSwapProcess.
+    flush routines of KE/MIPS/XXFLSHTB.C, and KiSwapProcess.
 
     The memory manager's page tables are the MIPS R4000 ones (a 4 KB page
     directory that maps itself at PDE_BASE, EntryLo-format PTEs), which the
@@ -32,6 +31,19 @@ Abstract:
     of system space shares second-level tables. Process ids are assigned and
     recycled exactly as MIPS assigns PIDs.
 
+    On a multiprocessor the processors share the tables: a processor running
+    a process walks the table of its id, which the others running it walk too.
+    The tables are changed under the TB lock, with interrupts disabled (the
+    miss handler runs with them disabled), and the TLB maintenance is
+    broadcast to every processor (the multiprocessing extensions), so that a
+    flush on one processor flushes them all and needs no interprocessor
+    request, unlike the MIPS flushes. A second-level table is reused only
+    after the broadcast invalidation that follows its removal (break before
+    make). Memory and the tables are inner shareable, so the data caches and
+    the table walks are coherent. The process id rollover is synchronized with
+    the other processors as on MIPS: each moves the process it runs to a new id
+    before the processor that rolled over continues.
+
 Environment:
 
     Kernel mode only.
@@ -51,6 +63,7 @@ Environment:
 #define SECTION_XN          (1 << 4)
 #define SECTION_AP_PRIV_RW  (1 << 10)
 #define SECTION_TEX_NORMAL  (1 << 12)
+#define SECTION_S           (1 << 16)
 #define L1_SUPERSECTION     (1 << 18)
 #define SUPERSECTION_HIGH(High) ((High) << 20)
 
@@ -62,15 +75,27 @@ Environment:
 #define L2_AP1              (1 << 5)
 #define L2_TEX_NORMAL       (1 << 6)
 #define L2_AP2              (1 << 9)
+#define L2_S                (1 << 10)
 #define L2_NG               (1 << 11)
 
 //
 // The translation table walks are cached as the tables are (inner and outer
 // write back, write allocate: TTBR0 IRGN and RGN), so they see the descriptors
-// the kernel writes through the data cache.
+// the kernel writes through the data cache; on a multiprocessor the walks are
+// inner shareable (TTBR0 S and NOS), as normal memory is.
 //
 
+#if defined(NT_UP)
+
 #define TTBR_WALK_CACHED    ((1 << 6) | (1 << 3))
+#define MEMORY_SHAREABLE    0
+
+#else
+
+#define TTBR_WALK_CACHED    ((1 << 6) | (1 << 5) | (1 << 3) | (1 << 1))
+#define MEMORY_SHAREABLE    1
+
+#endif
 
 #define L1_ENTRIES          4096
 #define L2_ENTRIES          256
@@ -79,6 +104,9 @@ Environment:
 #define PDE_INDEX(Va)       ((ULONG)(Va) >> PDI_SHIFT)
 #define PTE_INDEX(Va)       (((ULONG)(Va) >> PTI_SHIFT) & 0x3FF)
 #define L2_INDEX(Va)        (((ULONG)(Va) >> PTI_SHIFT) & (L2_ENTRIES - 1))
+
+#define SECTION_SHAREABLE   (MEMORY_SHAREABLE ? SECTION_S : 0)
+#define L2_SHAREABLE        (MEMORY_SHAREABLE ? L2_S : 0)
 
 //
 // Megabyte ranges: user space, the kernel direct map, the per-process system
@@ -127,6 +155,44 @@ static PULONG KiSystemTable[SHARED_SYSTEM_MEGABYTES];
 static PULONG KiFreeL2;
 static ULONG KiSharedDataPage;
 
+//
+// The translation table base a secondary processor loads first, with its caches
+// still off (armstart.asm): the kernel-only table and its walk attributes,
+// written back to memory before the processor is started. It then takes the
+// table of the idle process (KiArmStartProcessorTranslation).
+//
+
+ULONG KiArmKernelTtbr;
+
+//
+// The second-level tables removed from the hardware tables since the last
+// broadcast invalidation, which join the free list after it.
+//
+
+static PULONG KiRemovedL2[TB_L2_TABLES];
+static ULONG KiRemovedL2Count;
+
+//
+// The TB lock: held, with interrupts disabled, while the hardware tables and
+// the table pool change. Its owner is the thread that holds it.
+//
+
+#if defined(NT_UP)
+
+#define KiAcquireTbLock()
+#define KiReleaseTbLock()
+#define KiTbLockHeld() FALSE
+
+#else
+
+KSPIN_LOCK KiTbLock;
+
+#define KiAcquireTbLock() KiAcquireSpinLock(&KiTbLock)
+#define KiReleaseTbLock() KiReleaseSpinLock(&KiTbLock)
+#define KiTbLockHeld() (KiTbLock == (KSPIN_LOCK)KeGetCurrentThread())
+
+#endif
+
 static __inline ULONG
 KiPhysical (
     PVOID VirtualAddress
@@ -144,13 +210,29 @@ KiPrivateMegabyte (
            ((Megabyte >= KSEG2_MEGABYTE) && (Megabyte < SHARED_SYSTEM_MEGABYTE));
 }
 
+//
+// Invalidate the translations of a virtual address of every address space id,
+// or every translation, in the TB of this processor or, on a multiprocessor,
+// of every processor (TLBIMVAA, TLBIALL; TLBIMVAAIS, TLBIALLIS).
+//
+
 static __inline VOID
 KiInvalidateTbEntry (
     ULONG VirtualAddress
     )
 {
     __dsb(_ARM_BARRIER_SY);
+
+#if defined(NT_UP)
+
     _MoveToCoprocessor(VirtualAddress & ~(PAGE_SIZE - 1), 15, 0, 8, 7, 3);
+
+#else
+
+    _MoveToCoprocessor(VirtualAddress & ~(PAGE_SIZE - 1), 15, 0, 8, 3, 3);
+
+#endif
+
     __dsb(_ARM_BARRIER_SY);
     __isb(_ARM_BARRIER_SY);
 }
@@ -161,14 +243,26 @@ KiInvalidateEntireTb (
     )
 {
     __dsb(_ARM_BARRIER_SY);
+
+#if defined(NT_UP)
+
     _MoveToCoprocessor(0, 15, 0, 8, 7, 0);
+
+#else
+
+    _MoveToCoprocessor(0, 15, 0, 8, 3, 0);
+
+#endif
+
     __dsb(_ARM_BARRIER_SY);
     __isb(_ARM_BARRIER_SY);
 }
 
 //
 // Second-level table pool. A table on the free list is linked through its
-// first entry; tables are zeroed when allocated.
+// first entry; tables are zeroed when allocated. A table removed from the
+// hardware tables may still be walked by another processor until the TB is
+// invalidated: it is set aside and freed by KiInvalidateRemovedTables.
 //
 
 static VOID
@@ -181,6 +275,28 @@ KiFreeL2Table (
 }
 
 static VOID
+KiInvalidateRemovedTables (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This function invalidates the entire TB of every processor and frees the
+    second-level tables removed since the last invalidation.
+
+--*/
+
+{
+    KiInvalidateEntireTb();
+    while (KiRemovedL2Count != 0) {
+        KiRemovedL2Count -= 1;
+        KiFreeL2Table(KiRemovedL2[KiRemovedL2Count]);
+    }
+}
+
+static VOID
 KiPurgeTable (
     PULONG Tb
     )
@@ -189,8 +305,9 @@ KiPurgeTable (
 
 Routine Description:
 
-    This function releases the second-level tables of a hardware first-level
+    This function removes the second-level tables of a hardware first-level
     table's process-private regions, discarding the translations they cache.
+    The caller invalidates the TB (KiInvalidateRemovedTables).
 
 --*/
 
@@ -203,7 +320,9 @@ Routine Description:
         }
 
         if ((Tb[Megabyte] & 3) == L1_COARSE) {
-            KiFreeL2Table((PULONG)(KSEG0_BASE + (Tb[Megabyte] & ~(L2_TABLE_SIZE - 1))));
+            KiRemovedL2[KiRemovedL2Count] =
+                (PULONG)(KSEG0_BASE + (Tb[Megabyte] & ~(L2_TABLE_SIZE - 1)));
+            KiRemovedL2Count += 1;
             Tb[Megabyte] = 0;
         }
     }
@@ -228,7 +347,7 @@ KiAllocateL2Table (
             KiPurgeTable(KiProcessTable[Index]);
         }
 
-        KiInvalidateEntireTb();
+        KiInvalidateRemovedTables();
         if (KiFreeL2 == NULL) {
             KeBugCheckEx(MEMORY_MANAGEMENT, 0x41A, 0, 0, 0);
         }
@@ -285,6 +404,7 @@ Routine Description:
         Table = KiAllocateL2Table();
     }
 
+    __dsb(_ARM_BARRIER_SY);
     Tb[Megabyte] = KiPhysical(Table) | L1_COARSE;
     __dsb(_ARM_BARRIER_SY);
     return Table;
@@ -316,7 +436,7 @@ Routine Description:
         Descriptor |= L2_B;
 
     } else {
-        Descriptor |= L2_TEX_NORMAL | L2_C | L2_B;
+        Descriptor |= L2_TEX_NORMAL | L2_C | L2_B | L2_SHAREABLE;
     }
 
     if (VirtualAddress < KSEG0_BASE) {
@@ -394,6 +514,10 @@ Routine Description:
     faulting instruction is then restarted. Every other fault is left to the
     memory management fault handler. Only the direct map is referenced.
 
+    A miss taken while the current thread holds the TB lock (on the stack of
+    the thread being switched to, or a stack page a flush just purged) is
+    filled under that hold, as the uniprocessor kernel nests this handler.
+
 Arguments:
 
     VirtualAddress - Supplies the faulting virtual address (DFAR or IFAR).
@@ -411,6 +535,8 @@ Return Value:
 {
     ULONG Status = (FaultStatus & 0xF) | ((FaultStatus >> 6) & 0x10);
     BOOLEAN Write = (FaultStatus & (1 << 11)) != 0;
+    BOOLEAN Filled = FALSE;
+    BOOLEAN Held;
     PHARDWARE_PTE PageDirectory;
     PHARDWARE_PTE PageTable;
     HARDWARE_PTE Pde;
@@ -428,37 +554,55 @@ Return Value:
         return FALSE;
     }
 
+    Held = KiTbLockHeld();
+    if (Held == FALSE) {
+        KiAcquireTbLock();
+    }
+
     //
     // The user mapping of the shared user data page is part of the fixed TB:
     // read only, and refilled whenever it is not present.
     //
 
     if ((VirtualAddress & ~(PAGE_SIZE - 1)) == USPCR2) {
-        if (Write) {
-            return FALSE;
+        if (Write == FALSE) {
+            PageTable = (PHARDWARE_PTE)KiGetL2Table(USPCR2 >> 20, TRUE);
+            ((PULONG)PageTable)[L2_INDEX(USPCR2)] = (KiSharedDataPage << PAGE_SHIFT) |
+                L2_SMALL | L2_XN | L2_TEX_NORMAL | L2_C | L2_B | L2_SHAREABLE |
+                L2_AP2 | L2_AP1 | L2_AP0 | L2_NG;
+            KiInvalidateTbEntry(USPCR2);
+            Filled = TRUE;
         }
 
-        PageTable = (PHARDWARE_PTE)KiGetL2Table(USPCR2 >> 20, TRUE);
-        ((PULONG)PageTable)[L2_INDEX(USPCR2)] = (KiSharedDataPage << PAGE_SHIFT) |
-            L2_SMALL | L2_XN | L2_TEX_NORMAL | L2_C | L2_B | L2_AP2 | L2_AP1 | L2_AP0 | L2_NG;
-        KiInvalidateTbEntry(USPCR2);
-        return TRUE;
+        if (Held == FALSE) {
+            KiReleaseTbLock();
+        }
+
+        return Filled;
     }
+
+    //
+    // The PTE is read under the TB lock, which a flush takes after the
+    // memory manager changed it: a translation filled from an older PTE is
+    // purged by that flush.
+    //
 
     PageDirectory = (PHARDWARE_PTE)(KSEG0_BASE + PCR->CurrentPdr);
     Pde = PageDirectory[PDE_INDEX(VirtualAddress)];
-    if (Pde.Valid == 0) {
-        return FALSE;
+    if (Pde.Valid != 0) {
+        PageTable = (PHARDWARE_PTE)(KSEG0_BASE + (Pde.PageFrameNumber << PAGE_SHIFT));
+        Pte = PageTable[PTE_INDEX(VirtualAddress)];
+        if ((Pte.Valid != 0) && ((Write == FALSE) || (Pte.Dirty != 0))) {
+            KiInstallTbEntry(VirtualAddress, Pte);
+            Filled = TRUE;
+        }
     }
 
-    PageTable = (PHARDWARE_PTE)(KSEG0_BASE + (Pde.PageFrameNumber << PAGE_SHIFT));
-    Pte = PageTable[PTE_INDEX(VirtualAddress)];
-    if ((Pte.Valid == 0) || (Write && (Pte.Dirty == 0))) {
-        return FALSE;
+    if (Held == FALSE) {
+        KiReleaseTbLock();
     }
 
-    KiInstallTbEntry(VirtualAddress, Pte);
-    return TRUE;
+    return Filled;
 }
 
 VOID
@@ -470,9 +614,9 @@ KeFlushCurrentTb (
 
 Routine Description:
 
-    This function flushes the translation buffer of the current processor:
-    every translation cached for the current process and for shared system
-    space (the random part of the MIPS TB).
+    This function flushes the translation buffer: every translation cached
+    for the current process and for shared system space (the random part of
+    the MIPS TB), and the TB of every processor.
 
 --*/
 
@@ -482,6 +626,7 @@ Routine Description:
     ULONG Entry;
     PULONG Table;
 
+    KiAcquireTbLock();
     KiPurgeTable((PULONG)PCR->CurrentTb);
     for (Index = 0; Index < SHARED_SYSTEM_MEGABYTES; Index += 1) {
         Table = KiSystemTable[Index];
@@ -492,7 +637,8 @@ Routine Description:
         }
     }
 
-    KiInvalidateEntireTb();
+    KiInvalidateRemovedTables();
+    KiReleaseTbLock();
     KiRestoreInterrupts(Enable);
 }
 
@@ -516,13 +662,38 @@ Routine Description:
     BOOLEAN Enable = KiDisableInterrupts();
     ULONG Index;
 
+    KiAcquireTbLock();
     for (Index = 0; Index < Count; Index += 1) {
         KiFlushTbEntry((ULONG)Virtual[Index]);
     }
 
+    KiReleaseTbLock();
     KiRestoreInterrupts(Enable);
 }
 
+VOID
+KiFlushSingleTb (
+    IN BOOLEAN Invalid,
+    IN PVOID Virtual
+    )
+
+/*++
+
+Routine Description:
+
+    This function flushes the translation of a virtual address whose PTE the
+    caller has already changed.
+
+--*/
+
+{
+    BOOLEAN Enable = KiDisableInterrupts();
+
+    KiAcquireTbLock();
+    KiFlushTbEntry((ULONG)Virtual);
+    KiReleaseTbLock();
+    KiRestoreInterrupts(Enable);
+}
 
 VOID
 KeFillEntryTb (
@@ -542,6 +713,7 @@ Routine Description:
 {
     BOOLEAN Enable = KiDisableInterrupts();
 
+    KiAcquireTbLock();
     if (Pte[0].Valid != 0) {
         KiInstallTbEntry((ULONG)Virtual, Pte[0]);
 
@@ -549,8 +721,157 @@ Routine Description:
         KiFlushTbEntry((ULONG)Virtual);
     }
 
+    KiReleaseTbLock();
     KiRestoreInterrupts(Enable);
 }
+
+#if !defined(NT_UP)
+
+VOID
+KeFlushEntireTb (
+    IN BOOLEAN Invalid,
+    IN BOOLEAN AllProcessors
+    )
+
+/*++
+
+Routine Description:
+
+    This function flushes the entire translation buffer of every processor
+    (KE/MIPS/XXFLSHTB.C, whose interprocessor requests the broadcast TB
+    maintenance replaces).
+
+Arguments:
+
+    Invalid - Supplies a boolean value that specifies the reason for
+        flushing the translation buffer.
+
+    AllProcessors - Supplies a boolean value that determines which
+        translation buffers are to be flushed.
+
+--*/
+
+{
+    KIRQL OldIrql;
+
+    ASSERT(KeGetCurrentIrql() <= DISPATCH_LEVEL);
+
+    KeRaiseIrql(DISPATCH_LEVEL, &OldIrql);
+    KeFlushCurrentTb();
+    KeLowerIrql(OldIrql);
+}
+
+VOID
+KeFlushMultipleTb (
+    IN ULONG Number,
+    IN PVOID *Virtual,
+    IN BOOLEAN Invalid,
+    IN BOOLEAN AllProcessors,
+    IN PHARDWARE_PTE *PtePointer OPTIONAL,
+    IN HARDWARE_PTE PteValue
+    )
+
+/*++
+
+Routine Description:
+
+    This function flushes multiple entries from the translation buffer of
+    every processor, after setting the specified page table entries to the
+    specified value. The process id wrap lock is held so that the process id
+    cannot change meanwhile.
+
+Arguments:
+
+    Number - Supplies the number of TB entries to flush.
+
+    Virtual - Supplies a pointer to an array of virtual addresses that are
+        within the pages whose translation buffer entries are to be flushed.
+
+    Invalid - Supplies a boolean value that specifies the reason for
+        flushing the translation buffer.
+
+    AllProcessors - Supplies a boolean value that determines which
+        translation buffers are to be flushed.
+
+    PtePointer - Supplies an optional pointer to an array of pointers to
+        page table entries that receive the specified page table entry
+        value.
+
+    PteValue - Supplies the the new page table entry value.
+
+--*/
+
+{
+    ULONG Index;
+
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+
+    KiAcquireSpinLock(&KiProcessIdWrapLock);
+    if (ARGUMENT_PRESENT(PtePointer)) {
+        for (Index = 0; Index < Number; Index += 1) {
+            *PtePointer[Index] = PteValue;
+        }
+    }
+
+    KiFlushMultipleTb(Invalid, &Virtual[0], Number);
+    KiReleaseSpinLock(&KiProcessIdWrapLock);
+}
+
+HARDWARE_PTE
+KeFlushSingleTb (
+    IN PVOID Virtual,
+    IN BOOLEAN Invalid,
+    IN BOOLEAN AllProcessors,
+    IN PHARDWARE_PTE PtePointer,
+    IN HARDWARE_PTE PteValue
+    )
+
+/*++
+
+Routine Description:
+
+    This function flushes a single entry from the translation buffer of
+    every processor, after setting the specified page table entry to the
+    specified value. The process id wrap lock is held so that the process id
+    cannot change meanwhile.
+
+Arguments:
+
+    Virtual - Supplies a virtual address that is within the page whose
+        translation buffer entry is to be flushed.
+
+    Invalid - Supplies a boolean value that specifies the reason for
+        flushing the translation buffer.
+
+    AllProcessors - Supplies a boolean value that determines which
+        translation buffers are to be flushed.
+
+    PtePointer - Supplies a pointer to the page table entry which receives
+        the specified value.
+
+    PteValue - Supplies the the new page table entry value.
+
+Return Value:
+
+    The previous contents of the specified page table entry is returned as
+    the function value.
+
+--*/
+
+{
+    HARDWARE_PTE OldPte;
+
+    ASSERT(KeGetCurrentIrql() == DISPATCH_LEVEL);
+
+    KiAcquireSpinLock(&KiProcessIdWrapLock);
+    OldPte = *PtePointer;
+    *PtePointer = PteValue;
+    KiFlushSingleTb(Invalid, Virtual);
+    KiReleaseSpinLock(&KiProcessIdWrapLock);
+    return OldPte;
+}
+
+#endif
 
 static VOID
 KiLoadTb (
@@ -581,6 +902,50 @@ Routine Description:
     __isb(_ARM_BARRIER_SY);
 }
 
+static ULONG
+KiAssignProcessId (
+    IN PKPROCESS Process,
+    OUT PBOOLEAN Rollover
+    )
+
+/*++
+
+Routine Description:
+
+    This function returns the process id of a process, assigning a new one if
+    its sequence number is not the master sequence number. When the ids are
+    exhausted the master sequence advances and every process's translations
+    are discarded (the MIPS PID rollover). Called with the TB lock held.
+
+--*/
+
+{
+    ULONG ProcessId;
+    ULONG Index;
+
+    if (Process->ProcessSequence == KiMasterSequence) {
+        return Process->ProcessPid;
+    }
+
+    ProcessId = KiMasterPid + 1;
+    Process->ProcessSequence = KiMasterSequence;
+    if (ProcessId >= KeNumberProcessIds) {
+        KiMasterSequence += 1;
+        Process->ProcessSequence = KiMasterSequence;
+        for (Index = 0; Index < TB_PROCESS_IDS; Index += 1) {
+            KiPurgeTable(KiProcessTable[Index]);
+        }
+
+        KiInvalidateRemovedTables();
+        ProcessId = 0;
+        *Rollover = TRUE;
+    }
+
+    KiMasterPid = ProcessId;
+    Process->ProcessPid = ProcessId;
+    return ProcessId;
+}
+
 BOOLEAN
 KiSwapProcess (
     IN PKPROCESS NewProcess,
@@ -597,6 +962,13 @@ Routine Description:
     master sequence advances and every process's translations are discarded
     (the MIPS PID rollover).
 
+    On a multiprocessor a rollover takes the process id wrap lock, which the
+    flush routines hold, and returns with it held: the caller synchronizes the
+    process ids of the other processors (KiSynchronizeProcessIds) and then
+    releases it. While the lock is owned interrupts are enabled between the
+    attempts to take it, so that this processor serves the interprocessor
+    requests of the owner.
+
 Return Value:
 
     TRUE if a process id rollover occurred, FALSE otherwise.
@@ -607,36 +979,129 @@ Return Value:
     BOOLEAN Enable = KiDisableInterrupts();
     BOOLEAN Rollover = FALSE;
     ULONG ProcessId;
-    ULONG Index;
 
     UNREFERENCED_PARAMETER(OldProcess);
 
-    if (NewProcess->ProcessSequence == KiMasterSequence) {
-        ProcessId = NewProcess->ProcessPid;
+    KiAcquireTbLock();
 
-    } else {
-        ProcessId = KiMasterPid + 1;
-        NewProcess->ProcessSequence = KiMasterSequence;
-        if (ProcessId >= KeNumberProcessIds) {
-            KiMasterSequence += 1;
-            NewProcess->ProcessSequence = KiMasterSequence;
-            for (Index = 0; Index < TB_PROCESS_IDS; Index += 1) {
-                KiPurgeTable(KiProcessTable[Index]);
-            }
+#if !defined(NT_UP)
 
-            KiInvalidateEntireTb();
-            ProcessId = 0;
-            Rollover = TRUE;
+    //
+    // A rollover is due: take the process id wrap lock first, then the TB
+    // lock again; the process may meanwhile have an id of the master sequence
+    // another processor's rollover assigned.
+    //
+
+    if ((NewProcess->ProcessSequence != KiMasterSequence) &&
+        (KiMasterPid + 1 >= KeNumberProcessIds)) {
+
+        KiReleaseTbLock();
+        while (KiTryToAcquireSpinLock(&KiProcessIdWrapLock) == FALSE) {
+            _enable();
+            __yield();
+            _disable();
         }
 
-        KiMasterPid = ProcessId;
-        NewProcess->ProcessPid = ProcessId;
+        KiAcquireTbLock();
+        ProcessId = KiAssignProcessId(NewProcess, &Rollover);
+        if (Rollover == FALSE) {
+            KiReleaseSpinLock(&KiProcessIdWrapLock);
+        }
+
+    } else {
+        ProcessId = KiAssignProcessId(NewProcess, &Rollover);
     }
 
+#else
+
+    ProcessId = KiAssignProcessId(NewProcess, &Rollover);
+
+#endif
+
     KiLoadTb(ProcessId, NewProcess->DirectoryTableBase[0]);
+    KiReleaseTbLock();
     KiRestoreInterrupts(Enable);
     return Rollover;
 }
+
+#if !defined(NT_UP)
+
+VOID
+KiSynchronizeProcessIdsTarget (
+    IN PULONG SignalDone,
+    IN PVOID Parameter1,
+    IN PVOID Parameter2,
+    IN PVOID Parameter3
+    )
+
+/*++
+
+Routine Description:
+
+    This function synchronizes the process id of the current process with a
+    rollover on another processor (KE/MIPS/X4TRAP.S): the translations the
+    process cached under its old id since the rollover are discarded, and it
+    is given an id of the new master sequence. It is called at IPI_LEVEL;
+    the processor that rolled over holds the process id wrap lock.
+
+Arguments:
+
+    SignalDone - Supplies a pointer to a variable that is cleared when the
+        requested operation has been performed.
+
+    Parameter1 - Parameter3 - Not used.
+
+--*/
+
+{
+    PKPROCESS Process = KeGetCurrentThread()->ApcState.Process;
+    BOOLEAN Rollover = FALSE;
+    BOOLEAN Enable = KiDisableInterrupts();
+    ULONG ProcessId;
+
+    KiAcquireTbLock();
+    KiPurgeTable((PULONG)PCR->CurrentTb);
+    KiInvalidateRemovedTables();
+    ProcessId = KiAssignProcessId(Process, &Rollover);
+    KiLoadTb(ProcessId, Process->DirectoryTableBase[0]);
+    KiReleaseTbLock();
+    KiRestoreInterrupts(Enable);
+    *SignalDone = 0;
+}
+
+VOID
+KiSynchronizeProcessIds (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This function synchronizes the process ids of all other processors after
+    a rollover on this one (KE/MIPS/XXFLSHTB.C). It is called at
+    DISPATCH_LEVEL with interrupts enabled and the process id wrap lock held.
+
+--*/
+
+{
+    PKPRCB Prcb;
+    KAFFINITY TargetProcessors;
+
+    Prcb = KeGetCurrentPrcb();
+    TargetProcessors = KeActiveProcessors & ~Prcb->SetMember;
+    if (TargetProcessors != 0) {
+        KiIpiSendPacket(TargetProcessors,
+                        KiSynchronizeProcessIdsTarget,
+                        NULL,
+                        NULL,
+                        NULL);
+
+        KiIpiStallOnPacketTargets(TargetProcessors);
+    }
+}
+
+#endif
 
 VOID
 KiArmStartTranslation (
@@ -741,11 +1206,12 @@ Routine Description:
         Physical = Megabyte << 20;
         if (Megabyte < MemoryTop) {
             KiKernelTable[KSEG0_MEGABYTE + Megabyte] = Physical | L1_SECTION |
-                SECTION_AP_PRIV_RW | SECTION_TEX_NORMAL | SECTION_C | SECTION_B;
+                SECTION_AP_PRIV_RW | SECTION_TEX_NORMAL | SECTION_C | SECTION_B |
+                SECTION_SHAREABLE;
 
         } else if (Physical < DeviceStart) {
             KiKernelTable[KSEG0_MEGABYTE + Megabyte] = Physical | L1_SECTION |
-                SECTION_AP_PRIV_RW | SECTION_TEX_NORMAL | SECTION_XN;
+                SECTION_AP_PRIV_RW | SECTION_TEX_NORMAL | SECTION_XN | SECTION_SHAREABLE;
 
         } else {
             KiKernelTable[KSEG0_MEGABYTE + Megabyte] = Physical | L1_SECTION |
@@ -770,7 +1236,7 @@ Routine Description:
     KiSharedDataPage = LoaderBlock->u.Arm.PcrPage2;
     Table = KiAllocateL2Table();
     Table[L2_INDEX(KIPCR2)] = (KiSharedDataPage << PAGE_SHIFT) | L2_SMALL | L2_XN |
-        L2_TEX_NORMAL | L2_C | L2_B | L2_AP0;
+        L2_TEX_NORMAL | L2_C | L2_B | L2_SHAREABLE | L2_AP0;
     KiKernelTable[KIPCR2 >> 20] = KiPhysical(Table) | L1_COARSE;
 
     for (Index = 0; Index < TB_PROCESS_IDS; Index += 1) {
@@ -805,29 +1271,39 @@ Routine Description:
     _MoveToCoprocessor(1, 15, 0, 3, 0, 0);
     KiLoadTb(0, *(PULONG)&PageDirectory[PDE_INDEX(PDE_BASE)]);
     KiInvalidateEntireTb();
+    KiArmKernelTtbr = KiPhysical(KiKernelTable) | TTBR_WALK_CACHED;
 }
 
+#if !defined(NT_UP)
+
 VOID
-KiFlushSingleTb (
-    IN BOOLEAN Invalid,
-    IN PVOID Virtual
+KiArmStartProcessorTranslation (
+    IN PKPROCESS Process
     )
 
 /*++
 
 Routine Description:
 
-    This function flushes the translation of a virtual address whose PTE the
-    caller has already changed.
+    This function makes the table of the idle process current on a secondary
+    processor, which runs on the kernel-only table: the process is given an
+    id of the master sequence, with the rollover synchronized as at a context
+    switch.
+
+Arguments:
+
+    Process - Supplies a pointer to the idle process.
 
 --*/
 
 {
-    BOOLEAN Enable = KiDisableInterrupts();
-
-    KiFlushTbEntry((ULONG)Virtual);
-    KiRestoreInterrupts(Enable);
+    if (KiSwapProcess(Process, NULL) != FALSE) {
+        KiSynchronizeProcessIds();
+        KiReleaseSpinLock(&KiProcessIdWrapLock);
+    }
 }
+
+#endif
 
 ULONG
 KiProbeEntryTb (

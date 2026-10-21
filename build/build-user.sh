@@ -218,7 +218,7 @@ D=NET/SOCKETS/TCPCMD/FTPSVC
 dll $P $D/CLIENT; dll $P $D/SERVER; dll $P $D/FTPCTRS; dll $P NET/UI/FTPMGR/CPL; dll $P NET/UI/FTPMGR/FTPSMX
 dll $P NET/SOCKETS/TCPSVCS/SIMPTCP; exe $P NET/SOCKETS/TCPSVCS/TCPSVCS tcpsvcs
 
-exe /work/RASPI/apps hello hello
+exe /work/RASPI/apps hello hello; exe /work/RASPI/apps smptest smptest
 }
 
 PASS=compile; user; barrier

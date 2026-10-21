@@ -1,5 +1,39 @@
 #ntdiff PRIVATE/NTOS/INC/ARC.H
-=1 1 1218
+=1 1 1150
++//
++// ARM port: the state a processor starts or restarts in from its restart block,
++// loaded by the firmware: the integer registers, the stack pointer and the link
++// register of the supervisor mode, and the program counter and status, adjacent
++// as a return from exception takes them (the Thumb state is the T bit of Cpsr,
++// so Pc has bit 0 clear). R12 is scratch.
++//
++
++typedef struct _ARM_RESTART_STATE {
++
++#if defined(_ARM_)
++
++    ULONG R0;
++    ULONG R1;
++    ULONG R2;
++    ULONG R3;
++    ULONG R4;
++    ULONG R5;
++    ULONG R6;
++    ULONG R7;
++    ULONG R8;
++    ULONG R9;
++    ULONG R10;
++    ULONG R11;
++    ULONG R12;
++    ULONG Sp;
++    ULONG Lr;
++    ULONG Pc;
++    ULONG Cpsr;
+=1 911 7
++} ARM_RESTART_STATE, *PARM_RESTART_STATE;
+=1 1150 19
++        ARM_RESTART_STATE Arm;
+=1 1169 50
 +#elif defined(_ARM_)
 +
 +//

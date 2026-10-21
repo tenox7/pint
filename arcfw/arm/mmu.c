@@ -52,6 +52,7 @@ ULONG FwPeripheralBase = 0x3F000000;
 //
 
 static ULONG ArcL1Space[L1_ENTRIES * 2];
+static PULONG ArcL1;
 
 VOID
 FwSocInitialize (
@@ -79,12 +80,12 @@ FwMmuInitialize (
     VOID
     )
 {
-    PULONG ArcL1 = (PULONG)(((ULONG)ArcL1Space + 0x3fff) & ~0x3fff);
     ULONG MemoryEnd = FwBcm2711 ? 0x400 : 0x3F0;
     ULONG DeviceStart = FwBcm2711 ? 0xFC0 : 0x3F0;
     ULONG DeviceEnd = FwBcm2711 ? 0x1000 : 0x410;
-    ULONG mb, sctlr;
+    ULONG mb;
 
+    ArcL1 = (PULONG)(((ULONG)ArcL1Space + 0x3fff) & ~0x3fff);
     for (mb = 0; mb < L1_ENTRIES; mb++)
         ArcL1[mb] = 0;
 
@@ -99,6 +100,26 @@ FwMmuInitialize (
 
     for (mb = PCIE_WINDOW; FwBcm2711 && mb < PCIE_WINDOW + 16; mb++)
         ArcL1[mb] = PA_35_32(PCIE_WINDOW_PA) | SUPERSECTION | SECTION | AP_PRIV_RW | DEVICE | XN;
+
+    FwMmuInitializeProcessor();
+}
+
+VOID
+FwMmuInitializeProcessor (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine turns on the MMU of the processor it runs on with the
+    firmware's translation table, which the boot processor built.
+
+--*/
+
+{
+    ULONG sctlr;
 
     __dsb(_ARM_BARRIER_SY);
     _MoveToCoprocessor((ULONG)ArcL1, 15, 0, 2, 0, 0);

@@ -6,11 +6,9 @@
 =2 29 4
 =1 40 18
 +    routine, and then return to the system startup routine.
-=1 61 30
-=1 92 38
+=1 61 69
 +    Prcb->PcrPage = LoaderBlock->u.Arm.PcrPage;
-=1 131 4
-=1 150 39
+=1 131 58
 +        // Initialize the address of the interrupt dispatch routine.
 =1 190 6
 +        // and flush the caches so the code is actually in memory and
@@ -25,6 +23,4 @@
 +            (PKINTERRUPT_ROUTINE)((ULONG)(&KxUnexpectedInterrupt.DispatchCode) | 1);
 =1 215 133
 +    // If the current processor is 0, then set the appropriate bit in the active
-=1 349 52
-+    return;
-+}
+=1 349 82

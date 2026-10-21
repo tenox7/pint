@@ -9,8 +9,9 @@
 ;    Interlocked increment and decrement support: the ARM port of
 ;    BASE\CLIENT\MIPS\CRITSECT.S, the Win32 functions that support user mode
 ;    critical sections. The counts are updated with ldrex/strex (the MIPS
-;    ll/sc); the unique id of the current thread comes from its TEB, which
-;    the user read only thread id register holds.
+;    ll/sc), with memory barriers before and after, so that each is a full
+;    barrier on a multiprocessor; the unique id of the current thread comes
+;    from its TEB, which the user read/write thread id register holds.
 ;
 ;--
 
@@ -37,6 +38,7 @@
 
         LEAF_ENTRY InterlockedIncrement
         mov     r2, r0
+        dmb
 10      ldrex   r0, [r2]
         adds    r0, r0, #1
         strex   r1, r0, [r2]
@@ -67,6 +69,7 @@
         strex   r1, r0, [r2]
         cmp     r1, #0
         bne     %B10
+        dmb
         bx      lr
         LEAF_END InterlockedDecrement
 
@@ -121,7 +124,7 @@
         cmp     r2, #0
         bne     %B10
         dmb
-        CP_READ r2, 15, 0, 13, 0, 3             ; current TEB
+        CP_READ r2, 15, 0, 13, 0, 2             ; current TEB
         ldr     r2, [r2, #TeClientId + 4]       ; current thread unique id
         cbnz    r1, %F20
         str     r2, [r0, #CsOwningThread]       ; not owned: set the owner

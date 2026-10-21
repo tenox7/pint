@@ -30,6 +30,15 @@
 +    is called with interrupts enabled, then its interrupt ends. Otherwise its
 +    interrupt ends at once, masked, with its level requested in the PCR, as
 +    above.
++
++    On a multiprocessor the interrupts of the controllers reach processor 0,
++    and each processor has interrupts of its own, which the BCM2836 per-core
++    block delivers: its mailbox 0, which another processor sets to interrupt
++    it at IPI_LEVEL, and its generic virtual timer, the clock of a processor
++    other than 0 at CLOCK2_LEVEL. They are dispatched first, and one that
++    arrives at or below the current IRQL is masked in the per-core block and
++    requested in the PCR in the same way. The state of the controllers is
++    changed under the system interrupt lock, with interrupts disabled.
 =1 18 3
 +    Kernel mode only.
 =1 24 4
@@ -42,8 +51,19 @@
 +
 +static KIRQL HalpVectorIrql[HAL_MAXIMUM_GIC_VECTOR + 1];
 +static ULONG HalpEnabled[HAL_VECTOR_BANKS];
-+static ULONG HalpMasked[HAL_VECTOR_BANKS];
-+static ULONG HalpRequested[HAL_VECTOR_BANKS];
++static ULONG HalpMaskedShared[HAL_VECTOR_BANKS];
++static ULONG HalpRequestedShared[HAL_VECTOR_BANKS];
++
++//
++// Bank 0 of the GIC-400, its software generated and private peripheral
++// interrupts, is banked per processor: its masked and requested sources are
++// those of the processor, in the HAL part of its PCR. The other banks, and
++// every bank of the BCM2835 controller, hold the interrupts of processor 0.
++//
++
++#define HalpBankOfProcessor(Bank) (HalpBcm2711 && ((Bank) == 0))
++#define HalpMasked(Bank) (*(HalpBankOfProcessor(Bank) ? &PCR->HalReserved[3] : &HalpMaskedShared[Bank]))
++#define HalpRequested(Bank) (*(HalpBankOfProcessor(Bank) ? &PCR->HalReserved[4] : &HalpRequestedShared[Bank]))
 +static ULONG HalpLevelSources[HIGH_LEVEL + 1][HAL_VECTOR_BANKS];
 +
 +//
@@ -87,7 +107,7 @@
 +            continue;
 +        }
 +
-+        HalpMasked[Bank] |= Sources[Bank];
++        HalpMasked(Bank) |= Sources[Bank];
 +        if (HalpBcm2711) {
 +            HAL_REG(HAL_GICD_ICENABLER(Bank)) = Sources[Bank];
 +
@@ -106,7 +126,7 @@
 +    ULONG Bits;
 +
 +    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
-+        HalpMasked[Bank] &= ~Sources[Bank];
++        HalpMasked(Bank) &= ~Sources[Bank];
 +        Bits = Sources[Bank] & HalpEnabled[Bank];
 +        if (Bits == 0) {
 +            continue;
@@ -153,7 +173,7 @@
 +
 +    HalpMaskSources(Sources);
 +    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
-+        HalpRequested[Bank] |= Sources[Bank];
++        HalpRequested(Bank) |= Sources[Bank];
 +        for (Bits = Sources[Bank]; Bits != 0; Bits &= Bits - 1) {
 +            PCR->InterruptRequest |= 1 << HalpVectorIrql[Bank * 32 + (31 - _CountLeadingZeros(Bits & -(LONG)Bits))];
 +        }
@@ -166,15 +186,22 @@
 =1 33 6
 +    This routine masks every source of the GIC-400 and enables its distributor
 +    and this processor's interface, which presents a source of any priority
-+    the HAL gives.
++    the HAL gives. On a processor other than 0 only its banked sources and its
++    interface are initialized.
 =1 50 4
 +    ULONG Bank;
 +
-+    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
-+        HAL_REG(HAL_GICD_ICENABLER(Bank)) = 0xFFFFFFFF;
++    if (PCR->Number == 0) {
++        for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
++            HAL_REG(HAL_GICD_ICENABLER(Bank)) = 0xFFFFFFFF;
++        }
++
++        HAL_REG(HAL_GICD_CTLR) = 1;
++
++    } else {
++        HAL_REG(HAL_GICD_ICENABLER(0)) = 0xFFFFFFFF;
 +    }
 +
-+    HAL_REG(HAL_GICD_CTLR) = 1;
 +    HAL_REG(HAL_GICC_PMR) = 0xF0;
 +    HAL_REG(HAL_GICC_BPR) = 0;
 +    HAL_REG(HAL_GICC_CTLR) = 1;
@@ -187,7 +214,9 @@
 +    This function initializes interrupts for the Raspberry Pi: it masks every
 +    source at the controllers, connects the interrupt dispatcher to the
 +    processor's IRQ vector and the unmask routine to the levels above
-+    DISPATCH_LEVEL, and starts the interval timer.
++    DISPATCH_LEVEL, and starts the interval timer. It runs on each processor:
++    processor 0 initializes the controllers; each processor enables its own
++    interprocessor interrupt and, but processor 0, starts its clock.
 =1 46 3
 +    TRUE.
 =1 50 4
@@ -197,14 +226,21 @@
 +    if (HalpBcm2711) {
 +        HalpInitializeGic();
 +        Pcr->InterruptRoutine[IRQ_VECTOR] = (PKINTERRUPT_ROUTINE)HalpGicInterruptDispatch;
++        Pcr->InterruptRoutine[DEVICE_VECTORS + HAL_IPI_SGI] = (PKINTERRUPT_ROUTINE)HalpIpiInterrupt;
 +
 +    } else {
-+        HAL_REG(HAL_FIQ_CONTROL) = 0;
-+        HAL_REG(HAL_IRQ_DISABLE1) = 0xFFFFFFFF;
-+        HAL_REG(HAL_IRQ_DISABLE2) = 0xFFFFFFFF;
-+        HAL_REG(HAL_IRQ_DISABLE_BASIC) = 0xFFFFFFFF;
-+        HAL_REG(HAL_CORE_TIMER_CTL(0)) = 0;
-+        HAL_REG(HAL_CORE_MBOX_CTL(0)) = 0;
++        if (Pcr->Number == 0) {
++            HAL_REG(HAL_FIQ_CONTROL) = 0;
++            HAL_REG(HAL_IRQ_DISABLE1) = 0xFFFFFFFF;
++            HAL_REG(HAL_IRQ_DISABLE2) = 0xFFFFFFFF;
++            HAL_REG(HAL_IRQ_DISABLE_BASIC) = 0xFFFFFFFF;
++            HAL_REG(HAL_GPU_INT_ROUTING) = 0;
++        }
++
++        HAL_REG(HAL_CORE_TIMER_CTL(Pcr->Number)) = 0;
++        HAL_REG(HAL_CORE_MBOX_CTL(Pcr->Number)) = 0;
++        HAL_REG(HAL_CORE_MBOX_CLR(Pcr->Number, 0)) = 0xFFFFFFFF;
++        HalpLocalMasked = 0;
 +        Pcr->InterruptRoutine[IRQ_VECTOR] = (PKINTERRUPT_ROUTINE)HalpInterruptDispatch;
 +    }
 +
@@ -214,7 +250,102 @@
 +        Pcr->ReservedVectors |= (1 << Irql);
 +    }
 +
-+    HalpStartClock();
++    if (Pcr->Number == 0) {
++        HalpStartClock();
++
++    } else {
++        HalpStartProcessorClock();
++    }
++
++    if (HalpBcm2711) {
++        HalEnableSystemInterrupt(DEVICE_VECTORS + HAL_IPI_SGI, IPI_LEVEL, Latched);
++
++    } else {
++        HAL_REG(HAL_CORE_MBOX_CTL(Pcr->Number)) = HAL_MBOX_CTL_MAILBOX0_IRQ;
++    }
++
++    return TRUE;
+=1 73 3 -4
++// Mask and unmask the interrupts of the current processor itself in the
++// BCM2836 per-core block: its interprocessor interrupt and its clock.
++//
++
++static VOID
++HalpMaskLocal (
++    IN ULONG Local
++    )
++{
++    ULONG Number = PCR->Number;
++
++    if (Local & HAL_LOCAL_IPI) {
++        HAL_REG(HAL_CORE_MBOX_CTL(Number)) &= ~HAL_MBOX_CTL_MAILBOX0_IRQ;
++    }
++
++    if (Local & HAL_LOCAL_CLOCK) {
++        HAL_REG(HAL_CORE_TIMER_CTL(Number)) &= ~HAL_TIMER_CTL_CNTV_IRQ;
++    }
++
++    HalpLocalMasked |= Local;
++}
++
++static VOID
++HalpUnmaskLocal (
++    IN ULONG Local
++    )
++{
++    ULONG Number = PCR->Number;
++
++    HalpLocalMasked &= ~Local;
++    if (Local & HAL_LOCAL_IPI) {
++        HAL_REG(HAL_CORE_MBOX_CTL(Number)) |= HAL_MBOX_CTL_MAILBOX0_IRQ;
++    }
++
++    if (Local & HAL_LOCAL_CLOCK) {
++        HAL_REG(HAL_CORE_TIMER_CTL(Number)) |= HAL_TIMER_CTL_CNTV_IRQ;
++    }
++}
++
++static BOOLEAN
++HalpLocalInterruptDispatch (
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This function dispatches an interrupt of the current processor itself,
++    if one is pending, the interprocessor interrupt first: above the current
++    IRQL its routine is called at its level with interrupts enabled;
++    otherwise it is masked and its level requested.
+=1 46 3
++    TRUE if an interrupt of the processor itself was pending.
+=1 50 4
++    ULONG Source = HAL_REG(HAL_CORE_IRQ_SRC(PCR->Number));
++    PHALP_INTERRUPT_ROUTINE Service;
++    KIRQL OldIrql;
++    KIRQL Irql;
++    ULONG Local;
++
++    if (Source & HAL_IRQ_SRC_MAILBOX0) {
++        Local = HAL_LOCAL_IPI;
++        Irql = IPI_LEVEL;
++        Service = HalpIpiInterrupt;
++
++    } else if (Source & HAL_IRQ_SRC_CNTV) {
++        Local = HAL_LOCAL_CLOCK;
++        Irql = CLOCK2_LEVEL;
++        Service = HalpProcessorClockInterrupt;
++
++    } else {
++        return FALSE;
++    }
++
++    if (Irql <= PCR->CurrentIrql) {
++        HalpMaskLocal(Local);
++        PCR->InterruptRequest |= 1 << Irql;
++        return TRUE;
++    }
++
++    KeRaiseIrql(Irql, &OldIrql);
++    HalpEnableInterrupts();
++    Service((PVOID)Service, TrapFrame);
++    HalpDisableInterrupts();
 +    return TRUE;
 +}
 +
@@ -247,9 +378,15 @@
 +    ULONG Bank;
 +    ULONG Bits;
 +
++    if (HalpLocalInterruptDispatch(TrapFrame) ||
++        ((HAL_REG(HAL_CORE_IRQ_SRC(PCR->Number)) & HAL_IRQ_SRC_GPU) == 0)) {
++        return;
++    }
++
+=1 62 1
 +    RtlZeroMemory(Pending, sizeof(Pending));
-+    Pending[0] = HAL_REG(HAL_IRQ_PEND1) & HalpEnabled[0] & ~HalpMasked[0];
-+    Pending[1] = HAL_REG(HAL_IRQ_PEND2) & HalpEnabled[1] & ~HalpMasked[1];
++    Pending[0] = HAL_REG(HAL_IRQ_PEND1) & HalpEnabled[0] & ~HalpMasked(0);
++    Pending[1] = HAL_REG(HAL_IRQ_PEND2) & HalpEnabled[1] & ~HalpMasked(1);
 +
 +    for (Bank = 0; Bank < 2; Bank += 1) {
 +        for (Bits = Pending[Bank]; Bits != 0; Bits &= Bits - 1) {
@@ -261,6 +398,7 @@
 +    }
 +
 +    if (Best == (ULONG)-1) {
+=1 90 1 4
 +        return;
 +    }
 +
@@ -272,6 +410,7 @@
 +        }
 +
 +        HalpRequestSources(Masked);
+=1 90 1 4
 +        return;
 +    }
 +
@@ -279,19 +418,23 @@
 +    KeRaiseIrql(Irql, &OldIrql);
 +    if (((HalpEnabled[0] & ~HalpLevelSources[Irql][0]) |
 +         (HalpEnabled[1] & ~HalpLevelSources[Irql][1])) == 0) {
+=1 90 1 4
 +        Service((PVOID)Service, TrapFrame);
 +        return;
 +    }
 +
 +    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
-+        Masked[Bank] = HalpLevelSources[Irql][Bank] & ~HalpMasked[Bank];
++        Masked[Bank] = HalpLevelSources[Irql][Bank] & ~HalpMasked(Bank);
 +    }
 +
 +    HalpMaskSources(Masked);
+=1 90 1
 +    HalpEnableInterrupts();
 +    Service((PVOID)Service, TrapFrame);
 +    HalpDisableInterrupts();
+=1 62 1
 +    HalpUnmaskSources(Masked);
+=1 90 1
 +}
 +
 +VOID
@@ -333,7 +476,9 @@
 +    if (Irql <= PCR->CurrentIrql) {
 +        RtlZeroMemory(Sources, sizeof(Sources));
 +        Sources[Vector / 32] = 1 << HAL_VECTOR_BIT(Vector);
+=1 62 1 4
 +        HalpRequestSources(Sources);
+=1 90 1 4
 +        HAL_REG(HAL_GICC_EOIR) = Acknowledge;
 +        return;
 +    }
@@ -362,14 +507,32 @@
 =1 46 8
 +    KIRQL Irql = PCR->CurrentIrql;
 +    ULONG Unmask[HAL_VECTOR_BANKS];
++    ULONG Local = 0;
 +    ULONG Bank;
 +
++    if ((HalpLocalMasked & HAL_LOCAL_IPI) && (Irql < IPI_LEVEL)) {
++        Local |= HAL_LOCAL_IPI;
++    }
++
++    if ((HalpLocalMasked & HAL_LOCAL_CLOCK) && (Irql < CLOCK2_LEVEL)) {
++        Local |= HAL_LOCAL_CLOCK;
++    }
++
++    if (Local != 0) {
++        HalpUnmaskLocal(Local);
++    }
++
+=1 62 1
 +    for (Bank = 0; Bank < HAL_VECTOR_BANKS; Bank += 1) {
-+        Unmask[Bank] = HalpRequested[Bank] & ~HalpLevelSources[Irql][Bank];
-+        HalpRequested[Bank] &= ~Unmask[Bank];
++        Unmask[Bank] = 0;
++        if ((PCR->Number == 0) || HalpBankOfProcessor(Bank)) {
++            Unmask[Bank] = HalpRequested(Bank) & ~HalpLevelSources[Irql][Bank];
++            HalpRequested(Bank) &= ~Unmask[Bank];
++        }
 +    }
 +
 +    HalpUnmaskSources(Unmask);
+=1 90 1
 +}
 +
 =1 29 25
@@ -385,9 +548,10 @@
 +
 +    Bit = 1 << HAL_VECTOR_BIT(Irq);
 +    Psr = HalpDisableInterrupts();
+=1 62 1
 +    HalpEnabled[Irq / 32] &= ~Bit;
-+    HalpMasked[Irq / 32] &= ~Bit;
-+    HalpRequested[Irq / 32] &= ~Bit;
++    HalpMasked(Irq / 32) &= ~Bit;
++    HalpRequested(Irq / 32) &= ~Bit;
 +    if (HalpBcm2711) {
 +        HAL_REG(HAL_GICD_ICENABLER(Irq / 32)) = Bit;
 +
@@ -396,6 +560,7 @@
 +    }
 +
 +    HalpComputeLevelSources();
+=1 90 1
 +    HalpRestoreInterrupts(Psr);
 +}
 +
@@ -420,6 +585,7 @@
 +
 +    Bit = 1 << HAL_VECTOR_BIT(Irq);
 +    Psr = HalpDisableInterrupts();
+=1 62 1
 +    HalpVectorIrql[Irq] = Irql;
 +    HalpEnabled[Irq / 32] |= Bit;
 +    if (HalpBcm2711) {
@@ -434,15 +600,16 @@
 +            HAL_REG(HAL_GICD_ICFGR(Irq / 16)) = Configuration;
 +        }
 +
-+        if ((HalpMasked[Irq / 32] & Bit) == 0) {
++        if ((HalpMasked(Irq / 32) & Bit) == 0) {
 +            HAL_REG(HAL_GICD_ISENABLER(Irq / 32)) = Bit;
 +        }
 +
-+    } else if ((HalpMasked[Irq / 32] & Bit) == 0) {
++    } else if ((HalpMasked(Irq / 32) & Bit) == 0) {
 +        HAL_REG(HAL_VECTOR_BANK(Irq) == 2 ? HAL_IRQ_ENABLE2 : HAL_IRQ_ENABLE1) = Bit;
 +    }
 +
 +    HalpComputeLevelSources();
+=1 90 1
 +    HalpRestoreInterrupts(Psr);
 +    return TRUE;
 +}
@@ -473,8 +640,44 @@
 +    return DEVICE_VECTORS + BusInterruptVector;
 +}
 +
-=1 264 10
-+    This HAL runs one processor, so there is never another to interrupt.
+=1 264 9
++    This routine requests an interprocessor interrupt on a set of processors:
++    it sets mailbox 0 of each in the BCM2836 per-core block, or sends them
++    software generated interrupt 0 through the GIC-400 (processor n is its CPU
++    interface n). The caller made its requests visible before.
 =1 277 13
-+    UNREFERENCED_PARAMETER(Mask);
++    ULONG Number;
++
++    if (HalpBcm2711) {
++        HAL_REG(HAL_GICD_SGIR) = ((Mask & 0xFF) << 16) | HAL_IPI_SGI;
++        return;
++    }
++
++    for (Number = 0; Mask != 0; Number += 1, Mask >>= 1) {
++        if (Mask & 1) {
++            HAL_REG(HAL_CORE_MBOX_SET(Number, 0)) = 1;
++        }
++    }
++}
++
++VOID
++HalpIpiInterrupt (
++    IN PVOID Routine,
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This routine is entered as the result of an interprocessor interrupt (the
++    Duo HAL's xxipiint.s). It acknowledges the interrupt, clearing mailbox 0
++    of the processor (the GIC-400 ends the interrupt after this routine), and
++    transfers control to the kernel, which processes the interprocessor
++    requests; a request made after the acknowledgement interrupts again.
+=1 40 3
++    Routine - Supplies the address of this routine.
++
++    TrapFrame - Supplies a pointer to a trap frame.
+=1 46 8
++    if (!HalpBcm2711) {
++        HAL_REG(HAL_CORE_MBOX_CLR(PCR->Number, 0)) = 0xFFFFFFFF;
++    }
++
++    KeIpiInterrupt(TrapFrame);
 +}

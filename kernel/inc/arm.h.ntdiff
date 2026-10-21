@@ -35,6 +35,9 @@
 +void __dsb(unsigned int);
 +void __isb(unsigned int);
 +void __wfi(void);
++void __wfe(void);
++void __sev(void);
++void __yield(void);
 +unsigned int _CountLeadingZeros(unsigned long);
 +
 +#ifdef __cplusplus
@@ -48,6 +51,9 @@
 +#pragma intrinsic(__dsb)
 +#pragma intrinsic(__isb)
 +#pragma intrinsic(__wfi)
++#pragma intrinsic(__wfe)
++#pragma intrinsic(__sev)
++#pragma intrinsic(__yield)
 +#pragma intrinsic(_CountLeadingZeros)
 +
 +#define _ARM_BARRIER_SY 0xF
@@ -108,8 +114,25 @@
 +//
 +
 +#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
-=1 313 27
-=1 341 4
+=1 313 3
++// Get current IRQL: a function, as on Alpha, which reads the IRQL of the
++// processor it runs on with interrupts disabled: a thread a context switch
++// moved to another processor between reading the address of the PCR and its
++// IRQL would read the IRQL of the processor it left.
+=1 370 3
++KIRQL
++KeGetCurrentIrql (
+=1 525 3
+=1 321 13
++// Get address of current kernel thread object: the user read only thread id
++// register, which the context switch loads with the thread, as Windows on ARM
++// does, so that one instruction reads it on any processor (the Alpha
++// __rdthread). The user read/write one holds the TEB.
++//
++
++#define KeGetCurrentThread() ((struct _KTHREAD *)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 1200 3
+=1 342 3
 +#define KeGetCurrentProcessorNumber() ((ULONG)PCR->Number)
 =1 346 8
 +//
@@ -117,7 +140,16 @@
 +//
 +
 +#define KiSetProcessorControlRegion(Pcr) _MoveToCoprocessor((ULONG)(Pcr), 15, 0, 13, 0, 4)
-=1 354 26
++
++//
++// Set the current thread of this processor and its TEB.
++//
++
++#define KiSetCurrentThread(Thread) _MoveToCoprocessor((ULONG)(Thread), 15, 0, 13, 0, 3)
++#define KiSetCurrentTeb(Teb) _MoveToCoprocessor((ULONG)(Teb), 15, 0, 13, 0, 2)
+=1 354 5
++#define KeGetPreviousMode() (KPROCESSOR_MODE)KeGetCurrentThread()->PreviousMode
+=1 360 20
 =1 400 54
 =1 455 21
 +KeUpdateRunTime (
@@ -125,8 +157,15 @@
 =1 609 1
 +    IN ULONG TimeIncrement
 =1 484 34
-=1 536 8
-=1 547 23
+=1 536 3
++// Synchronize the process ids of the other processors after a process id
++// rollover (ki.h declares it for MIPS and Alpha, whose PIDs are assigned as
++// the ARM ASIDs are).
+=3 1362 3
++KiSynchronizeProcessIds (
+=1 525 3
+=2 719 9
+=1 550 20
 +//
 +// Disable and enable interrupts: the CPSR IRQ mask, which serves as the MIPS
 +// PSR interrupt enable (the MIPS _disable and _enable intrinsics).
@@ -134,7 +173,26 @@
 +
 +#define _disable() __cps(_ARM_CPS_DISABLE_INTERRUPTS, _ARM_CPS_INTERRUPT_FLAG_I, 0)
 +#define _enable() __cps(_ARM_CPS_ENABLE_INTERRUPTS, _ARM_CPS_INTERRUPT_FLAG_I, 0)
-=1 586 102
+=1 586 43
++// Define query system time macro. The parts of a time are read in order, with
++// a barrier between the reads, as another processor writes them.
+=1 630 5
++        __dmb(_ARM_BARRIER_SY);                                         \
+=1 635 1
++        __dmb(_ARM_BARRIER_SY);                                         \
+=1 636 13
++        __dmb(_ARM_BARRIER_SY);                                    \
+=1 649 1
++        __dmb(_ARM_BARRIER_SY);                                    \
+=1 650 8
++        __dmb(_ARM_BARRIER_SY);                                 \
+=1 658 1
++        __dmb(_ARM_BARRIER_SY);                                 \
+=1 659 21
++        __dmb(_ARM_BARRIER_SY);                                             \
+=1 680 1
++        __dmb(_ARM_BARRIER_SY);                                             \
+=1 681 7
 =1 723 9
 +// The ARM peripherals are memory mapped (there is no separate I/O space), so
 +// the port and register forms are the same. KeFlushWriteBuffer drains the

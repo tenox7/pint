@@ -87,6 +87,23 @@
         LEAF_END FwEnableAsynchronousAborts
 
 ;
+; VOID FwLoadRestartState(PARM_RESTART_STATE State)
+;
+; Load the restart state of a processor (the ARM_RESTART_STATE of its restart
+; block): r0-r11, the stack pointer and the link register, then the program
+; counter and status by a return from exception, which takes the mode and the
+; instruction set from the status. R12 is scratch.
+;
+
+        LEAF_ENTRY FwLoadRestartState
+        add     r12, r0, #60                    ; Pc, Cpsr
+        ldr     sp, [r0, #52]
+        ldr     lr, [r0, #56]
+        ldm     r0, {r0-r11}
+        rfeia   r12
+        LEAF_END FwLoadRestartState
+
+;
 ; BOOLEAN FwProbeRead(ULONG Address, PULONG Value)
 ;
 ; Read a word of a device that may not be there: an abort of the read, also

@@ -25,7 +25,15 @@
 +#endif // _HIVE_RASPI_
 =1 173 17
 +    defined(MITSUMI) || defined(BCMEMMC)
-=1 191 821
+=1 191 252
++#if defined(RASPI)
++//
++// All four cores of the Pi run NT, the registered processors of an Advanced
++// Server installation (REGISTRY.INF); a Workstation registers two.
++//
++                RegisteredProcessors = REG_DWORD 4
++#endif // defined(RASPI)
+=1 442 570
 +#if defined(NETWORK) || defined(RASPINET)
 =1 1013 3
 +#if defined(RASPINET)
