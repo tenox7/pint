@@ -503,7 +503,11 @@ BcmethTimer(
 }
 
 //
-// The thread: the work the miniport queued, and the link each second.
+// The thread: the work the miniport queued, and the link each second. Its
+// control transfers hold the USB host, which the keyboard and pointer port
+// driver polls the keyboards on from a thread of the low real-time priority:
+// this thread runs at that priority, so that the threads between the two
+// cannot keep it from releasing the host.
 //
 
 static VOID
@@ -516,6 +520,7 @@ BcmethThread(
     BOOLEAN Timer;
     ULONG Work;
 
+    KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
     Interval.QuadPart = -10000 * (LONGLONG)LINK_INTERVAL_MS;
     while (!Adapter->Halting) {
         KeWaitForSingleObject(&Adapter->WorkEvent, Executive, KernelMode, FALSE, &Interval);

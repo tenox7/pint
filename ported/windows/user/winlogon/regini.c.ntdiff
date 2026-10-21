@@ -17,7 +17,10 @@
 +    DomainMember = TRUE;
 =1 1545 115
 +        if ( NetFound && DomainMember ) {
-=1 1661 435
+=1 1661 42
++            fprintf( fh, "@echo The system will restart in 5 seconds.\r\n" );
++            fprintf( fh, "@sleep 5\r\n" );
+=1 1705 391
 +    TimeoutMessageBoxlpstr( NULL,
 +                            TEXT("Windows NT has configured the registry from REGISTRY.INI. ")
 +                            TEXT("This is done once, on the first start of a new installation.\n\n")

@@ -25,8 +25,11 @@ Abstract:
     the frame the translator keeps the result for. The core comes out of reset
     with the frame interval of full speed, so the interval of the speed of the
     root port is set once the port is enabled, as the microframes are timed by
-    it. An interface whose reads fail is read again after a delay that
-    doubles, as Linux does.
+    it. A periodic transfer is enabled with time enough left in the
+    (micro)frame before its own, which the core misses otherwise; one the core
+    could not do in its (micro)frame all the same is tried again at the next
+    read, and an interface whose reads fail three times in a row is read
+    again after a delay that doubles, as Linux does.
 
     The hubs are enumerated at initialization, then their status change
     endpoints polled, so that devices can come and go. A keyboard or a pointer
@@ -131,6 +134,8 @@ Abstract:
 #define HCINT_NAK               0x00000010
 #define HCINT_ACK               0x00000020
 #define HCINT_NYET              0x00000040
+#define HCINT_XACTERR           0x00000080
+#define HCINT_BBLERR            0x00000100
 #define HCINT_FRMOVRUN          0x00000200
 #define HCINT_DATATGLERR        0x00000400
 #define HCINT_ALL               0x000007FF
@@ -161,12 +166,14 @@ Abstract:
 #define XACT_STALL              2
 #define XACT_TOGGLE             3
 #define XACT_ERROR              4
+#define XACT_MISSED             5
 
 #define CONTROL_TIMEOUT_MS      1000
 #define PERIODIC_TIMEOUT_MS     4
 #define TRANSFER_ERRORS         3
 #define SPLIT_WINDOW            4
 #define START_SPLIT_FRAMES      16
+#define PERIODIC_MARGIN_US      30
 #define RETRY_FIRST_MS          13
 #define RETRY_LAST_MS           104
 #define ENUMERATION_TRIES       4
@@ -339,13 +346,39 @@ UsbWaitChannel(
 }
 
 //
+// Wait until enough of this (micro)frame is left for the core to take a
+// periodic transfer for the next one: enabled later, the transfer misses that
+// (micro)frame and the core halts the channel with a frame overrun. The time
+// left counts down in clocks of the PHY, and starts again with each
+// (micro)frame.
+//
+
+static VOID
+UsbWaitPeriodic(
+    IN PUSB_HOST Host
+    )
+{
+    ULONG Margin = PERIODIC_MARGIN_US * PHY_CLOCK_MHZ;
+    ULONG First = READ_REG(Host, HFNUM);
+    ULONG Start = UsbClock();
+    ULONG Frame = First;
+
+    while ((Frame >> HFNUM_FRREM_SHIFT) < Margin && ((Frame ^ First) & HFNUM_FRNUM_MASK) == 0 &&
+           UsbClock() - Start < Host->ClockRate) {
+        Frame = READ_REG(Host, HFNUM);
+    }
+}
+
+//
 // Run one transaction group on channel 0 and wait for it: the packets and
 // the size of the transfer go through the buffer of the host, and a periodic
-// transfer goes in the next microframe (or frame). A channel a deadline left
-// running is halted first. What the channel sends must be in memory before it
-// starts, and what it received is read after it halted: to the processor the
-// buffer is ordinary memory, which it may reorder with the registers. Returns
-// the interrupts of the channel, and its transfer size register at the halt.
+// transfer goes in the next microframe (or frame), enabled with time enough
+// left in this one (that of a split, after the start split that waited for
+// it). A channel a deadline left running is halted first. What the channel
+// sends must be in memory before it starts, and what it received is read
+// after it halted: to the processor the buffer is ordinary memory, which it
+// may reorder with the registers. Returns the interrupts of the channel, and
+// its transfer size register at the halt.
 //
 
 static ULONG
@@ -371,6 +404,10 @@ UsbRunChannel(
     WRITE_REG(Host, HCTSIZ, (Pid << HCTSIZ_PID_SHIFT) | (Packets << HCTSIZ_PKTCNT_SHIFT) | Size);
     WRITE_REG(Host, HCDMA, Host->BufferAddress);
     WRITE_REG(Host, HCINT, HCINT_ALL);
+    if ((Character & HCCHAR_PERIODIC) && Split == 0) {
+        UsbWaitPeriodic(Host);
+    }
+
     if ((Character & HCCHAR_PERIODIC) && (READ_REG(Host, HFNUM) & 1) == 0) {
         Character |= HCCHAR_ODDFRM;
     }
@@ -384,6 +421,12 @@ UsbRunChannel(
     Host->Interrupt = Interrupt;
     return Interrupt;
 }
+
+//
+// The result of a transaction from the interrupts of the channel. A periodic
+// channel the core halted without an error and without a handshake, or with
+// a frame overrun, missed its (micro)frame: the transaction did not run.
+//
 
 static LONG
 UsbStatus(
@@ -400,6 +443,12 @@ UsbStatus(
 
     if ((Interrupt & (HCINT_NAK | HCINT_TIMEOUT)) == HCINT_NAK) {
         return XACT_NAK;
+    }
+
+    if ((Interrupt & (HCINT_XACTERR | HCINT_BBLERR | HCINT_TIMEOUT)) == 0 &&
+        ((Interrupt & HCINT_FRMOVRUN) ||
+         (Interrupt & (HCINT_XFERCOMPL | HCINT_ACK | HCINT_NYET)) == 0)) {
+        return XACT_MISSED;
     }
 
     return XACT_ERROR;
@@ -492,8 +541,9 @@ UsbSplit(
 // the buffer of the host (a packet at a time if split, or periodic) until
 // the length is moved or a short packet ends it. A NAK, a toggle error or a
 // transaction error repeats the packet group within the time limit (up to
-// three errors in a row); a periodic transfer is tried once. Returns the
-// length moved, or XFER_NAK, XFER_STALL or XFER_ERROR.
+// three errors in a row); a periodic transfer is tried once, and one that
+// missed its (micro)frame gives XFER_NAK. Returns the length moved, or
+// XFER_NAK, XFER_STALL or XFER_ERROR.
 //
 
 static LONG
@@ -585,6 +635,10 @@ UsbTransfer(
 
         if (Character & HCCHAR_PERIODIC) {
             return Status == XACT_ERROR ? XFER_ERROR : XFER_NAK;
+        }
+
+        if (Status == XACT_MISSED) {
+            Status = XACT_ERROR;
         }
 
         if ((LONG)(UsbClock() - Limit) >= 0 ||
@@ -1783,9 +1837,9 @@ UsbHidRead(
 Routine Description:
 
     This routine reads a report from the interrupt endpoint of a keyboard or
-    pointer, and counts the outcome. After a read fails, the interface is
-    read again only after a delay, which doubles up to 104 ms while the
-    reads keep failing.
+    pointer, and counts the outcome. After three reads in a row fail, the
+    interface is read again only after a delay, which doubles up to 104 ms
+    while the reads keep failing.
 
 Arguments:
 
@@ -1824,7 +1878,16 @@ Return Value:
     }
 
     if (Length != XFER_ERROR) {
+        Hid->Errors = 0;
         Hid->RetryDelay = 0;
+        return Length;
+    }
+
+    if (Hid->Errors < TRANSFER_ERRORS) {
+        Hid->Errors += 1;
+    }
+
+    if (Hid->Errors < TRANSFER_ERRORS) {
         return Length;
     }
 

@@ -71,13 +71,13 @@ exe $W SCREG/SC/SERVER/DAYTONA services
 dll $P EVENTLOG/SERVER; dll $P EVENTLOG/NETEVENT; dll $N DD/NLSMSG; dll $P NET/MESSAGES
 
 # the keyboard layout, the shell (userinit, progman, control panel) and the tools of
-# the first boot of a developer install (cmd, ini, ech, adduser, shutdown)
+# the first boot of a developer install (cmd, ini, ech, adduser, shutdown, sleep)
 dll $W USER/KBDLYOUT/US
 lib $W SHELL/USERPRI; lib $W PORT1632; dll $W SHELL/LIBRARY; dll $W MPR
 lib $W USER/USERINIT; exe $W USER/USERINIT userinit
 lib $W CMD; exe $W CMD cmd
 lib $P SDKTOOLS/ZTOOLS/SRC
-for t in INI:ini ECH:ech ADDUSER:adduser SHUTDOWN:shutdown; do exe $P SDKTOOLS/${t%%:*} ${t#*:}; done
+for t in INI:ini ECH:ech ADDUSER:adduser SHUTDOWN:shutdown SLEEP:sleep; do exe $P SDKTOOLS/${t%%:*} ${t#*:}; done
 lib $W DIAMOND/MSZIP/MDI.NT; lib $W DIAMOND/CHUCK/FDI.NT; lib $W SHELL/LZ/LIBS; dll $W SHELL/LZ/LZEXPAND
 dll $W SHELL/VERSION; dll $W SHELL/COMDLG; dll $W SHELL/CONTROL/MAIN
 exe $W SHELL/CONTROL/CPANEL control
