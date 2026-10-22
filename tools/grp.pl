@@ -1,14 +1,15 @@
 #!/usr/bin/perl
-# grp.pl GROUP DIR COLUMNS NAME=PROGRAM...: add items for the programs DIR/PROGRAM.EXE to a
+# grp.pl GROUP DIR PATH COLUMNS NAME=PROGRAM...: add items for the programs DIR/PROGRAM.EXE to a
 # Program Manager group file (PMCC, the group files of NT's developer setup that REGISTRY.INI
-# ProgramGroups names), each with the icon Program Manager's New Program Item takes: the 32x32
-# one of 16 colours of the program's first icon (else its first 32x32 one; a program without an
-# icon gets Program Manager's). The items are laid out again, COLUMNS a row, 75 pixels apart as
+# ProgramGroups names), each running PATH\PROGRAM.EXE (PROGRAM.EXE when PATH is empty: a program
+# on the path), with the icon Program Manager's New Program Item takes: the 32x32 one of 16
+# colours of the program's first icon (else its first 32x32 one; a program without an icon gets
+# Program Manager's). The items are laid out again, COLUMNS a row, 75 pixels apart as
 # Program Manager arranges them, and the group window grows by the rows and columns added.
 # Item definitions and icons start on 4 bytes: Program Manager reads them in place.
 use strict; use warnings;
-my ($grp, $dir, $cols, @add) = @ARGV;
-die "usage: grp.pl GROUP DIR COLUMNS NAME=PROGRAM...\n" unless @add;
+my ($grp, $dir, $path, $cols, @add) = @ARGV;
+die "usage: grp.pl GROUP DIR PATH COLUMNS NAME=PROGRAM...\n" unless @add;
 my $d = slurp($grp);
 die "$grp: not a group file\n" unless substr($d, 0, 4) eq 'PMCC';
 my $cb = unpack 'v', substr($d, 6, 2);
@@ -32,7 +33,7 @@ for my $a (@add) {
     my $file = (grep { lc $_ eq lc "$prog.exe" } map { s{.*/}{}r } glob "$dir/*")[0] or die "grp.pl: no $dir/$prog.exe\n";
     my ($id, $icon) = icon("$dir/$file");
     my $i = 0; $i++ while defined $item[$i];
-    $item[$i] = [0, 0, $name, lc "$prog.exe", '', $id // 0, 3, length($icon // ''), 0, 0, 0, $icon // ''];
+    $item[$i] = [0, 0, $name, (length $path ? "$path\\" : "") . lc "$prog.exe", '', $id // 0, 3, length($icon // ''), 0, 0, 0, $icon // ''];
 }
 
 # the order of the items on the screen (rows, then columns), the added ones last, in the grid

@@ -11,6 +11,7 @@ sdcard/root/WINNT/System32/*.INF
 sdcard/root/WINNT/System32/WINPERMS.TXT
 sdcard/root/WINNT/System32/Drivers/*.SYS
 sdcard/root/SDKTOOLS/
+sdcard/root/GAMES/
 
 # the sources made from their edit scripts over the NT tree (*.ntdiff, tools/ntdiff.pl)
 arcfw/arm/fwio.c

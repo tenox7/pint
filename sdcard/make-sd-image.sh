@@ -3,8 +3,8 @@
 # config.txt, the ARC firmware (arcfw.bin, the kernel= image) and the NT tree in
 # sdcard/root (\WINNT\...) with the registry hives of obj/gen/hives, the NLS tables and fonts
 # of the NT tree, the help files of the programs and the setup aid of a developer install
-# (ported/oak/registry.ini, the program groups in \WINNT\IDW, the games of apps/games in
-# the Games group: tools/grp.pl). FAT16 because both
+# (ported/oak/registry.ini, the program groups in \WINNT\IDW, the games of apps/games in \GAMES
+# in the Games group: tools/grp.pl). FAT16 because both
 # the GPU firmware and NT 3.5 read it.
 # Flash it for a real Pi 2, 3 or 4, or attach it in QEMU with -drive if=sd. With -u the disk of
 # the last build is updated in place, keeping what NT wrote on it: the files built since
@@ -76,8 +76,9 @@ cp ../obj/gen/hives/SYSTEM ../obj/gen/hives/SOFTWARE ../obj/gen/hives/DEFAULT /t
 perl ../tools/ntdiff.pl apply /nt ../ported/oak/registry.ini.ntdiff
 cp ../ported/oak/registry.ini /tmp/sd/WINNT/REGISTRY.INI
 mkdir -p /tmp/sd/WINNT/IDW && cp /nt/PRIVATE/WINDOWS/SHELL/PROGMAN/*.GRP /tmp/sd/WINNT/IDW/
-# the games of apps/games in the Games group
-perl ../tools/grp.pl /tmp/sd/WINNT/IDW/GAMES.GRP /tmp/sd/WINNT/System32 5 2048=2048 Breakout=breakout "Bubble Breaker=bubbles" \
+# the games of apps/games (\GAMES, on the system drive: HOMEDRIVE, as winlogon sets it without a home directory)
+# in the Games group
+perl ../tools/grp.pl /tmp/sd/WINNT/IDW/GAMES.GRP /tmp/sd/GAMES "%HOMEDRIVE%\\GAMES" 5 2048=2048 Breakout=breakout "Bubble Breaker=bubbles" \
     "Moon Lander=lander" "Missile Command=misl" Snake=ntsnake Tankz=tankz "NT Rigue=ntrigue" RISCque=riscque Sokoban=sokoban \
     RISCoban=riscoban WiNTown=wintown
 # the help files of the programs, where setup puts them

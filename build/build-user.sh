@@ -95,9 +95,9 @@ for a in SHELL/ACCESORY/NOTEPAD:notepad SHELL/ACCESORY/CALC:calc SHELL/ACCESORY/
          SHELL/WINVER:winver SHELL/GAMES/REVERSI:reversi EP/CRUEL:cruel EP/GOLF:golf EP/PEGGED:pegged EP/SNAKE:snake \
          EP/TICTAC:tictac EP/OLDTP:taipei; do pair $W $a; done
 exe /work/RASPI/apps taskman taskman
-# the games of apps/games (in the Games group: sdcard/make-sd-image.sh)
+# the games of apps/games, in \GAMES (in the Games group: sdcard/make-sd-image.sh)
 for a in 2048:2048 breakout:breakout bubbles:bubbles lander:lander missile:misl snake:ntsnake tankz:tankz ntrigue:ntrigue \
-         riscque:riscque sokoban:sokoban riscoban:riscoban wintown:wintown; do exe /work/RASPI/apps games/${a%%:*} ${a#*:}; done
+         riscque:riscque sokoban:sokoban riscoban:riscoban wintown:wintown; do DEST=GAMES exe /work/RASPI/apps games/${a%%:*} ${a#*:}; done
 
 # WinHelp and its full-text search
 for c in MVAPI FTENGINE FTUI; do dll $W WINHELP/$c; done
