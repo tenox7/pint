@@ -110,6 +110,7 @@ ported/lsa/msv1_0/nlpcache.c
 ported/lsa/server/adtlog.c
 ported/lsa/server/aucred.c
 ported/ntos/ke/procobj.c
+ported/ntos/init/init.c
 ported/ntos/rtl/rxact.c
 ported/sm/server/sminit.c
 ported/windows/base/server/srvini.c

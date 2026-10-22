@@ -32,6 +32,11 @@ hdmi_drive=2
 framebuffer_width=1920
 framebuffer_height=1080
 
+# Show the frame buffer on the whole screen. Without this line the GPU firmware takes an HD
+# display for a TV that hides its edges (overscan) and shrinks the picture into a black
+# border, 48 pixels a side. On a TV that does hide them, delete this line.
+disable_overscan=1
+
 # Raspberry Pi 4: its GPU firmware is start4.elf (the boot EEPROM reads this card)
 # and the HAL drives its GIC-400, which the firmware sets up for a 32-bit kernel.
 [pi4]

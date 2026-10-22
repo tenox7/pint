@@ -16,7 +16,8 @@ GEN=$HOSTGEN step ksarm $K/ke/genarm.c -- $B/make-ksarm.sh
 GEN=$HOSTGEN step midl $R/tools/midl -- $R/tools/midl/gen-midl.sh
 GEN=$HOSTGEN step nethdr $R/ported/ntos/inc $R/ported/inc -- $B/make-nethdr.sh
 step crt $CRT -- $R/crt/make-crt.sh
-INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/ported/ntos/rtl $R/ported/ntos/makefil0 $R/ported/ntos/diskreg \
+INSTALL=1 step kernel $K/ke $K/kd $K/mm $K/ex $K/lpc $K/ps $K/rtl $K/config $K/armdef.src $R/ported/ntos/rtl $R/ported/ntos/ke $R/ported/ntos/init \
+    $R/ported/ntos/makefil0 $R/ported/ntos/diskreg \
     $R/obj/libcntpr.lib -- $B/make-execlink.sh
 INSTALL=1 job hal step hal $R/hal $R/obj/ntoskrnl.lib $R/obj/libcntpr.lib -- $R/hal/make-hal.sh
 for c in RTL/BOOT BOOT/LIB CONFIG/BOOT BOOT/BLDR; do job lib/$c cstep lib /work/PRIVATE/NTOS $c -- $B/make-lib.sh $c; done
