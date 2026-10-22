@@ -1,14 +1,14 @@
 # PINT - Raspberry PI Windows NT
 
-Windows NT 3.5 ported to 32-bit ARM (ARMv7-A) on the Raspberry Pi 2 and 3, with own ARC firmware.
+Windows NT 3.5 ported to 32-bit ARM (ARMv7-A) on the Raspberry Pi 2, 3 and 4, with own ARC firmware.
 
 ## Raspberry Pi models
 
-- Tested: Pi 2 Model B v1.1 (BCM2836, Cortex-A7), Pi 3 Model B v1.2, v1.3 and B+ v1.3 (BCM2837, Cortex-A53) and QEMU
-  `raspi2b`, `raspi3b`, `raspi3ap`.
-- Untested, should work: Pi 2 v1.2, 3A+, Zero 2 W (BCM2837).
-- Planned: CM4, Pi 4B, Pi 400 (BCM2711, Cortex-A72): needs the new peripheral window, GIC and EMMC2; the 4B and 400
-  also PCIe and an xHCI USB driver.
+- Tested: Pi 2 Model B v1.1 (BCM2836, Cortex-A7), Pi 3 Model B v1.2, v1.3 and B+ v1.3 (BCM2837, Cortex-A53), Pi 4
+  Model B v1.4 (BCM2711, Cortex-A72: USB-A ports and Ethernet; NT uses the first GB of memory) and QEMU `raspi2b`,
+  `raspi3b`, `raspi3ap`, `raspi4b`.
+- Untested, should work: Pi 2 v1.2, 3A+, Zero 2 W (BCM2837), Pi 400, CM4 (BCM2711).
+- NT runs its multiprocessor kernel on all four cores of every model.
 - Not planned:
   - Pi 1, Zero, Zero W: ARMv6 (ARM1176), no Thumb-2.
   - Pi 5, Pi 500: the Cortex-A76 runs 32-bit code only in user mode.
@@ -44,27 +44,27 @@ bundled QEMU.
 
     build/run.sh                  # console on serial in this terminal (Ctrl-A X quits)
     build/run.sh -device usb-kbd  # console on the HDMI window + USB keyboard
-    M=raspi3b build/run.sh        # a Pi 3B (M=raspi3ap: a 3A+)
+    M=raspi3b build/run.sh        # a Pi 3B (M=raspi3ap: a 3A+, M=raspi4b: a Pi 4B, QEMU 11.1 or later)
     build/run.sh -h               # the common options; the others go to QEMU
 
 The firmware puts the console on HDMI when a USB keyboard is present, otherwise on serial. run.sh always attaches a USB
 mouse (click the window to give it to NT, Ctrl+Alt+G releases it) and a DS1307-type RTC at 0x68 on I2C1 (GPIO 2/3),
 where the HAL keeps the time. Without an RTC the clock starts each boot at the firmware build date.
 
-The first run is NT's developer setup (three boots): any key in the setup console,
-then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A C) and Enter log on as Administrator.
+The first run is NT's developer setup (three boots, on its own); then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C,
+`sendkey ctrl-alt-delete`, Ctrl-A C) and Enter log on as Administrator.
 
 The resolution is `framebuffer_width` and `framebuffer_height` of the SD card's `config.txt` (1920x1080; without them the
 display's mode), in QEMU `RES=1280x1024 build/run.sh`.
 
-For a real Pi 2 or 3, write `obj/nt-arcfw-sd.img` to an SD card. USB keyboards and mice, behind hubs too (and KVMs
+For a real Pi 2, 3 or 4, write `obj/nt-arcfw-sd.img` to an SD card. USB keyboards and mice, behind hubs too (and KVMs
 with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lists the USB devices it found.
 
 ## Networking
 
 Networking works: TCP/IP with DHCP and NetBIOS over TCP/IP, so NT maps shares of Windows and Samba servers (File Manager
 or `net use`), shares its own folders (`net share`), and has ping, ipconfig and hostname. It uses the onboard Ethernet
-(LAN9514 on the Pi 2/3B, LAN7800 on the 3B+), in QEMU a USB Ethernet adapter
+(LAN9514 on the Pi 2/3B, LAN7800 on the 3B+, the BCM2711's GENET on the Pi 4), in QEMU a USB Ethernet adapter
 (`NONET=1 build/run.sh`: none). Control Panel > Network configures it: TCP/IP (DHCP or a static address, DNS, WINS),
 bindings, computer name and workgroup. Its Add Software > TCP/IP Protocol installs the FTP Server and the Simple TCP/IP
 Services.
@@ -91,7 +91,7 @@ the PATH.
 
 ## Roadmap
 
-- SMP: use all four cores (NT runs on one now).
+- Pi 4: memory above the first GB, the USB-C port, USB Ethernet adapters.
 
 ## Legal
 
