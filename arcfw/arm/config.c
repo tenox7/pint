@@ -15,7 +15,8 @@
 //                  -> MonitorPeripheral(monitor)
 //   MultiFunctionAdapter -> KeyboardController(key, the USB host) -> KeyboardPeripheral(keyboard)
 //   MultiFunctionAdapter -> PointerController(point, the USB host) -> PointerPeripheral(pointer)
-//   MultiFunctionAdapter -> NetworkController(net, a function of the USB host), if one is found
+//   MultiFunctionAdapter -> NetworkController(net, the GENET of a BCM2711, else a function of the
+//                  USB host), if one is found
 //   System(arc) -> MultiFunctionAdapter("PCI"), on a BCM2711 whose PCI Express link is up
 //   System(arc) -> ScsiAdapter(scsi) -> DiskController(disk) -> DiskPeripheral(rdisk)
 // BlGetPathnameFromComponent renders the SD card as "scsi(0)disk(0)rdisk(0)".
@@ -407,23 +408,40 @@ MakeInputNodes(
 }
 
 //
-// The Ethernet controller, a function of the USB host the firmware found
-// (usb.c): the network controller of the internal bus, with the interrupt and
-// registers of the USB host and the station address of the board, as Jazz
-// describes its SONIC.
+// The Ethernet controller: the GENET of a BCM2711 board, else a function of
+// the USB host the firmware found (usb.c). It is the network controller of the
+// internal bus, with its interrupt and registers (those of the USB host for a
+// function), the DMA channel of the bus through which its buffers are reached
+// (the HAL's: the system bus of the BCM2711 for the GENET, the VideoCore bus
+// for the USB host) and the station address of the board, as Jazz describes
+// its SONIC. A GENET version 5 has major revision 6 in its SYS_REV_CTRL.
 //
+
+#define GENET_PHYSICAL_BASE     0xFD580000
+#define GENET_REGISTERS_SIZE    0x10000
+#define GENET_LEVEL             3
+#define GENET_VECTOR            189
+#define GENET_SYS_REV_CTRL      0x00
+#define GENET_MAJOR_REVISION    6
+#define VIDEOCORE_BUS_CHANNEL   0
+#define SYSTEM_BUS_CHANNEL      1
 
 static CHAR ArcNetworkId[16];
 
 static struct {
     CM_PARTIAL_RESOURCE_LIST List;
-    CM_PARTIAL_RESOURCE_DESCRIPTOR More[2];
+    CM_PARTIAL_RESOURCE_DESCRIPTOR More[3];
     CM_BCMETH_DEVICE_DATA EthernetData;
 } ArcNetworkData;
 
-VOID
-FwAddNetworkController (
-    IN PCHAR Identifier
+static VOID
+MakeNetworkNode (
+    IN PCHAR Identifier,
+    IN ULONG Level,
+    IN ULONG Vector,
+    IN ULONG Base,
+    IN ULONG Length,
+    IN ULONG Channel
     )
 {
     PCM_PARTIAL_RESOURCE_DESCRIPTOR Partial = ArcNetworkData.List.PartialDescriptors;
@@ -434,18 +452,21 @@ FwAddNetworkController (
 
     ArcNetworkData.List.Version = ARC_VERSION;
     ArcNetworkData.List.Revision = ARC_REVISION;
-    ArcNetworkData.List.Count = 3;
+    ArcNetworkData.List.Count = 4;
 
     SetDescriptor(&Partial[0], CmResourceTypeInterrupt, CM_RESOURCE_INTERRUPT_LEVEL_SENSITIVE);
-    Partial[0].u.Interrupt.Level = USB_LEVEL;
-    Partial[0].u.Interrupt.Vector = USB_VECTOR;
+    Partial[0].u.Interrupt.Level = Level;
+    Partial[0].u.Interrupt.Vector = Vector;
 
     SetDescriptor(&Partial[1], CmResourceTypeMemory, CM_RESOURCE_MEMORY_READ_WRITE);
-    Partial[1].u.Memory.Start.LowPart = USB_PHYSICAL_BASE;
-    Partial[1].u.Memory.Length = USB_REGISTERS_SIZE;
+    Partial[1].u.Memory.Start.LowPart = Base;
+    Partial[1].u.Memory.Length = Length;
 
-    SetDescriptor(&Partial[2], CmResourceTypeDeviceSpecific, 0);
-    Partial[2].u.DeviceSpecificData.DataSize = sizeof(CM_BCMETH_DEVICE_DATA);
+    SetDescriptor(&Partial[2], CmResourceTypeDma, 0);
+    Partial[2].u.Dma.Channel = Channel;
+
+    SetDescriptor(&Partial[3], CmResourceTypeDeviceSpecific, 0);
+    Partial[3].u.DeviceSpecificData.DataSize = sizeof(CM_BCMETH_DEVICE_DATA);
     ArcNetworkData.EthernetData.Version = ARC_VERSION;
     ArcNetworkData.EthernetData.Revision = ARC_REVISION;
     MailboxGetBoardMacAddress(ArcNetworkData.EthernetData.EthernetAddress);
@@ -457,9 +478,37 @@ FwAddNetworkController (
     ArcNetworkNode.ComponentEntry.Flags.Output = 1;
     ArcNetworkNode.ConfigurationData = &ArcNetworkData;
     ArcNetworkNode.ComponentEntry.ConfigurationDataLength =
-        sizeof(CM_PARTIAL_RESOURCE_LIST) + 2 * sizeof(CM_PARTIAL_RESOURCE_DESCRIPTOR) +
+        sizeof(CM_PARTIAL_RESOURCE_LIST) + 3 * sizeof(CM_PARTIAL_RESOURCE_DESCRIPTOR) +
         sizeof(CM_BCMETH_DEVICE_DATA);
     Link(&ArcBusNode, &ArcNetworkNode);
+}
+
+VOID
+FwAddNetworkController (
+    IN PCHAR Identifier
+    )
+{
+    MakeNetworkNode(Identifier, USB_LEVEL, USB_VECTOR, USB_PHYSICAL_BASE, USB_REGISTERS_SIZE,
+                    VIDEOCORE_BUS_CHANNEL);
+}
+
+//
+// The GENET, if the BCM2711 has one that answers: it is described before the
+// USB host is scanned, so a function found there does not take its place.
+//
+
+static VOID
+FwAddGenet (
+    VOID
+    )
+{
+    ULONG Revision;
+
+    if (FwBcm2711 && FwProbeRead(GENET_PHYSICAL_BASE + GENET_SYS_REV_CTRL, &Revision) &&
+        ((Revision >> 24) & 0xF) == GENET_MAJOR_REVISION) {
+        MakeNetworkNode(BCMETH_ID_GENET, GENET_LEVEL, GENET_VECTOR, GENET_PHYSICAL_BASE,
+                        GENET_REGISTERS_SIZE, SYSTEM_BUS_CHANNEL);
+    }
 }
 
 //
@@ -614,6 +663,7 @@ FwBuildConfigurationTree(
     Link(&ArcKeyboardControllerNode, &ArcKeyboardNode);
     Link(&ArcBusNode, &ArcPointerControllerNode);
     Link(&ArcPointerControllerNode, &ArcPointerNode);
+    FwAddGenet();
 
     Link(&ArcSystemNode, &ArcScsiNode);
     Link(&ArcScsiNode, &ArcControllerNode);

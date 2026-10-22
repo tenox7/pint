@@ -499,7 +499,13 @@
 +    This function is called by the kernel, with interrupts disabled, when IRQL
 +    drops below a level at which interrupts were requested. It unmasks the
 +    requested sources above the current IRQL, which interrupt again if they
-+    are still asserted.
++    are still asserted. The interprocessor interrupt of the GIC-400 is a
++    software generated interrupt, which its acknowledgement consumed (it is
++    not asserted like a device's): it is sent again to this processor, so that
++    the requests it announced are processed. A processor at a raised IRQL
++    takes interrupts (KeInsertQueueDpc raises IRQL to HIGH_LEVEL), and the
++    interprocessor interrupts that arrive then would otherwise be lost, with
++    their senders waiting for them forever.
 =1 40 3
 +    Routine - Supplies the address of this routine.
 +
@@ -532,7 +538,10 @@
 +    }
 +
 +    HalpUnmaskSources(Unmask);
-=1 90 1
++    if (HalpBcm2711 && (Unmask[0] & (1 << HAL_IPI_SGI)) != 0) {
++        HAL_REG(HAL_GICD_SGIR) = HAL_GICD_SGIR_SELF | HAL_IPI_SGI;
++    }
+=1 89 2
 +}
 +
 =1 29 25

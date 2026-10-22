@@ -7,11 +7,13 @@ Module Name:
 Abstract:
 
     The Ethernet controller of the Raspberry Pi as the firmware describes
-    it: a USB function (the LAN9514's on the Pi 2 and 3 Model B, the LAN7515's
-    on the Pi 3 Model B+, or a CDC Ethernet device), the NetworkController of
-    the internal bus. Its configuration data holds the interrupt and the
-    registers of the USB host, then, as Jazz gives the SONIC's, the station
-    address, here that of the board from the VideoCore.
+    it: the GENET of a BCM2711 (the Pi 4), or a USB function (the LAN9514's
+    on the Pi 2 and 3 Model B, the LAN7515's on the Pi 3 Model B+, or a CDC
+    Ethernet device), the NetworkController of the internal bus. Its
+    configuration data holds the interrupt and the registers of the GENET or
+    of the USB host, the DMA channel of the bus through which its buffers are
+    reached, then, as Jazz gives the SONIC's, the station address, here that
+    of the board from the VideoCore.
 
 --*/
 
@@ -26,6 +28,7 @@ Abstract:
 #define BCMETH_ID_LAN9500       "LAN9500"
 #define BCMETH_ID_LAN7800       "LAN7800"
 #define BCMETH_ID_CDC           "CDC-ETHERNET"
+#define BCMETH_ID_GENET         "GENET"
 
 typedef struct _CM_BCMETH_DEVICE_DATA {
     USHORT Version;

@@ -12,7 +12,9 @@ Abstract:
     function in its place (chip.c). The firmware describes the controller as
     the network controller of the internal bus, with the interrupt of the
     USB host and the station address of the board, as Jazz describes its
-    SONIC; the USB host port driver (bcmusb.sys) found the function.
+    SONIC; the USB host port driver (bcmusb.sys) found the function. On the
+    Pi 4 the controller is the GENET of the BCM2711, with its own registers,
+    interrupt and DMA rings (genet.c); what follows is about the functions.
 
     The frames move on two pipes, the bulk endpoints of the function on host
     channels of their own, through buffers in shared memory: the receive
@@ -79,6 +81,7 @@ static const NDIS_OID BcmethSupportedOids[] = {
 static const UCHAR Lan9500Description[] = "SMSC LAN9500 USB Ethernet Controller";
 static const UCHAR Lan7800Description[] = "Microchip LAN7800 USB Gigabit Ethernet Controller";
 static const UCHAR CdcDescription[] = "USB CDC Ethernet Controller";
+static const UCHAR GenetDescription[] = "Broadcom GENET Gigabit Ethernet Controller";
 
 NTSTATUS
 DriverEntry(
@@ -138,17 +141,46 @@ MoveToShared(
 }
 
 //
-// The hardware description of the controller the firmware gives: the
-// interrupt of the USB host and the station address of the board.
+// The hardware description of the controller the firmware gives: whether it
+// is the GENET (its identifier), its interrupt and registers (those of the
+// USB host for a function), the DMA channel of its buffers and the station
+// address of the board.
 //
 
 typedef struct _BCMETH_HARDWARE {
     BOOLEAN Found;
     BOOLEAN AddressValid;
+    BOOLEAN Genet;
     ULONG InterruptVector;
     ULONG InterruptLevel;
+    ULONG MemoryBase;
+    ULONG MemoryLength;
+    ULONG DmaChannel;
     UCHAR EthernetAddress[ETH_LENGTH_OF_ADDRESS];
 } BCMETH_HARDWARE, *PBCMETH_HARDWARE;
+
+static NTSTATUS
+BcmethSaveIdentifier(
+    IN PWSTR ValueName,
+    IN ULONG ValueType,
+    IN PVOID ValueData,
+    IN ULONG ValueLength,
+    IN PVOID Context,
+    IN PVOID EntryContext
+    )
+{
+    PBCMETH_HARDWARE Hardware = Context;
+    UNICODE_STRING Identifier;
+    UNICODE_STRING Genet;
+
+    if (ValueType == REG_SZ) {
+        RtlInitUnicodeString(&Identifier, ValueData);
+        RtlInitUnicodeString(&Genet, L"GENET");
+        Hardware->Genet = RtlEqualUnicodeString(&Identifier, &Genet, TRUE);
+    }
+
+    return STATUS_SUCCESS;
+}
 
 static NTSTATUS
 BcmethSaveHardware(
@@ -178,6 +210,11 @@ BcmethSaveHardware(
             Hardware->InterruptVector = Partial->u.Interrupt.Vector;
             Hardware->InterruptLevel = Partial->u.Interrupt.Level;
             Hardware->Found = TRUE;
+        } else if (Partial->Type == CmResourceTypeMemory) {
+            Hardware->MemoryBase = Partial->u.Memory.Start.LowPart;
+            Hardware->MemoryLength = Partial->u.Memory.Length;
+        } else if (Partial->Type == CmResourceTypeDma) {
+            Hardware->DmaChannel = Partial->u.Dma.Channel;
         } else if (Partial->Type == CmResourceTypeDeviceSpecific && Index == List->Count - 1 &&
                    Partial->u.DeviceSpecificData.DataSize >= sizeof(CM_BCMETH_DEVICE_DATA)) {
             Data = (PCM_BCMETH_DEVICE_DATA)(Partial + 1);
@@ -199,7 +236,7 @@ BcmethReadHardware(
     )
 {
     WCHAR Path[] = L"\\Registry\\Machine\\Hardware\\Description\\System\\MultifunctionAdapter\\#\\NetworkController\\#";
-    RTL_QUERY_REGISTRY_TABLE QueryTable[2];
+    RTL_QUERY_REGISTRY_TABLE QueryTable[3];
     PWCHAR Mark;
 
     Mark = wcschr(Path, L'#');
@@ -213,6 +250,9 @@ BcmethReadHardware(
     QueryTable[0].Flags = RTL_QUERY_REGISTRY_REQUIRED;
     QueryTable[0].Name = L"Configuration Data";
     QueryTable[0].DefaultType = REG_NONE;
+    QueryTable[1].QueryRoutine = BcmethSaveIdentifier;
+    QueryTable[1].Name = L"Identifier";
+    QueryTable[1].DefaultType = REG_NONE;
     return NT_SUCCESS(RtlQueryRegistryValues(RTL_REGISTRY_ABSOLUTE, Path, QueryTable, Hardware, NULL)) &&
            Hardware->Found;
 }
@@ -405,6 +445,11 @@ BcmethIsr(
     PBCMETH_ADAPTER Adapter = MiniportAdapterContext;
     BOOLEAN Recognized = FALSE;
 
+    if (Adapter->Chip == CHIP_GENET) {
+        GenetIsr(InterruptRecognized, QueueMiniportHandleInterrupt, Adapter);
+        return;
+    }
+
     if (UsbFunctionPipeHalted(&Adapter->ReceivePipe)) {
         Adapter->ReceiveHalted = TRUE;
         Recognized = TRUE;
@@ -425,6 +470,11 @@ BcmethHandleInterrupt(
     )
 {
     PBCMETH_ADAPTER Adapter = MiniportAdapterContext;
+
+    if (Adapter->Chip == CHIP_GENET) {
+        GenetHandleInterrupt(Adapter);
+        return;
+    }
 
     if (Adapter->Resetting) {
         Adapter->ReceiveHalted = FALSE;
@@ -450,6 +500,11 @@ BcmethDisableInterrupt(
 {
     PBCMETH_ADAPTER Adapter = MiniportAdapterContext;
 
+    if (Adapter->Chip == CHIP_GENET) {
+        GenetDisableInterrupt(Adapter);
+        return;
+    }
+
     UsbFunctionPipeInterrupt(&Adapter->ReceivePipe, FALSE);
     UsbFunctionPipeInterrupt(&Adapter->TransmitPipe, FALSE);
 }
@@ -460,6 +515,11 @@ BcmethEnableInterrupt(
     )
 {
     PBCMETH_ADAPTER Adapter = MiniportAdapterContext;
+
+    if (Adapter->Chip == CHIP_GENET) {
+        GenetEnableInterrupt(Adapter);
+        return;
+    }
 
     UsbFunctionPipeInterrupt(&Adapter->ReceivePipe, TRUE);
     UsbFunctionPipeInterrupt(&Adapter->TransmitPipe, TRUE);
@@ -513,7 +573,8 @@ BcmethTimer(
 // control transfers hold the USB host, which the keyboard and pointer port
 // driver polls the keyboards on from a thread of the low real-time priority:
 // this thread runs at that priority, so that the threads between the two
-// cannot keep it from releasing the host.
+// cannot keep it from releasing the host. The GENET is reset in place, so its
+// work is the receive filter and its link.
 //
 
 static VOID
@@ -557,7 +618,12 @@ BcmethThread(
         }
 
         if (Work & WORK_FILTER) {
-            ChipSetFilter(Adapter);
+            if (Adapter->Chip == CHIP_GENET) {
+                GenetSetFilter(Adapter);
+            } else {
+                ChipSetFilter(Adapter);
+            }
+
             Adapter->RequestStatus = NDIS_STATUS_SUCCESS;
             Adapter->RequestPending = TRUE;
             Timer = TRUE;
@@ -579,7 +645,11 @@ BcmethThread(
             NdisMSetTimer(&Adapter->RequestTimer, 0);
         }
 
-        ChipCheckLink(Adapter);
+        if (Adapter->Chip == CHIP_GENET) {
+            GenetCheckLink(Adapter);
+        } else {
+            ChipCheckLink(Adapter);
+        }
     }
 
     PsTerminateSystemThread(STATUS_SUCCESS);
@@ -618,9 +688,11 @@ BcmethFreeAdapter(
 
 //
 // Log why the adapter did not start: the step (1 the firmware describes no
-// controller, 2 none among the USB functions, 3 no station address, 4 the
-// resources, 5 the start of the controller, its pipes or interrupt), the
-// status, the controller and its device, and its last register access.
+// controller, 2 none among the USB functions, or the GENET or its PHY does
+// not answer, 3 no station address, 4 the resources, 5 the start of the
+// controller (or the PHY of the GENET), its pipes or interrupt), the status,
+// the controller and its device (the PHY address of the GENET), and its last
+// register access.
 //
 
 static VOID
@@ -634,6 +706,68 @@ BcmethLogFailure(
                            Step <= 2 ? NDIS_ERROR_CODE_ADAPTER_NOT_FOUND : NDIS_ERROR_CODE_HARDWARE_FAILURE, 7,
                            Step, Status, Adapter->Chip, Adapter->Device, Adapter->LastRegister, Adapter->LastValue,
                            Adapter->LastResult);
+}
+
+static VOID
+BcmethStartThread(
+    IN PBCMETH_ADAPTER Adapter
+    )
+{
+    HANDLE Thread;
+
+    //
+    // The handle is of the process this runs in; halt can run in any (winlogon at
+    // shutdown), so keep the thread object.
+    //
+
+    if (NT_SUCCESS(PsCreateSystemThread(&Thread, THREAD_ALL_ACCESS, NULL, NULL, NULL, BcmethThread, Adapter))) {
+        ObReferenceObjectByHandle(Thread, THREAD_ALL_ACCESS, NULL, KernelMode, &Adapter->Thread, NULL);
+        ZwClose(Thread);
+    }
+}
+
+//
+// The GENET: the station address of the board (or the one configured), and
+// the registers, interrupt and DMA channel the firmware gives; genet.c
+// starts it.
+//
+
+static NDIS_STATUS
+BcmethStartGenet(
+    IN PBCMETH_ADAPTER Adapter,
+    IN PBCMETH_HARDWARE Hardware,
+    IN BOOLEAN AddressConfigured
+    )
+{
+    NDIS_STATUS Status;
+    ULONG Step;
+
+    Adapter->Chip = CHIP_GENET;
+    if (!Hardware->AddressValid) {
+        BcmethLogFailure(Adapter, 3, NDIS_STATUS_ADAPTER_NOT_FOUND);
+        BcmethFreeAdapter(Adapter);
+        return NDIS_STATUS_ADAPTER_NOT_FOUND;
+    }
+
+    NdisMoveMemory(Adapter->PermanentAddress, Hardware->EthernetAddress, ETH_LENGTH_OF_ADDRESS);
+    if (!AddressConfigured) {
+        NdisMoveMemory(Adapter->CurrentAddress, Adapter->PermanentAddress, ETH_LENGTH_OF_ADDRESS);
+    }
+
+    Adapter->RegistersPhysical = Hardware->MemoryBase;
+    Adapter->RegistersLength = Hardware->MemoryLength;
+    Adapter->DmaChannel = Hardware->DmaChannel;
+    Adapter->PacketFilter = 0;
+    NdisMInitializeTimer(&Adapter->RequestTimer, Adapter->MiniportAdapterHandle, BcmethTimer, Adapter);
+    Status = GenetInitialize(Adapter, Hardware->InterruptVector, Hardware->InterruptLevel, &Step);
+    if (Status != NDIS_STATUS_SUCCESS) {
+        BcmethLogFailure(Adapter, Step, Status);
+        BcmethFreeAdapter(Adapter);
+        return Status;
+    }
+
+    BcmethStartThread(Adapter);
+    return NDIS_STATUS_SUCCESS;
 }
 
 static NDIS_STATUS
@@ -653,7 +787,8 @@ Routine Description:
     This routine finds the controller the firmware describes among the
     functions of the USB host, starts it with the address of the board (or
     the one configured), opens its pipes, connects the interrupt and starts
-    the first receive and the thread.
+    the first receive and the thread; or starts the GENET the firmware
+    describes and the thread.
 
 Arguments:
 
@@ -687,7 +822,6 @@ Return Value:
     BOOLEAN AddressConfigured = FALSE;
     NDIS_STATUS Status;
     UINT Index;
-    HANDLE Thread;
 
     for (Index = 0; Index < MediumArraySize && MediumArray[Index] != NdisMedium802_3; Index += 1) {
     }
@@ -737,6 +871,10 @@ Return Value:
         BcmethLogFailure(Adapter, 1, NDIS_STATUS_ADAPTER_NOT_FOUND);
         BcmethFreeAdapter(Adapter);
         return NDIS_STATUS_ADAPTER_NOT_FOUND;
+    }
+
+    if (Hardware.Genet) {
+        return BcmethStartGenet(Adapter, &Hardware, AddressConfigured);
     }
 
     Status = ChipFind(Adapter);
@@ -822,17 +960,7 @@ Return Value:
 
     ChipCheckLink(Adapter);
     BcmethStartReceive(Adapter);
-
-    //
-    // The handle is of the process this runs in; halt can run in any (winlogon at
-    // shutdown), so keep the thread object.
-    //
-
-    if (NT_SUCCESS(PsCreateSystemThread(&Thread, THREAD_ALL_ACCESS, NULL, NULL, NULL, BcmethThread, Adapter))) {
-        ObReferenceObjectByHandle(Thread, THREAD_ALL_ACCESS, NULL, KernelMode, &Adapter->Thread, NULL);
-        ZwClose(Thread);
-    }
-
+    BcmethStartThread(Adapter);
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -850,6 +978,12 @@ BcmethHalt(
         ObDereferenceObject(Adapter->Thread);
     }
 
+    if (Adapter->Chip == CHIP_GENET) {
+        GenetHalt(Adapter);
+        BcmethFreeAdapter(Adapter);
+        return;
+    }
+
     NdisMDeregisterInterrupt(&Adapter->Interrupt);
     UsbFunctionClosePipe(&Adapter->ReceivePipe);
     UsbFunctionClosePipe(&Adapter->TransmitPipe);
@@ -860,7 +994,8 @@ BcmethHalt(
 
 //
 // A reset: the thread stops the controller and starts it again with fresh
-// pipes, and the timer drops the transmits in the ring and starts them.
+// pipes, and the timer drops the transmits in the ring and starts them. The
+// GENET is reset at once.
 //
 
 static NDIS_STATUS
@@ -872,6 +1007,10 @@ BcmethReset(
     PBCMETH_ADAPTER Adapter = MiniportAdapterContext;
 
     *AddressingReset = FALSE;
+    if (Adapter->Chip == CHIP_GENET) {
+        return GenetReset(Adapter);
+    }
+
     Adapter->Resetting = TRUE;
     BcmethQueueWork(Adapter, WORK_RESET);
     return NDIS_STATUS_PENDING;
@@ -889,6 +1028,10 @@ BcmethCheckForHang(
 {
     PBCMETH_ADAPTER Adapter = MiniportAdapterContext;
     ULONG Transmits = Adapter->TransmitOk + Adapter->TransmitError;
+
+    if (Adapter->Chip == CHIP_GENET) {
+        return GenetCheckForHang(Adapter);
+    }
 
     if (Adapter->Resetting || !Adapter->TransmitBusy || Transmits != Adapter->LastTransmits) {
         Adapter->LastTransmits = Transmits;
@@ -920,6 +1063,10 @@ BcmethSend(
     UINT Header;
     UINT Copied = 0;
     UINT Frame;
+
+    if (Adapter->Chip == CHIP_GENET) {
+        return GenetSend(Adapter, Packet);
+    }
 
     if (Adapter->Resetting) {
         return NDIS_STATUS_RESET_IN_PROGRESS;
@@ -1062,11 +1209,12 @@ BcmethQueryInformation(
         break;
 
     case OID_GEN_TRANSMIT_BUFFER_SPACE:
-        Value = TRANSMIT_SLOTS * TRANSMIT_SLOT_SIZE;
+        Value = Adapter->Chip == CHIP_GENET ? GENET_TRANSMIT_BUFFERS * GENET_BUFFER_SIZE :
+                                              TRANSMIT_SLOTS * TRANSMIT_SLOT_SIZE;
         break;
 
     case OID_GEN_RECEIVE_BUFFER_SPACE:
-        Value = RECEIVE_BUFFER_SIZE;
+        Value = Adapter->Chip == CHIP_GENET ? GENET_RECEIVE_BUFFERS * GENET_BUFFER_SIZE : RECEIVE_BUFFER_SIZE;
         break;
 
     case OID_GEN_VENDOR_ID:
@@ -1078,9 +1226,11 @@ BcmethQueryInformation(
 
     case OID_GEN_VENDOR_DESCRIPTION:
         Source = (PVOID)(Adapter->Chip == CHIP_LAN9500 ? Lan9500Description :
-                         Adapter->Chip == CHIP_LAN7800 ? Lan7800Description : CdcDescription);
+                         Adapter->Chip == CHIP_LAN7800 ? Lan7800Description :
+                         Adapter->Chip == CHIP_GENET ? GenetDescription : CdcDescription);
         SourceLength = Adapter->Chip == CHIP_LAN9500 ? sizeof(Lan9500Description) :
-                       Adapter->Chip == CHIP_LAN7800 ? sizeof(Lan7800Description) : sizeof(CdcDescription);
+                       Adapter->Chip == CHIP_LAN7800 ? sizeof(Lan7800Description) :
+                       Adapter->Chip == CHIP_GENET ? sizeof(GenetDescription) : sizeof(CdcDescription);
         break;
 
     case OID_GEN_DRIVER_VERSION:

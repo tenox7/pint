@@ -7,8 +7,9 @@ Module Name:
 Abstract:
 
     The definitions of the Ethernet miniport driver of the Raspberry Pi: the
-    adapter, and the routines of its controllers (chip.c), USB functions that
-    the USB host port driver (bcmusb.sys) found.
+    adapter, and the routines of its controllers: USB functions that the USB
+    host port driver (bcmusb.sys) found (chip.c), or the GENET of the BCM2711
+    (genet.c).
 
 --*/
 
@@ -35,10 +36,23 @@ Abstract:
 #define CHIP_LAN9500                1
 #define CHIP_LAN7800                2
 #define CHIP_CDC                    3
+#define CHIP_GENET                  4
 
 #define RECEIVE_BUFFER_SIZE         2048
 #define TRANSMIT_SLOTS              16
 #define TRANSMIT_SLOT_SIZE          1536
+
+//
+// The rings of the GENET: a buffer for each descriptor, in areas of shared
+// memory of GENET_AREA_BUFFERS buffers.
+//
+
+#define GENET_RECEIVE_BUFFERS       128
+#define GENET_TRANSMIT_BUFFERS      64
+#define GENET_BUFFER_SIZE           2048
+#define GENET_AREA_BUFFERS          32
+#define GENET_RECEIVE_AREAS         (GENET_RECEIVE_BUFFERS / GENET_AREA_BUFFERS)
+#define GENET_TRANSMIT_AREAS        (GENET_TRANSMIT_BUFFERS / GENET_AREA_BUFFERS)
 
 //
 // The work of the thread, which runs the control transfers the miniport
@@ -138,7 +152,37 @@ typedef struct _BCMETH_ADAPTER {
     BOOLEAN Halting;
     BOOLEAN LinkUp;
     BOOLEAN FullDuplex;
+    BOOLEAN Pause;
     ULONG LinkSpeed;
+
+    //
+    // The GENET: its registers, the DMA channel of the bus its buffers are
+    // reached through, its PHY, and its rings: the areas of their buffers
+    // (cached shared memory), an NDIS buffer for each through which the data
+    // cache is flushed, the next descriptor of each ring, the consumer index
+    // of the receive ring, and the producer index of the transmit ring and
+    // its consumer index the transmits were reclaimed to.
+    //
+
+    PUCHAR Registers;
+    ULONG RegistersPhysical;
+    ULONG RegistersLength;
+    ULONG DmaChannel;
+    BOOLEAN MapRegisters;
+    ULONG PhyAddress;
+    ULONG PhyId;
+    NDIS_HANDLE BufferPool;
+    PUCHAR ReceiveArea[GENET_RECEIVE_AREAS];
+    NDIS_PHYSICAL_ADDRESS ReceiveAreaPhysical[GENET_RECEIVE_AREAS];
+    PUCHAR TransmitArea[GENET_TRANSMIT_AREAS];
+    NDIS_PHYSICAL_ADDRESS TransmitAreaPhysical[GENET_TRANSMIT_AREAS];
+    PNDIS_BUFFER ReceiveFlush[GENET_RECEIVE_BUFFERS];
+    PNDIS_BUFFER TransmitFlush[GENET_TRANSMIT_BUFFERS];
+    ULONG ReceiveIndex;
+    ULONG ReceiveConsumer;
+    ULONG TransmitIndex;
+    ULONG TransmitProducer;
+    ULONG TransmitConsumer;
 
     //
     // Restarts of stalled pipes, which the thread asks the timer for once it
@@ -229,6 +273,71 @@ ChipNextFrame(
     OUT PULONG FrameOffset,
     OUT PULONG FrameLength,
     OUT PBOOLEAN Error
+    );
+
+//
+// The GENET (genet.c).
+//
+
+NDIS_STATUS
+GenetInitialize(
+    IN PBCMETH_ADAPTER Adapter,
+    IN ULONG InterruptVector,
+    IN ULONG InterruptLevel,
+    OUT PULONG Step
+    );
+
+VOID
+GenetHalt(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+NDIS_STATUS
+GenetReset(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+BOOLEAN
+GenetCheckForHang(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+VOID
+GenetIsr(
+    OUT PBOOLEAN InterruptRecognized,
+    OUT PBOOLEAN QueueMiniportHandleInterrupt,
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+VOID
+GenetHandleInterrupt(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+VOID
+GenetDisableInterrupt(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+VOID
+GenetEnableInterrupt(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+NDIS_STATUS
+GenetSend(
+    IN PBCMETH_ADAPTER Adapter,
+    IN PNDIS_PACKET Packet
+    );
+
+VOID
+GenetSetFilter(
+    IN PBCMETH_ADAPTER Adapter
+    );
+
+VOID
+GenetCheckLink(
+    IN PBCMETH_ADAPTER Adapter
     );
 
 extern NDIS_PHYSICAL_ADDRESS HighestAcceptableMax;

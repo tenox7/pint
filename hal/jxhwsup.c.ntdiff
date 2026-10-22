@@ -7,9 +7,12 @@
 +    The buses are the Internal bus and, on a BCM2711 whose firmware brought up
 +    its PCI Express link, the PCI bus (pcisup.c, pcibus.c). Bus master devices
 +    of the Internal bus reach memory through the VideoCore bus, which sees
-+    SDRAM at BUS_MEMORY_BASE plus the physical address, those of the PCI bus at
-+    the physical address (the inbound window of the root complex); there is no
-+    I/O map, so a transfer maps directly and needs no map registers. The PCI
++    SDRAM at BUS_MEMORY_BASE plus the physical address, but for the GENET of a
++    BCM2711, which is on its system bus and sees SDRAM at the physical address:
++    the firmware gives it the DMA channel SYSTEM_BUS_CHANNEL. Those of the PCI
++    bus reach it at the physical address (the inbound window of the root
++    complex). There is no I/O map, so a transfer maps directly and needs no map
++    registers. The PCI
 +    memory is the HAL's window, which drivers use without mapping it, as the
 +    QVAs of the Alpha HALs. There is no system (slave) DMA controller in the NT
 +    sense.
@@ -23,6 +26,13 @@
 +//
 +
 +#define BUS_MEMORY_BASE 0xC0000000
++
++//
++// The DMA channel of the bus masters of the Internal bus that reach memory
++// through the system bus of a BCM2711, at the physical address.
++//
++
++#define SYSTEM_BUS_CHANNEL 1
 +
 +//
 +// The highest physical address a bus master can reach.
@@ -49,7 +59,9 @@
 +    AdapterObject->ScatterGather = DeviceDescription->ScatterGather;
 +    AdapterObject->MapRegistersPerChannel = BYTES_TO_PAGES(DeviceDescription->MaximumLength) + 1;
 +    AdapterObject->MapRegisterBase = AdapterObject;
-+    AdapterObject->BusMemoryBase = DeviceDescription->InterfaceType == PCIBus ? 0 : BUS_MEMORY_BASE;
++    AdapterObject->BusMemoryBase = DeviceDescription->InterfaceType == PCIBus ||
++                                   (HalpBcm2711 && DeviceDescription->DmaChannel == SYSTEM_BUS_CHANNEL) ?
++                                   0 : BUS_MEMORY_BASE;
 +    KeInitializeDeviceQueue(&AdapterObject->ChannelWaitQueue);
 +
 +    *NumberOfMapRegisters = AdapterObject->MapRegistersPerChannel;
