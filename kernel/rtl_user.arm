@@ -9,4 +9,4 @@ rtl/xcptmisc.asm
 rtl/largeint.c
 rtl/trampoln.asm
 rtl/xxcaptur.asm
-rtl/movemem.c
+rtl/xxmvmem.asm

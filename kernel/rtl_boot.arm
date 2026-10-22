@@ -2,4 +2,4 @@
 /work/PRIVATE/NTOS/RTL/MIPS/DEBUG.C
 rtl/debugstb.asm
 rtl/largeint.c
-rtl/movemem.c
+rtl/xxmvmem.asm

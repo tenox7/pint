@@ -40,7 +40,7 @@ bash $B/gensrv.sh $DIR/gen > /dev/null || { echo "  GENSRV FAIL"; exit 1; }
 for s in ke/*.asm ex/*.asm $DIR/gen/sysstubs.asm $DIR/gen/systable.asm; do
   par ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS -I$O/gen $KINCS
 done
-for s in rtl/debugstb.asm rtl/xcptmisc.asm rtl/xxcaptur.asm; do
+for s in rtl/debugstb.asm rtl/xcptmisc.asm rtl/xxcaptur.asm rtl/xxmvmem.asm; do
   par ntas $DIR/arch/$(basename ${s%.asm})_asm.obj $s $DEFS $(cdefs RTL) -I$O/gen $KINCS
 done
 # one ARM C source of KE, and one ARM source of a component (SUBSYS:file), compiled by the
@@ -69,7 +69,7 @@ for e in EX:/work/PRIVATE/NTOS/EX/MIPS/SPLOCKS.C EX:/work/PRIVATE/NTOS/EX/MIPS/P
          KD:/work/PRIVATE/NTOS/KD/MIPS/KDCMSUP.C KD:/work/PRIVATE/NTOS/KD/MIPS/KDREBOOT.C \
          KD:kd/kdtrap.c KD:kd/kdcpuapi.c RTL:/work/PRIVATE/NTOS/RTL/MIPS/DEBUG.C KE:/work/PRIVATE/NTOS/KE/MIPS/FLUSH.C \
          KE:ke/intobj.c PS:ps/psctxarm.c \
-         RTL:rtl/context.c RTL:rtl/largeint.c RTL:rtl/movemem.c RTL:rtl/exdsptch.c RTL:rtl/vunwind.c RTL:rtl/chandler.c RTL:rtl/getcalr.c $FLUSHTB; do
+         RTL:rtl/context.c RTL:rtl/largeint.c RTL:rtl/exdsptch.c RTL:rtl/vunwind.c RTL:rtl/chandler.c RTL:rtl/getcalr.c $FLUSHTB; do
   par archc $e
 done
 pwait; fail=$((fail+PARFAIL))

@@ -156,6 +156,18 @@ static PULONG KiFreeL2;
 static ULONG KiSharedDataPage;
 
 //
+// The VideoCore memory, above the memory of the system and below the
+// peripherals (pages KiVideoCoreFirstPage up to KiVideoCoreEndPage), holds the
+// frame buffer. Its uncached mappings are normal noncacheable memory, as in the
+// direct map, so that the processor's writes merge into bursts; every other
+// uncached mapping is device memory, where each access is a bus access of its
+// own.
+//
+
+static ULONG KiVideoCoreFirstPage;
+static ULONG KiVideoCoreEndPage;
+
+//
 // The translation table base a secondary processor loads first, with its caches
 // still off (armstart.asm): the kernel-only table and its walk attributes,
 // written back to memory before the processor is started. It then takes the
@@ -433,7 +445,13 @@ Routine Description:
 
     Descriptor = (Pte.PageFrameNumber << PAGE_SHIFT) | L2_SMALL;
     if (Pte.CachePolicy == UNCACHED_POLICY) {
-        Descriptor |= L2_B;
+        if ((Pte.PageFrameNumber >= KiVideoCoreFirstPage) &&
+            (Pte.PageFrameNumber < KiVideoCoreEndPage)) {
+            Descriptor |= L2_TEX_NORMAL | L2_SHAREABLE | L2_XN;
+
+        } else {
+            Descriptor |= L2_B;
+        }
 
     } else {
         Descriptor |= L2_TEX_NORMAL | L2_C | L2_B | L2_SHAREABLE;
@@ -1202,6 +1220,8 @@ Routine Description:
     }
 
     MemoryTop = (TopPage + ((1 << (20 - PAGE_SHIFT)) - 1)) >> (20 - PAGE_SHIFT);
+    KiVideoCoreFirstPage = MemoryTop << (20 - PAGE_SHIFT);
+    KiVideoCoreEndPage = DeviceStart >> PAGE_SHIFT;
     for (Megabyte = 0; Megabyte < KSEG2_MEGABYTE - KSEG0_MEGABYTE; Megabyte += 1) {
         Physical = Megabyte << 20;
         if (Megabyte < MemoryTop) {
