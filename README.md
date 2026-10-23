@@ -84,6 +84,14 @@ Pack's), Tankz, NT Rigue, RISCque, Sokoban, RISCoban and WiNTown, a port of Micr
 changed to the API of NT 3.5 in October 2026. WiNTown and the Micropolis simulator are under the GPL 3.0 with Electronic
 Arts' additional terms (`apps/games/wintown/LICENSE`); the other games are public domain.
 
+## VNC viewer
+
+`\APPS\TENOXVNC.EXE` (TenoxVNC in the Accessories group) is the Win32 build of TenoxVNC (`apps/tenoxvnc`, from
+github.com/tenox7/tenoxvnc), a VNC viewer. Run without a server, it asks for one (`host`, `host:display` or
+`host::port`), with the password, encoding and colors; F8 opens its menu (full screen, Ctrl+Alt+Del, clipboard,
+settings). It is under the GPL 2.0 (`apps/tenoxvnc/LICENCE.TXT`), its zlib and IJG JPEG decoders under their own terms
+(`LICENSE.zlib`, `README.jpeg`).
+
 ## SDK tools
 
 The tools of the NT source's `PRIVATE\SDKTOOLS` that build for ARM are in `\SDKTOOLS` (`build/build-sdktools.sh`), not on

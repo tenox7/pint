@@ -1,0 +1,21 @@
+MAJORCOMP=apps
+MINORCOMP=tenoxvnc
+
+TARGETNAME=tenoxvnc
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+INCLUDES=..
+
+# vncauth.c names chmod, which NT 3.5 has in io.h only (as _chmod), and the Unix permission bits
+C_DEFINES=-Dchmod=_chmod -DS_IRUSR=0400 -DS_IWUSR=0200
+
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib
+
+# the viewer (rfbproto.c includes its decoders) and its Win32 side
+SOURCES=..\vncviewer.c ..\argsresources.c ..\rfbproto.c ..\sockets.c ..\misc.c ..\caps.c \
+        ..\vncauth.c ..\d3des.c ..\zlib.c ..\jpeg.c \
+        w32xt.c w32desk.c w32color.c w32curs.c w32key.c w32dlg.c w32misc.c \
+        tenoxvnc.rc
+
+UMTYPE=windows

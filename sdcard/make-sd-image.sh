@@ -4,7 +4,7 @@
 # sdcard/root (\WINNT\...) with the registry hives of obj/gen/hives, the NLS tables and fonts
 # of the NT tree, the help files of the programs and the setup aid of a developer install
 # (ported/oak/registry.ini, the program groups in \WINNT\IDW, the games of apps/games in \GAMES
-# in the Games group: tools/grp.pl). FAT16 because both
+# in the Games group and the VNC viewer in \APPS in Accessories: tools/grp.pl). FAT16 because both
 # the GPU firmware and NT 3.5 read it.
 # Flash it for a real Pi 2, 3 or 4, or attach it in QEMU with -drive if=sd. With -u the disk of
 # the last build is updated in place, keeping what NT wrote on it: the files built since
@@ -81,6 +81,8 @@ mkdir -p /tmp/sd/WINNT/IDW && cp /nt/PRIVATE/WINDOWS/SHELL/PROGMAN/*.GRP /tmp/sd
 perl ../tools/grp.pl /tmp/sd/WINNT/IDW/GAMES.GRP /tmp/sd/GAMES "%HOMEDRIVE%\\GAMES" 5 2048=2048 Breakout=breakout "Bubble Breaker=bubbles" \
     "Moon Lander=lander" "Missile Command=misl" Snake=ntsnake Tankz=tankz "NT Rigue=ntrigue" RISCque=riscque Sokoban=sokoban \
     RISCoban=riscoban WiNTown=wintown
+# the VNC viewer of apps/tenoxvnc (\APPS) in the Accessories group
+perl ../tools/grp.pl /tmp/sd/WINNT/IDW/ACCESORI.GRP /tmp/sd/APPS "%HOMEDRIVE%\\APPS" 6 TenoxVNC=tenoxvnc
 # the help files of the programs, where setup puts them
 for h in WINHELP/HLP/WINHELP SHELL/PROGMAN/PROGMAN SHELL/WINFILE/WINFILE SHELL/CONTROL/CONTROL SHELL/ACCESORY/NOTEPAD/NOTEPAD \
          SHELL/ACCESORY/CALC/CALC SHELL/ACCESORY/SPECHARS/CHARMAP SHELL/GAMES/SOL/SOL EP/WINMINE/HELP/WINMINE EP/FREECELL/FREECELL \

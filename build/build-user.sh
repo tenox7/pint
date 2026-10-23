@@ -98,6 +98,8 @@ exe /work/RASPI/apps taskman taskman
 # the games of apps/games, in \GAMES (in the Games group: sdcard/make-sd-image.sh)
 for a in 2048:2048 breakout:breakout bubbles:bubbles lander:lander missile:misl snake:ntsnake tankz:tankz ntrigue:ntrigue \
          riscque:riscque sokoban:sokoban riscoban:riscoban wintown:wintown; do DEST=GAMES exe /work/RASPI/apps games/${a%%:*} ${a#*:}; done
+# the VNC viewer of apps/tenoxvnc (its Win32 build in win32), in \APPS
+DEST=APPS exe /work/RASPI/apps tenoxvnc/win32 tenoxvnc
 
 # WinHelp and its full-text search
 for c in MVAPI FTENGINE FTUI; do dll $W WINHELP/$c; done
