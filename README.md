@@ -4,10 +4,10 @@ Windows NT 3.5 ported to 32-bit ARM (ARMv7-A) on the Raspberry Pi 2, 3 and 4, wi
 
 ## Raspberry Pi models
 
-- Tested: Pi 2 Model B v1.1 (BCM2836, Cortex-A7), Pi 3 Model B v1.2, v1.3 and B+ v1.3 (BCM2837, Cortex-A53), Pi 4
-  Model B v1.4 (BCM2711, Cortex-A72: USB-A ports and Ethernet; NT uses the first GB of memory) and QEMU `raspi2b`,
-  `raspi3b`, `raspi3ap`, `raspi4b`.
-- Untested, should work: Pi 2 v1.2, 3A+, Zero 2 W (BCM2837), Pi 400, CM4 (BCM2711).
+- Tested: Pi 2 Model B v1.1 (BCM2836, Cortex-A7), Pi 2 Model B v1.2, Pi 3 Model B v1.2, v1.3 and B+ v1.3 (BCM2837,
+  Cortex-A53), Pi 4 Model B v1.4 and Pi 400 (BCM2711, Cortex-A72: USB-A ports and Ethernet; NT uses the first GB of
+  memory) and QEMU `raspi2b`, `raspi3b`, `raspi3ap`, `raspi4b`.
+- Untested, should work: 3A+, Zero 2 W (BCM2837), CM4 (BCM2711).
 - NT runs its multiprocessor kernel on all four cores of every model.
 - Not planned:
   - Pi 1, Zero, Zero W: ARMv6 (ARM1176), no Thumb-2.
