@@ -1,0 +1,24 @@
+BearSSL for https in IE on Windows NT 3.1
+
+From https://www.bearssl.org/ (git 7bea48e, 2026-04-06), MIT license
+(LICENSE.txt).
+
+Only what a TLS 1.2 client needs, as generic\win32\w32ssl.c sets it up:
+TLS 1.2, AES-128-GCM, ECDHE on P-256 or P-384 or RSA key exchange,
+RSA and ECDSA (P-256 or P-384) signatures, SHA-256. Server certificates
+are read for the key only, not checked: there is no list of trusted
+authorities.
+
+  inc\    the public headers, without kdf, pem and aead
+  src\    the 46 sources IE links, in one folder (upstream has
+          sub-folders), with config.h and inner.h
+  nt31\   stdint.h, which the 1993 compilers don't have
+
+The NT 3.1 compilers have no 64-bit integers, so these differ from
+upstream:
+  nt31\stdint.h   uint64_t is a pair of 32-bit halves
+  src\config.h    32-bit code only; no system random source or clock
+  src\inner.h     br_enc64*/br_dec64* on the halves, br_u64_* helpers
+  src\hmac.c, multihash.c, sha2small.c, ssl_rec_gcm.c
+                  byte counts and record numbers use the helpers
+  inc\bearssl.h   does not include the kdf, pem and aead headers

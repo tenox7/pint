@@ -1,0 +1,9 @@
+#define RES_SPLASH_GRAPHIC      0x0160
+/* 0x7f1b (was 0x0161): the globe RES_ICO_FRAME (0x7f10) must stay the exe's
+   lowest-id icon, the one Program Manager shows; this dialog icon sits above it. */
+#define RES_BASIC_ICON          0x7f1b
+
+/* not 1-3: these strings are also built into iexplore.exe, which uses 1-223 */
+#define RES_BASIC_MENU_LABEL    0x0F00
+#define RES_BASIC_MENU_TEXT     0x0F01
+#define RES_NUM_PASSWORDS       0x0F02

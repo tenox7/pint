@@ -100,6 +100,11 @@ for a in 2048:2048 breakout:breakout bubbles:bubbles lander:lander missile:misl 
          riscque:riscque sokoban:sokoban riscoban:riscoban wintown:wintown; do DEST=GAMES exe /work/RASPI/apps games/${a%%:*} ${a#*:}; done
 # the VNC viewer of apps/tenoxvnc (its Win32 build in win32), in \APPS
 DEST=APPS exe /work/RASPI/apps tenoxvnc/win32 tenoxvnc
+# Internet Explorer 1.5 (Spyglass Mosaic) of apps/ie, in \APPS: the engine (iesh), the Win32
+# GUI (iew32), HTTP Basic auth (iebasic) and the BearSSL TLS client (iebssl) link, with the
+# OEM glue and emosaic.rc, into IEXPLORE.EXE (a UMAPPL in apps/ie/make)
+for c in ie/shared ie/win32 ie/basic ie/bearssl ie/make; do lib /work/RASPI/apps $c; done
+DEST=APPS exe /work/RASPI/apps ie/make iexplore
 
 # WinHelp and its full-text search
 for c in MVAPI FTENGINE FTUI; do dll $W WINHELP/$c; done
