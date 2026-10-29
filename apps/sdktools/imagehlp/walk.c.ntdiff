@@ -1,0 +1,13 @@
+#ntdiff private/sdktools/imagehlp/walk.c
+=1 1 93
++BOOL
++WalkArm(
+=1 69 4
+=1 62 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
+=1 92 89
++        case IMAGE_FILE_MACHINE_ARMNT:
++            rval = WalkArm( hProcess,
+=1 151 4
++                            GetModuleBase );
+=1 179 61

@@ -1,0 +1,8 @@
+#ntdiff private/sdktools/vctools/crt/fpw32/include/cv.h
+=1 1 242
++#elif defined(_M_ARM)
++/* ARM: the quiet NaN of i386; the default NaN of the VFP is positive */
+=1 209 1
++	(!(signbit) && (manhi)==0xc0000000 && (manlo)==0)
+=1 211 8
+=1 243 294

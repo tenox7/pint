@@ -1,0 +1,12 @@
+#ntdiff private/net/ui/ncpa1.1/netcfg/busloc.cxx
+=1 1 23
++#define SZ_BCM2836              SZ("BCM2836-Internal Bus")
++#define SZ_BCM2837              SZ("BCM2837-Internal Bus")
++#define SZ_BCM2711              SZ("BCM2711-Internal Bus")
+=1 24 393
++    // skip Jazz-Internal bus and the internal bus of the Raspberry Pi
++    if (( nlsBusType._stricmp( SZ_JAZZ ) != 0 ) &&
++        ( nlsBusType._stricmp( SZ_BCM2836 ) != 0 ) &&
++        ( nlsBusType._stricmp( SZ_BCM2837 ) != 0 ) &&
++        ( nlsBusType._stricmp( SZ_BCM2711 ) != 0 ))
+=1 419 399

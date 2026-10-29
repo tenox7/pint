@@ -1,0 +1,9 @@
+#ntdiff private/windows/setup/inf/win4/inf/perms.inx
+#crlf
+=1 1 31
++@@:@r:system32\spool\drivers\w32arm\2 = d5,f3
+=1 32 6
++@@:@r:system32\spool\prtprocs\w32arm = d5,f3
+=1 38 7
++@@:@r:system32\spool\drivers\w32arm = d5,f1
+=1 45 99

@@ -1,0 +1,8 @@
+#ntdiff private/windows/media/winmm/playsnd.c
+=1 1 357
++       } else {
++          return FALSE;     // no media directory to look in
++       }
++    }
+=1 306 4
+=1 363 883

@@ -1,0 +1,52 @@
+#ntdiff private/windows/base/client/datetime.c
+=1 1 22
++#if defined(_ARM_)
++
++//
++// The kernel stores the parts of a shared time with barriers between them
++// (High2Time, LowPart, High1Time): they are read back in the opposite order
++// with barriers too, so that a value read while it changes is seen as such.
++//
++
++void __dmb(unsigned int);
++#pragma intrinsic(__dmb)
++#define ReadBarrier() __dmb(0xB)
++
++#else
++
++#define ReadBarrier()
++
++#endif
+=1 22 57
++        ReadBarrier();
+=1 79 1
++        ReadBarrier();
+=1 80 4
++        ReadBarrier();
+=1 84 1
++        ReadBarrier();
+=1 85 3
++        ReadBarrier();
+=1 88 1
++        ReadBarrier();
+=1 89 71
++        ReadBarrier();
+=1 160 1
++        ReadBarrier();
+=1 161 49
++        ReadBarrier();
+=1 210 1
++        ReadBarrier();
+=1 211 114
++        ReadBarrier();
+=1 325 1
++        ReadBarrier();
+=1 326 221
++        ReadBarrier();
+=1 547 1
++        ReadBarrier();
+=1 548 54
++        ReadBarrier();
+=1 602 1
++        ReadBarrier();
+=1 603 782

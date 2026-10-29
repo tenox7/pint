@@ -1,0 +1,5 @@
+#ntdiff private/windows/setup/setupapi/dll.c
+=1 1 52
++#elif defined(_ARM_)
++PCTSTR PlatformName = TEXT("Arm");
+=1 53 345

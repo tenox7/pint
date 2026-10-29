@@ -1,0 +1,27 @@
+#ntdiff private/sdktools/imagehlp/symbolsp.c
+=1 1 1387
++//
++// The address of an export: that of a function of an ARM image has the Thumb
++// state bit set, which the address of its code has not.
++//
++
++ULONG __inline
++GetExportAddress(
++    PMODULE_ENTRY           mi,
++    PIMAGE_NT_HEADERS       nh,
+=1 1359 3
+=1 386 1 -4
++
++    if (nh->FileHeader.Machine == IMAGE_FILE_MACHINE_ARMNT) {
++        sh = FindSection( mi->SectionHdrs, mi->NumSections, Address );
++        if (sh && (sh->Characteristics & IMAGE_SCN_MEM_EXECUTE)) {
++            Address &= ~1;
+=1 265 3
++    return mi->BaseOfDll + Address;
+=1 1386 144
++            sym = AllocSym( mi, GetExportAddress( mi, nh, addrs[idx] ), mi->TmpSym.Name);
++        } else {
++            sym = AllocSym( mi, GetExportAddress( mi, nh, addrs[idx] ), Name);
+=1 1533 10
++            sym = AllocSym( mi, GetExportAddress( mi, nh, addrs[i] ), NameBuf);
+=1 1544 1126

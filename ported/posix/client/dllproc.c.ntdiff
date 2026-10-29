@@ -1,0 +1,15 @@
+#ntdiff private/posix/client/dllproc.c
+=1 1 38
++#ifdef _ARM_
++#include "psxarm.h"
+=1 38 988
++    case PROCESSOR_ARCHITECTURE_ARM:
++        if (ProcInfo.ProcessorLevel == PROCESSOR_ARM_CORTEX_A7) {
++            pchProcType = "ARM Cortex-A7";
++        } else if (ProcInfo.ProcessorLevel == PROCESSOR_ARM_CORTEX_A53) {
++            pchProcType = "ARM Cortex-A53";
++        } else if (ProcInfo.ProcessorLevel == PROCESSOR_ARM_CORTEX_A72) {
++            pchProcType = "ARM Cortex-A72";
++        } else {
++            pchProcType = "ARM Unknown";
+=1 1023 229

@@ -1,0 +1,76 @@
+#ntdiff private/ntos/inc/arc.h
+=1 1 1150
++//
++// ARM port: the state a processor starts or restarts in from its restart block,
++// loaded by the firmware: the integer registers, the stack pointer and the link
++// register of the supervisor mode, and the program counter and status, adjacent
++// as a return from exception takes them (the Thumb state is the T bit of Cpsr,
++// so Pc has bit 0 clear). R12 is scratch.
++//
++
++typedef struct _ARM_RESTART_STATE {
++
++#if defined(_ARM_)
++
++    ULONG R0;
++    ULONG R1;
++    ULONG R2;
++    ULONG R3;
++    ULONG R4;
++    ULONG R5;
++    ULONG R6;
++    ULONG R7;
++    ULONG R8;
++    ULONG R9;
++    ULONG R10;
++    ULONG R11;
++    ULONG R12;
++    ULONG Sp;
++    ULONG Lr;
++    ULONG Pc;
++    ULONG Cpsr;
+=1 911 7
++} ARM_RESTART_STATE, *PARM_RESTART_STATE;
+=1 1150 19
++        ARM_RESTART_STATE Arm;
+=1 1169 50
++#elif defined(_ARM_)
++
++//
++// ARM port: the ARC firmware (arcfw) builds the system parameter block at
++// physical 0x1000, as the Jazz firmware does.
++//
+=1 1202 3
+=1 1219 387
++//
++// ARM port (not in the original NT 3.5 arc.h): the processor state the kernel
++// needs at entry, as the MIPS block, filled by BlSetupForNt. The union is the
++// last member of LOADER_PARAMETER_BLOCK, so its size moves no other field.
++// Environment holds the firmware's environment variables for the HAL, which
++// a Jazz HAL reads from the nonvolatile RAM: the Pi has none, and the firmware
++// is not resident once the system runs. It is a list of "NAME=value" strings,
++// each zero terminated, ended by an empty one, in the loader's heap.
++//
++typedef struct _ARM_LOADER_BLOCK {
+=1 1504 5
+=1 1510 8
++    PCHAR Environment;
++} ARM_LOADER_BLOCK, *PARM_LOADER_BLOCK;
++
++//
++// ARM port: the device specific configuration data of the system component.
++// The ARC firmware fills it with what the VideoCore reports about the board and
++// the firmware, as a PC keeps the date and version strings of its BIOS in ROM,
++// and the kernel enters it in the hardware description of the registry under
++// the same names (CONFIG\ARM). A version field holds strings, each zero
++// terminated, the last followed by an empty one.
++//
++typedef struct _ARM_SYSTEM_FIRMWARE_DATA {
++    CHAR SystemFirmwareDate[12];
++    CHAR SystemFirmwareVersion[128];
++    CHAR VideoFirmwareDate[12];
++    CHAR VideoFirmwareVersion[64];
++} ARM_SYSTEM_FIRMWARE_DATA, *PARM_SYSTEM_FIRMWARE_DATA;
+=1 1605 30
++        ARM_LOADER_BLOCK Arm;
+=1 1635 6

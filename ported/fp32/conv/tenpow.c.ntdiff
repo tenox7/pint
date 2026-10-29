@@ -1,0 +1,4 @@
+#ntdiff private/fp32/conv/tenpow.c
+=1 1 46
++    int sticky = 0;
+=1 48 193

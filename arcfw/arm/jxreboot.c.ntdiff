@@ -1,0 +1,150 @@
+#ntdiff private/ntos/fw/mips/jxreboot.c
+=1 1 10
++    This module contains the firmware termination functions for the Raspberry
++    Pi 2 (the ARM FW\MIPS\JXREBOOT.C). The system is reset through the power
++    manager's watchdog.
+=1 306 3
++#include "fwp.h"
+=1 26 1
++
++#define PM_BASE     (PERIPHERAL_BASE + 0x100000u)
++#define PM_RSTC     (*(volatile unsigned int *)(PM_BASE + 0x1c))
++#define PM_WDOG     (*(volatile unsigned int *)(PM_BASE + 0x24))
++#define PM_PASSWORD 0x5a000000u
++#define PM_RSTC_WRCFG_CLR        0xffffffcfu
++#define PM_RSTC_WRCFG_FULL_RESET 0x00000020u
++
++VOID
++FwpEnterInteractiveMode (
++    VOID
+=1 46 3
++FwHalt (
++    VOID
+=1 289 6
++    This routine is the firmware halt termination function: it displays a
++    message and halts. It is also the power down function.
+=1 306 4
+=1 95 2
++    __cps(_ARM_CPS_DISABLE_INTERRUPTS, _ARM_CPS_INTERRUPT_FLAG_I | _ARM_CPS_INTERRUPT_FLAG_F, 0);
++    for (;;) {
++        __wfi();
+=1 230 3
++VOID
++FwReboot (
++    VOID
+=1 289 6
++    This routine is the firmware reboot termination function: it resets the
++    system.
+=1 306 4
++    PM_WDOG = PM_PASSWORD | 10;
++    PM_RSTC = PM_PASSWORD | (PM_RSTC & PM_RSTC_WRCFG_CLR) | PM_RSTC_WRCFG_FULL_RESET;
+=1 98 3
++
++VOID
++FwLoadRestartState (
++    IN PARM_RESTART_STATE State
++    );
++
++//
++// The program counter and status are adjacent where FwLoadRestartState takes
++// them, by a return from exception.
++//
++
++typedef char FwRestartStateLayout[(FIELD_OFFSET(ARM_RESTART_STATE, Sp) == 52 &&
++                                   FIELD_OFFSET(ARM_RESTART_STATE, Pc) == 60 &&
++                                   FIELD_OFFSET(ARM_RESTART_STATE, Cpsr) == 64) ? 1 : -1];
++
++VOID
++VenRestartBlock (
++    IN PRESTART_BLOCK RestartBlock
+=1 289 6
++    This routine loads the restart state of a restart block into the
++    processor and continues at its program counter.
+=1 306 4
++    FwLoadRestartState(&RestartBlock->u.Arm);
++}
++
++VOID
++FwpRestart (
++    VOID
+=1 289 6
++    This routine implements the restart of a processor from its restart
++    block: if the block of the processor it runs on is valid, the processor
++    continues in the state the block saves. The caches are off in the
++    firmware, so there is nothing to sweep before.
+=1 62 3
++    Returns only if the processor has no valid restart block.
+=1 306 4
++    PRESTART_BLOCK RestartBlock = SYSTEM_BLOCK->RestartBlock;
++    ULONG WhoAmI = _MoveFromCoprocessor(15, 0, 0, 0, 5) & 3;
+=1 140 5
++    if ((RestartBlock != NULL) && (RestartBlock->Signature == ARC_RESTART_BLOCK_SIGNATURE)) {
+=1 172 1 -8
+=1 230 3
++VOID
++FwProcessorSystemBoot (
++    IN ULONG Number
+=1 289 6
++    This routine is the boot routine of a secondary processor (processor B of
++    a Duo): it sets ready in the boot status of its restart block and waits
++    for the start bit, which the HAL sets once it filled the restart state,
++    to restart from the block.
+=1 58 3
++    Number - Supplies the number of the processor.
+=1 120 6
++
++{
++    PRESTART_BLOCK RestartBlock = SYSTEM_BLOCK->RestartBlock;
+=1 211 1
++
++    while ((RestartBlock != NULL) && (RestartBlock->ProcessorId != Number)) {
+=1 142 3
++    if (RestartBlock == NULL) {
++        for (;;) {
++            __wfi();
+=1 175 3
++    BootStatus = RestartBlock->BootStatus;
++    BootStatus.ProcessorReady = 1;
++    RestartBlock->BootStatus = BootStatus;
++    __dsb(_ARM_BARRIER_SY);
++    for (;;) {
++        BootStatus = RestartBlock->BootStatus;
+=1 214 1
++            BootStatus.ProcessorRunning = 1;
++            BootStatus.BootStarted = 1;
++            RestartBlock->BootStatus = BootStatus;
++            __dsb(_ARM_BARRIER_SY);
++            FwpRestart();
++        }
++
++        __wfe();
+=1 230 3
++VOID
++FwRestart (
++    VOID
+=1 289 6
++    This routine is the firmware restart termination function. If a valid
++    restart block is present for the processor, execution continues at its
++    restart address; otherwise the system is reset and boots normally. The
++    boot master's block has no restart state.
+=1 306 4
++    if (SYSTEM_BLOCK->RestartBlock == NULL ||
++        SYSTEM_BLOCK->RestartBlock->u.Arm.Pc == 0) {
++        FwReboot();
++    }
++
++    FwpRestart();
++    FwHalt();
++}
++
++VOID
++FwTerminationInitialize (
++    VOID
++    )
++{
++    SYSTEM_BLOCK->FirmwareVector[HaltRoutine] = (PVOID)FwHalt;
++    SYSTEM_BLOCK->FirmwareVector[PowerDownRoutine] = (PVOID)FwHalt;
++    SYSTEM_BLOCK->FirmwareVector[RestartRoutine] = (PVOID)FwRestart;
++    SYSTEM_BLOCK->FirmwareVector[RebootRoutine] = (PVOID)FwReboot;
++    SYSTEM_BLOCK->FirmwareVector[InteractiveModeRoutine] = (PVOID)FwpEnterInteractiveMode;
++}

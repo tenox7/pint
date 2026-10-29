@@ -1,0 +1,4 @@
+#ntdiff private/utils/untfs/inc/indxbuff.hxx
+=1 1 36
++    FRIEND class NTFS_INDEX_TREE;
+=1 58 321

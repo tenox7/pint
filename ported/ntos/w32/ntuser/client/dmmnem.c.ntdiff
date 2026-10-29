@@ -1,0 +1,4 @@
+#ntdiff private/ntos/w32/ntuser/client/dmmnem.c
+=1 1 355
++    return NULL;
++}

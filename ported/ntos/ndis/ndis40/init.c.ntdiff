@@ -1,0 +1,5 @@
+#ntdiff private/ntos/ndis/ndis40/init.c
+=1 1 515
++#elif defined(_M_ARM)
++			NdisProcessorArm
+=1 516 900

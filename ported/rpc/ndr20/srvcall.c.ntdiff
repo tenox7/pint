@@ -1,0 +1,40 @@
+#ntdiff private/rpc/ndr20/srvcall.c
+=1 1 44
++#if defined(_PPC_) || defined(_ARM_)
+=1 46 1
++#endif //_PPC_ || _ARM_
+=1 48 1097
++    returnValue = Invoke(pFtn,
++                         (REGISTER_TYPE *) pArgs,
+=1 1147 3
++#ifdef _ARM_
++                         0,
++#endif //_ARM_
+=1 1150 157
++#ifdef _ARM_
++    //
++    // On ARM the image of the floating point argument registers is kept
++    // below the arguments, at negative stack offsets.
++    //
++    pArgBuffer = alloca(ARM_FLOAT_ARGUMENT_SIZE + StackSize);
++
++    if ( pArgBuffer )
++        pArgBuffer += ARM_FLOAT_ARGUMENT_SIZE;
++#else
+=1 1307 1
++#endif //_ARM_
+=1 1308 18
++#ifdef _ARM_
++    MIDL_memset( pArgBuffer - ARM_FLOAT_ARGUMENT_SIZE,
++	             0,
++	             ARM_FLOAT_ARGUMENT_SIZE + StackSize );
++#else
+=1 1326 3
++#endif //_ARM_
+=1 1329 332
++            returnValue = Invoke(pFunc,
+=1 1662 4
++#ifdef _ARM_
++                                (double *)(pArgBuffer - ARM_FLOAT_ARGUMENT_SIZE),
++#endif //_ARM_
+=1 1666 213

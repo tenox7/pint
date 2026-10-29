@@ -1,0 +1,6 @@
+#ntdiff private/sdktools/vctools/mc/mc.c
+=1 1 251
++                            s1 = CharPrev( RcInclFileName, s1 );
+=1 253 20
++                            s1 = CharPrev( DebugFileName, s1 );
+=1 274 59

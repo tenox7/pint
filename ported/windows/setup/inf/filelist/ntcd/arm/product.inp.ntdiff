@@ -1,0 +1,4 @@
+#ntdiff private/windows/setup/inf/filelist/ntcd/mips/product.inp
+#crlf
+=1 1 3
++STF_PLATFORM = Arm

@@ -1,0 +1,6 @@
+#ntdiff private/ntos/ps/create.c
+=1 1 529
++#if defined(_ARM_)
++            Thread->Win32StartAddress = (PVOID)ThreadContext->R0;
++#endif // _ARM_
+=1 529 1589

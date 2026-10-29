@@ -1,0 +1,8 @@
+#ntdiff private/windows/spooler/printui/setup.cxx
+=1 1 2740
++               PlatformARM == ARCH_ARM &&
+=1 2741 11
++        DRIVER_ARM_2,
+=1 2752 4
++        DRIVER_ARM_1,
+=1 2756 1103

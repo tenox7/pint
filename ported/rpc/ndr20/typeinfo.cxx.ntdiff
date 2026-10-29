@@ -1,0 +1,162 @@
+#ntdiff private/rpc/ndr20/typeinfo.cxx
+=1 1 1228
++#ifdef _ARM_
++    ArmStart();
++#endif //_ARM_
+=1 1229 13
++#ifdef _ARM_
++        _stackSize = ArmStackSize();
++#endif //_ARM_
++
+=1 1242 58
++#ifdef _ARM_
++        ArmStart();
++#endif //_ARM_
+=1 1299 12
++#ifdef _ARM_
++            _stackSize = ArmStackSize();
++#endif //_ARM_
++
+=1 1311 17
++#ifdef _ARM_
++    ArmParamOffset(vt);
++#endif //_ARM_
+=1 1327 232
++#ifdef _ARM_
++    //The stack offset of the parameter.
++    _stackSize = ArmParamOffset(vt);
++#endif //_ARM_
+=1 1558 361
++#ifndef _ARM_ //a FILETIME is 4-byte aligned on ARM (ArmParamOffset)
+=1 1919 3
++#endif //_ARM_
+=1 1922 45
++#ifdef _ARM_
+=1 60 2
++//  ARM stack offsets.
++//
++//  The stack offsets of the parameters are where the ARM calling standard
++//  puts them.  The core registers r0 - r3 and the stack form one array of
++//  words, from offset 0; an argument that is 8-byte aligned starts at an
++//  even register or an 8-byte aligned stack offset, and one that does not
++//  fit in the core registers left is split between them and the stack as
++//  long as no argument went on the stack.  Float and double arguments go in
++//  the floating point registers s0 - s15 (d0 - d7), a float in the lowest
++//  free single register, a double in the lowest free double register, and
++//  once one does not fit, on the stack; the stubless client and the server
++//  keep the image of these registers in the ARM_FLOAT_ARGUMENT_SIZE bytes
++//  below the array (negative offsets).
+=1 15 2
++void CProcGen::ArmStart()
++{
++    //The "this" pointer is in r0.
++    _armRegister = 1;
++    _armStack = 0;
++    _armFreeSingles = 0xffff;
++    _fArmFloatOnStack = FALSE;
++}
++
++USHORT CProcGen::ArmParamOffset(
++    IN  VARTYPE    vt)
++{
++    if(vt & VT_BYREF)
++    {
++        return ArmCoreArgument(sizeof(void *), FALSE);
++    }
++
++    switch(vt)
++    {
++    case VT_R4:
++        return ArmFloatArgument(FALSE);
+=1 1722 3
++        return ArmFloatArgument(TRUE);
+=1 1673 4
++        return ArmCoreArgument(8, TRUE);
++
++    case VT_DECIMAL:
++        return ArmCoreArgument(sizeof(DECIMAL), TRUE);
++
++    case VT_VARIANT:
++        return ArmCoreArgument(sizeof(VARIANT), TRUE);
++
++    case VT_FILETIME:
++        return ArmCoreArgument(sizeof(FILETIME), FALSE);
++
++    default:
++        return ArmCoreArgument(sizeof(REGISTER_TYPE), FALSE);
+=1 1061 3
++USHORT CProcGen::ArmCoreArgument(
++    IN  USHORT     size,
++    IN  BOOL       fAlign8)
++{
++    USHORT offset;
++
++    size = (size + 3) & ~3;
++
++    if(fAlign8)
++    {
++        _armRegister = (_armRegister + 1) & ~1;
++    }
++
++    if(_armRegister * 4 + size <= 16)
++    {
++        //In core registers.
++        offset = _armRegister * 4;
++        _armRegister += size / 4;
++    }
++    else if(_armRegister < 4 && 0 == _armStack)
++    {
++        //Split between the last core registers and the stack.
++        offset = _armRegister * 4;
++        _armStack = offset + size - 16;
++        _armRegister = 4;
+=1 193 3
++        //On the stack.
++        _armRegister = 4;
++        if(fAlign8)
++        {
++            _armStack = (_armStack + 7) & ~7;
++        }
++        offset = 16 + _armStack;
++        _armStack += size;
++    }
++    return offset;
++}
++
++USHORT CProcGen::ArmFloatArgument(
++    IN  BOOL       fDouble)
++{
++    USHORT size = fDouble ? 8 : 4;
++    USHORT mask = fDouble ? 3 : 1;
++    USHORT i;
++    USHORT offset;
++
++    if(!_fArmFloatOnStack)
++    {
++        for(i = 0; i < 16; i += size / 4)
++        {
++            if((_armFreeSingles & (mask << i)) == (mask << i))
++            {
++                //In floating point registers.
++                _armFreeSingles &= ~(mask << i);
++                return (USHORT) (i * 4 - ARM_FLOAT_ARGUMENT_SIZE);
+=1 288 3
++        //No more floating point registers for any argument.
++        _armFreeSingles = 0;
++        _fArmFloatOnStack = TRUE;
++    }
++
++    //On the stack.
++    _armStack = (_armStack + size - 1) & ~(size - 1);
++    offset = 16 + _armStack;
++    _armStack += size;
++    return offset;
++}
++
++USHORT CProcGen::ArmStackSize()
++{
++    //The size of the array of words.
++    return _armStack ? 16 + _armStack : _armRegister * 4;
++}
++#endif //_ARM_
+=1 1966 1600

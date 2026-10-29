@@ -1,0 +1,18 @@
+#ntdiff private/windows/spooler/printui/drvver.cxx
+=1 1 35
++#elif defined(_ARM_)
++    const DWORD kDriverCurrent = ARCH_ARM + VERSION_2;
+=1 36 272
++            { PROCESSOR_ARCHITECTURE_ARM,     1, IDS_ENVIRONMENT_ARM    },
+=1 308 4
++            { PROCESSOR_ARCHITECTURE_ARM,     2, IDS_ENVIRONMENT_ARM    },
+=1 312 96
++        { IDS_ENVIRONMENT_ARM,     1,  VERSION_1,  ARCH_ARM    },
+=1 408 3
++        { IDS_ENVIRONMENT_PPC,     2,  VERSION_2,  ARCH_PPC    },
++        { IDS_ENVIRONMENT_ARM,     2,  VERSION_2,  ARCH_ARM    }};
+=1 412 64
++        { DRIVER_ARM_2,       IDS_ENVIRONMENT_ARM   },
+=1 476 4
++        { DRIVER_ARM_1,       IDS_ENVIRONMENT_ARM   },
+=1 480 163

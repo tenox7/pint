@@ -1,0 +1,13 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=nettest
+
+TARGETNAME=nettest
+TARGETPATH=obj
+TARGETTYPE=UMAPPL_NOLIB
+USE_CRTDLL=1
+
+SOURCES=
+
+UMTYPE=console
+UMAPPL=nettest
+UMLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib

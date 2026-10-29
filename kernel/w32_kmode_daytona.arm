@@ -1,0 +1,7 @@
+# W32\KMODE ARM_SOURCES (its MIPS_SOURCES: mips\systable.s and mips\sysstubs.s, the system
+# service table of win32k.sys and its stubs for kernel mode callers, which its makefile.inc
+# makes with GENSRV), and its DRIVERBASE: the start of the system view space, where the
+# memory manager maps win32k.sys as an image section (mm\sysload.c), as on MIPS.
+DRIVERBASE=0xDE000000
+arm/systable.asm
+arm/sysstubs.asm

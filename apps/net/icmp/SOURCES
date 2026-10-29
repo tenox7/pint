@@ -1,0 +1,13 @@
+MAJORCOMP=sockets
+MINORCOMP=icmp
+
+TARGETNAME=icmp
+TARGETPATH=$(BASEDIR)\public\sdk\lib
+TARGETTYPE=DYNLINK
+
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\kernel32.lib
+
+INCLUDES=$(BASEDIR)\private\inc
+
+SOURCES=icmp.c \
+        icmp.rc

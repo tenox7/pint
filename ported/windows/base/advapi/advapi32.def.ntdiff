@@ -1,0 +1,6 @@
+#ntdiff private/windows/base/advapi/advapi32.def
+=1 1 400
++; The Cryptography APIs are not exported: the tree has not the source of their
++; module (cryptapi.c).
++;
+=1 431 80

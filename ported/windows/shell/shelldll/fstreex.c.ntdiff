@@ -1,0 +1,4 @@
+#ntdiff private/windows/shell/shelldll/fstreex.c
+=1 1 3242
++        return bResult;
+=1 3243 6730

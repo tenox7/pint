@@ -1,0 +1,409 @@
+#ntdiff private/ntos/ke/mips/alignem.c private/ntos/ke/ppc/alignem.c
+=1 1 13
++    ARM port of KE/MIPS/ALIGNEM.C. ARMv7 performs the unaligned loads and
++    stores of a single word or halfword in hardware. Those of several words,
++    LDM, STM, PUSH, POP, LDRD and STRD, and those of the floating point and
++    SIMD unit, VLDR, VSTR, VLDM, VSTM, VPUSH, VPOP, and VLD1 and VST1 of
++    multiple elements, take an alignment fault (ke\trapc.c) at an address
++    that is not word aligned, or not aligned as a VLD1 or VST1 states.
++    Microsoft C for ARM moves structures, doublewords and the blocks of
++    memcpy with them as the types of their pointers allow. They are
++    emulated here in Thumb state, in user and in kernel mode, as the Alpha
++    and PowerPC kernels emulate theirs (ke\exceptn.c). The exclusive loads
++    and stores are not: their reference cannot be made atomic.
+=1 13 14
++
++//
++// Define the largest reference: VLDM and VSTM move up to 32 doublewords.
++//
++
++#define MAXIMUM_REFERENCE 32
++
++//
++// Define the kinds of registers a reference moves.
++//
++
++#define INTEGER_REGISTERS 0
++#define SINGLE_REGISTERS 1
++#define DOUBLE_REGISTERS 2
++
++static PULONG
++KiIntegerRegister (
++    IN ULONG Register,
++    IN PKEXCEPTION_FRAME ExceptionFrame,
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This function returns the address of the saved value of an integer
++    register: r0 - r3 and r12 - r15 are in the trap frame, r4 - r11 in
++    the exception frame.
+=1 54 4
++    if (Register < 4) {
++        return &TrapFrame->R0 + Register;
++
++    } else if (Register < 12) {
++        return &ExceptionFrame->R4 + (Register - 4);
++
++    } else {
++        return &TrapFrame->R12 + (Register - 12);
+=1 86 3 -4
++static PULONGLONG
++KiDoubleRegister (
++    IN ULONG Register,
++    IN PKEXCEPTION_FRAME ExceptionFrame,
++    IN PKTRAP_FRAME TrapFrame
+=1 33 6
++    This function returns the address of the saved value of a doubleword
++    floating register: d8 - d15 are in the exception frame, d0 - d7 and
++    d16 - d31 in the trap frame (ke\trap.asm). A single precision register
++    sn is half of d(n/2), its low half when n is even.
+=1 54 4
++    if (Register < 8) {
++        return &TrapFrame->VolatileD[Register];
++
++    } else if (Register < 16) {
++        return &ExceptionFrame->D8 + (Register - 8);
++
++    } else {
++        return &TrapFrame->VolatileD[Register - 8];
+=1 86 3 -4
+=1 28 12
++    address in the user part of the address space, or, in kernel mode, to
++    any address.
+=1 41 18
++    ULONG Address;
++    ULONG Base;
++    ULONG BaseValue;
++    BOOLEAN Branch;
++    ULONG Count;
++    ULONGLONG Data[MAXIMUM_REFERENCE];
+=1 69 1
++    ULONG First;
++    ULONG Index;
++    USHORT Instruction1;
++    USHORT Instruction2;
++    ULONG It;
++    ULONG Kind;
++    ULONG Length;
++    ULONG List;
++    BOOLEAN Load;
++    ULONG NextPc;
++    ULONG Offset;
++    KIRQL  OldIrql;
++    ULONG Pc;
++    UCHAR Registers[16];
++    ULONG Size;
++    BOOLEAN UserReference;
++    BOOLEAN Writeback;
+=1 73 33
++        // Read the fault instruction, of one halfword or of two (the first
++        // halfword 0xe800 or above). Only Thumb code is emulated.
++        //
++
++        UserReference = (BOOLEAN)(TrapFrame->PreviousMode != KernelMode);
++        Pc = TrapFrame->Pc;
++        if (((TrapFrame->Cpsr & PSR_THUMB) == 0) ||
++            ((UserReference != FALSE) && (Pc >= MM_USER_PROBE_ADDRESS - 4))) {
+=1 348 3 -4
++        Instruction1 = *(volatile USHORT *)Pc;
++        Instruction2 = 0;
++        Size = 2;
++        if (Instruction1 >= 0xe800) {
++            Instruction2 = *(volatile USHORT *)(Pc + 2);
++            Size = 4;
+=1 119 3
++        // Decode the reference: its lowest address, the registers it moves
++        // in the order of their words in memory, and the base register
++        // update.
++        //
++
++        Base = 0;
++        BaseValue = 0;
++        Load = FALSE;
++        Kind = INTEGER_REGISTERS;
++        First = 0;
++        Count = 0;
++        List = 0;
++        Writeback = FALSE;
++        if (Size == 2) {
++
++            //
++            // LDM, STM (Rn!, {r0 - r7}), and PUSH and POP (sp!, {r0 - r7,
++            // and lr or pc}).
++            //
++
++            if ((Instruction1 & 0xf000) == 0xc000) {
++                Base = (Instruction1 >> 8) & 7;
++                List = Instruction1 & 0xff;
++
++            } else if ((Instruction1 & 0xf600) == 0xb400) {
++                Base = 13;
++                List = (Instruction1 & 0xff) |
++                       ((Instruction1 & 0x100) << ((Instruction1 & 0x800) ? 7 : 6));
++
++            } else {
+=1 348 3
++            Load = (BOOLEAN)((Instruction1 & 0x800) != 0);
++            Writeback = TRUE;
++            BaseValue = *KiIntegerRegister(Base, ExceptionFrame, TrapFrame);
++            Address = BaseValue;
++
++        } else if (((Instruction1 & 0xffc0) == 0xe880) ||
++                   ((Instruction1 & 0xffc0) == 0xe900)) {
++
++            //
++            // LDM, STM (increment after) and LDMDB, STMDB (decrement before),
++            // which include POP and PUSH of several registers.
++            //
++
++            Base = Instruction1 & 0xf;
++            List = Instruction2 & 0xdfff;
++            Load = (BOOLEAN)((Instruction1 & 0x10) != 0);
++            Writeback = (BOOLEAN)((Instruction1 & 0x20) != 0);
++            BaseValue = *KiIntegerRegister(Base, ExceptionFrame, TrapFrame);
++            Address = BaseValue;
++
++        } else if (((Instruction1 & 0xfe40) == 0xe840) && ((Instruction1 & 0x120) != 0)) {
++
++            //
++            // LDRD, STRD (immediate offset, pre-indexed or post-indexed).
++            //
++
++            Base = Instruction1 & 0xf;
++            Registers[0] = (UCHAR)(Instruction2 >> 12);
++            Registers[1] = (UCHAR)((Instruction2 >> 8) & 0xf);
++            Count = 2;
++            Load = (BOOLEAN)((Instruction1 & 0x10) != 0);
++            Writeback = (BOOLEAN)((Instruction1 & 0x20) != 0);
++            Offset = (Instruction2 & 0xff) << 2;
++            Address = *KiIntegerRegister(Base, ExceptionFrame, TrapFrame);
++            BaseValue = (Instruction1 & 0x80) ? Address + Offset : Address - Offset;
++            if ((Instruction1 & 0x100) != 0) {
++                Address = BaseValue;
++            }
++
++            if ((Registers[0] == 15) || (Registers[1] == 15) ||
++                ((UserReference == FALSE) &&
++                 ((Registers[0] == 13) || (Registers[1] == 13)))) {
+=1 348 3
++        } else if (((Instruction1 & 0xfe00) == 0xec00) && ((Instruction2 & 0xe00) == 0xa00)) {
++
++            //
++            // VLDR, VSTR (P = 1, W = 0), VLDM, VSTM (increment after,
++            // P = 0, U = 1) and VLDMDB, VSTMDB (decrement before, P = 1,
++            // U = 0, W = 1), which include VPOP and VPUSH. The immediate is
++            // the number of words moved, or the offset in words of VLDR and
++            // VSTR. FLDMX and FSTMX (an odd number of words of doubleword
++            // registers) are not emulated.
++            //
++
++            Base = Instruction1 & 0xf;
++            Load = (BOOLEAN)((Instruction1 & 0x10) != 0);
++            Kind = (Instruction2 & 0x100) ? DOUBLE_REGISTERS : SINGLE_REGISTERS;
++            if (Kind == DOUBLE_REGISTERS) {
++                First = ((Instruction1 & 0x40) >> 2) | (Instruction2 >> 12);
++
++            } else {
++                First = ((Instruction2 >> 12) << 1) | ((Instruction1 & 0x40) >> 6);
++            }
++
++            Offset = (Instruction2 & 0xff) << 2;
++            Address = *KiIntegerRegister(Base, ExceptionFrame, TrapFrame);
++            if ((Instruction1 & 0x120) == 0x100) {
++                Address = (Instruction1 & 0x80) ? Address + Offset : Address - Offset;
++                Count = 1;
++
++            } else {
++                if ((Instruction1 & 0x180) == 0x080) {
++                    BaseValue = Address + Offset;
++
++                } else if ((Instruction1 & 0x1a0) == 0x120) {
++                    Address -= Offset;
++                    BaseValue = Address;
++
++                } else {
+=1 348 3 4
++                Writeback = (BOOLEAN)((Instruction1 & 0x20) != 0);
++                Count = Instruction2 & 0xff;
++                if (Kind == DOUBLE_REGISTERS) {
++                    if ((Count & 1) != 0) {
+=1 348 3 8
++                    Count >>= 1;
+=2 724 3
++            if ((Count == 0) || ((First + Count) > 32)) {
+=1 348 3
++        } else if ((Instruction1 & 0xff90) == 0xf900) {
++
++            //
++            // VLD1, VST1 of multiple single elements, one to four doubleword
++            // registers. In little-endian order every element size lays out
++            // the bytes of the registers in memory alike. The writeback adds
++            // the register Rm, or the length when Rm is sp; Rm = pc has none.
++            //
++
++            switch ((Instruction2 >> 8) & 0xf) {
++            case 7:
++                Count = 1;
++                break;
++
++            case 10:
++                Count = 2;
++                break;
++
++            case 6:
++                Count = 3;
++                break;
++
++            case 2:
++                Count = 4;
++                break;
+=1 346 5
++            Base = Instruction1 & 0xf;
++            Load = (BOOLEAN)((Instruction1 & 0x20) != 0);
++            Kind = DOUBLE_REGISTERS;
++            First = ((Instruction1 & 0x40) >> 2) | (Instruction2 >> 12);
++            if ((First + Count) > 32) {
+=1 348 3
++            Address = *KiIntegerRegister(Base, ExceptionFrame, TrapFrame);
++            if ((Instruction2 & 0xf) != 15) {
++                Writeback = TRUE;
++                if ((Instruction2 & 0xf) == 13) {
++                    BaseValue = Address + (Count * 8);
++
++                } else {
++                    BaseValue = Address +
++                        *KiIntegerRegister(Instruction2 & 0xf, ExceptionFrame, TrapFrame);
+=2 724 3
++        } else {
++
+=1 343 4 -4
+=1 348 3 -4
++        //
++        // A register list moves the registers in ascending order from the
++        // lowest address, and a decrement before or a push starts below the
++        // base. A load of the base register does not write it back.
++        //
++
++        if (List != 0) {
++            for (Index = 0; Index < 16; Index += 1) {
++                if ((List & (1 << Index)) != 0) {
++                    Registers[Count] = (UCHAR)Index;
++                    Count += 1;
+=2 724 3
++            if (((Instruction1 & 0xf600) == 0xb400) || ((Instruction1 & 0xffc0) == 0xe900)) {
++                if (((Instruction1 & 0xf600) == 0xb400) && (Load != FALSE)) {
++                    BaseValue += Count * 4;
++
++                } else {
++                    BaseValue -= Count * 4;
++                    Address = BaseValue;
++                }
++
++            } else {
++                BaseValue += Count * 4;
++            }
++
++            if ((Load != FALSE) && ((List & (1 << Base)) != 0)) {
++                Writeback = FALSE;
++            }
++
++            if ((Load == FALSE) && ((List & 0x8000) != 0)) {
+=1 348 3
++            if ((UserReference == FALSE) && (Load != FALSE) && ((List & 0x2000) != 0)) {
++                return FALSE;
+=1 86 4 4
++        // The address pc reads as is word aligned: a literal reference does
++        // not take an alignment fault. A reference of the kernel stack, which
++        // is aligned, never misses, and the trap frame lies below the stack
++        // pointer.
++        //
++
++        if ((Base == 15) || ((UserReference == FALSE) && (Base == 13))) {
+=1 348 3 -4
++        //
++        // The emulated data reference must be in user space in user mode.
++        // Alignment exceptions take precedence over memory management
++        // exceptions and the address could be a system address.
++        //
++
++        Length = Count * ((Kind == DOUBLE_REGISTERS) ? 8 : 4);
++        if ((UserReference != FALSE) &&
++            (((Address + Length) < Address) || ((Address + Length) > MM_USER_PROBE_ADDRESS))) {
+=1 348 3 -4
++        //
++        // Move the data a byte at a time, which cannot itself be misaligned:
++        // a load reads all of it before any register changes, a store reads
++        // the registers first.
++        //
++
++        Branch = FALSE;
++        NextPc = 0;
++        if (Load != FALSE) {
++            for (Index = 0; Index < Length; Index += 1) {
++                ((PUCHAR)Data)[Index] = ((volatile UCHAR *)Address)[Index];
++            }
++
++            for (Index = 0; Index < Count; Index += 1) {
++                if (Kind == DOUBLE_REGISTERS) {
++                    *KiDoubleRegister(First + Index, ExceptionFrame, TrapFrame) = Data[Index];
++
++                } else if (Kind == SINGLE_REGISTERS) {
++                    *((PULONG)KiDoubleRegister((First + Index) >> 1, ExceptionFrame, TrapFrame) +
++                      ((First + Index) & 1)) = ((PULONG)Data)[Index];
++
++                } else if (Registers[Index] == 15) {
++                    Branch = TRUE;
++                    NextPc = ((PULONG)Data)[Index];
++
++                } else {
++                    *KiIntegerRegister(Registers[Index], ExceptionFrame, TrapFrame) =
++                                                                        ((PULONG)Data)[Index];
+=2 724 3
++        } else {
++            for (Index = 0; Index < Count; Index += 1) {
++                if (Kind == DOUBLE_REGISTERS) {
++                    Data[Index] = *KiDoubleRegister(First + Index, ExceptionFrame, TrapFrame);
++
++                } else if (Kind == SINGLE_REGISTERS) {
++                    ((PULONG)Data)[Index] =
++                        *((PULONG)KiDoubleRegister((First + Index) >> 1, ExceptionFrame, TrapFrame) +
++                          ((First + Index) & 1));
++
++                } else {
++                    ((PULONG)Data)[Index] =
++                            *KiIntegerRegister(Registers[Index], ExceptionFrame, TrapFrame);
+=2 724 3
++            for (Index = 0; Index < Length; Index += 1) {
++                ((volatile UCHAR *)Address)[Index] = ((PUCHAR)Data)[Index];
+=1 86 3 4
++        if (Writeback != FALSE) {
++            *KiIntegerRegister(Base, ExceptionFrame, TrapFrame) = BaseValue;
+=1 119 3
++        // Continue after the instruction, or where a load of pc branches
++        // (to Thumb state when bit 0 of the address is set, as BX does). An
++        // instruction of an if-then block advances its execution state.
++        //
++
++        It = ((TrapFrame->Cpsr >> 25) & 0x3) | ((TrapFrame->Cpsr >> 8) & 0xfc);
++        if ((It & 0x7) == 0) {
++            It = 0;
++
++        } else {
++            It = (It & 0xe0) | ((It << 1) & 0x1f);
++        }
++
++        TrapFrame->Cpsr = (TrapFrame->Cpsr & ~CPSR_IT_MASK) | ((It & 0x3) << 25) | ((It & 0xfc) << 8);
++        if (Branch != FALSE) {
++            if ((NextPc & 1) != 0) {
++                TrapFrame->Pc = NextPc & ~1;
++
++            } else {
++                TrapFrame->Cpsr &= ~PSR_THUMB;
++                TrapFrame->Pc = NextPc;
++            }
++
++        } else {
++            TrapFrame->Pc = Pc + Size;
++        }
++
++        return TRUE;
+=1 354 22

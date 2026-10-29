@@ -1,0 +1,4 @@
+#ntdiff private/ntos/tdi/tcpip/ip/arp.c
+=1 1 1425
++            CTEFreeLockFromDPC(&entry->ate_lock, lhandle);
+=1 1427 3413

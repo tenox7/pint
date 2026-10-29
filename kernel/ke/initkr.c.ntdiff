@@ -1,0 +1,38 @@
+#ntdiff private/ntos/ke/mips/initkr.c private/ntos/ke/alpha/initkr.c
+=1 1 14
++    ARM32 / Raspberry Pi 2 port of KE/MIPS/INITKR.C. ARM deltas are marked
++    "ARM port:".
+=1 14 9
+=2 29 4
+=1 40 18
++    routine, and then return to the system startup routine.
+=1 61 69
++    Prcb->PcrPage = LoaderBlock->u.Arm.PcrPage;
+=1 131 37
++    // ARM port: the processor id is the main id register (MIDR): the level
++    // is its part number (0xc07 Cortex-A7, 0xd03 Cortex-A53, 0xd08 Cortex-A72)
++    // and the revision its variant and revision (rXpY as 0xX0Y).
++    //
++
++    KeProcessorArchitecture = PROCESSOR_ARCHITECTURE_ARM;
+=1 170 2
++        KeProcessorLevel > (USHORT)((PCR->ProcessorId >> 4) & 0xfff)) {
++        KeProcessorLevel = (USHORT)((PCR->ProcessorId >> 4) & 0xfff);
+=1 174 3
++        KeProcessorRevision > (USHORT)(((PCR->ProcessorId >> 12) & 0xf00) |
++                                       (PCR->ProcessorId & 0xf))) {
++        KeProcessorRevision = (USHORT)(((PCR->ProcessorId >> 12) & 0xf00) |
++                                       (PCR->ProcessorId & 0xf));
+=1 179 29
++        // Initialize the address of the interrupt dispatch routine.
+=1 209 6
++        // and flush the caches so the code is actually in memory and
++        // no stale instructions are cached for it.
+=1 217 3
++            KxUnexpectedInterrupt.DispatchCode[Index] =
++                        ((PULONG)((ULONG)KiInterruptTemplate & ~1))[Index];
+=1 221 14
++        KeSweepCurrentIcache();
+=1 241 4
++            (PKINTERRUPT_ROUTINE)((ULONG)(&KxUnexpectedInterrupt.DispatchCode) | 1);
+=1 246 218

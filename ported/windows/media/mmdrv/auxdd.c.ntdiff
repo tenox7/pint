@@ -1,0 +1,4 @@
+#ntdiff private/windows/media/mmdrv/auxdd.c
+=1 1 68
++    return MMSYSERR_NOTSUPPORTED;
++}

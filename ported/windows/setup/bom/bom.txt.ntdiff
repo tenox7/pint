@@ -1,0 +1,7 @@
+#ntdiff private/windows/setup/bom/bom.txt
+#crlf
+=1 1 13
++BCMETH.SYS	armbins	\		NET NDIS driver: ARM (built-in on the Raspberry Pi)		x	arm	\arm	arm\oemnadbc.inf	[Files-BCMETH]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32\drivers		2
+=1 14 567
++
+#noeol

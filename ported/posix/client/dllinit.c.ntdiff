@@ -1,0 +1,13 @@
+#ntdiff private/posix/client/dllinit.c
+=1 1 31
++#ifdef _ARM_
++#include "psxarm.h"
++#endif
+=1 32 83
++#ifdef _ARM_
++        PebPsxData->ClientStartAddress = PsxContextStartAddress(Context);
++        PsxSetContextStartAddress(Context, PdxProcessStartup);
++#else
+=1 115 2
++#endif
+=1 117 261

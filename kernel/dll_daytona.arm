@@ -1,0 +1,6 @@
+# DLL\DAYTONA ARM_SOURCES (the MIPS_SOURCES of dll\mips\sources: critsect.s evpair.s usrstubs.s ldrthunk.s). Not
+# evpair.s: it calls the fast event pair path of the NT 3.x kernels, which NT 4.0 has no more (the event pair
+# services are ordinary ones), from a function nothing calls or exports.
+dll/critsect.asm
+dll/ldrthunk.asm
+/tmp/gen/usrstubs.asm

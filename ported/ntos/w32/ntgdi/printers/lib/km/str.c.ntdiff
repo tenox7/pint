@@ -1,0 +1,5 @@
+#ntdiff private/ntos/w32/ntgdi/printers/lib/km/str.c
+=1 1 111
++#pragma function(wcsncpy, wcscpy, wcslen, wcscat)    // (intrinsics of Microsoft C for ARM: defined here)
++
+=1 112 140

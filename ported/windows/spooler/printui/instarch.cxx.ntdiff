@@ -1,0 +1,6 @@
+#ntdiff private/windows/spooler/printui/instarch.cxx
+=1 1 250
++        DRIVER_ARM_2,
+=1 251 4
++        DRIVER_ARM_1,
+=1 255 339

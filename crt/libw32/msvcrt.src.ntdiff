@@ -1,0 +1,9 @@
+#ntdiff private/sdktools/vctools/crt/libw32/msvcrt.src
+=1 1 806
++#elif defined(_M_ARM)
+=1 799 2
++	__CxxFrameHandler3
++	_dtoul
+=1 802 3
++
++#endif

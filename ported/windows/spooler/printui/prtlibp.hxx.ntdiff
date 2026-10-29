@@ -1,0 +1,10 @@
+#ntdiff private/windows/spooler/printui/prtlibp.hxx
+=1 1 34
++#define ARCH_ARM   4
++#define ARCH_WIN95 5
++#define ARCH_MAX   6
+=1 37 9
++#define DRIVER_ARM_2                (ARCH_ARM +   VERSION_2)
+=1 46 4
++#define DRIVER_ARM_1                (ARCH_ARM +   VERSION_1)
+=1 50 130

@@ -1,0 +1,4 @@
+#ntdiff public/sdk/inc/infstr.h
+=1 1 200
++#define INFSTR_PLATFORM_NTARM           TEXT("NTARM")
+=1 201 43

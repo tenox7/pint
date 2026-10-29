@@ -1,0 +1,7 @@
+#ntdiff private/ntos/inc/ndismain.h
+=1 1 88
++#elif defined(_M_MRX000) || defined(_M_ARM)
+=1 90 158
++	NdisProcessorPpc,
++	NdisProcessorArm
+=1 249 2423

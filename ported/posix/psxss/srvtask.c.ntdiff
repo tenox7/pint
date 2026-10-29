@@ -1,0 +1,5 @@
+#ntdiff private/posix/psxss/srvtask.c
+=1 1 37
++#ifdef _ARM_
++#include "psxarm.h"
+=1 36 1913

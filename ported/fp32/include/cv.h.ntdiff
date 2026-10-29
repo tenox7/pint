@@ -1,0 +1,8 @@
+#ntdiff private/fp32/include/cv.h
+=1 1 269
++#elif defined(_M_ARM)
++/* ARM: the quiet NaN of i386; the default NaN of the VFP is positive */
+=1 226 1
++	(!(signbit) && (manhi)==0xc0000000 && (manlo)==0)
+=1 228 8
+=1 270 262

@@ -1,0 +1,9 @@
+#ntdiff private/windows/spooler/printui/printui.rc
+#crlf
+=1 1 931
++    IDS_ENVIRONMENT_ARM     "Windows NT ARM"
+=1 932 81
++    IDS_DRIVER_ARM_1        "Windows NT 3.5 ARM"
+=1 1013 4
++    IDS_DRIVER_ARM_2        "Windows NT 4.0 ARM"
+=1 1017 79

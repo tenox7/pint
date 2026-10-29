@@ -1,0 +1,27 @@
+#ntdiff private/rpc/ndr20/typeinfo.h
+=1 1 115
++#ifdef _ARM_
++    //The arguments as the ARM calling standard places them: the next
++    //core register, the bytes of stack arguments, the free single
++    //precision registers (bit n for sn), and whether a float or double
++    //argument went on the stack.
++    USHORT         _armRegister;
++    USHORT         _armStack;
++    USHORT         _armFreeSingles;
++    BOOL           _fArmFloatOnStack;
++
++    void ArmStart();
++
++    USHORT ArmParamOffset(
++        IN  VARTYPE    vt);
++
++    USHORT ArmCoreArgument(
++        IN  USHORT     size,
++        IN  BOOL       fAlign8);
++
++    USHORT ArmFloatArgument(
++        IN  BOOL       fDouble);
++
++    USHORT ArmStackSize();
++#endif //_ARM_
+=1 115 139

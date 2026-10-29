@@ -1,0 +1,315 @@
+#ntdiff private/ntos/nthals/halfxs/mips/jxtime.c
+=1 1 10
++    This module implements the HAL set and query realtime clock routines for
++    the Raspberry Pi 2 (the Jazz HAL's jxtime.c). The Pi 2 has no realtime
++    clock of its own; its realtime clock is a Dallas DS1307 (or compatible)
++    on the I2C bus of the expansion header, BSC1 on GPIO 2 and 3.
++    Without one the clock runs in memory, as a PC whose CMOS battery is flat:
++    from midnight of the date of the ARC firmware, plus the system timer.
+=1 17 5
+=1 24 3
++
++//
++// Define the DS1307 registers: BCD time, the clock halt bit in the seconds
++// register (set while the oscillator is stopped: the time is not valid).
++//
++
++#define RTC_I2C_ADDRESS 0x68
++#define RTC_SECOND 0
++#define RTC_MINUTE 1
++#define RTC_HOUR 2
++#define RTC_DAY_OF_WEEK 3
++#define RTC_DAY_OF_MONTH 4
++#define RTC_MONTH 5
++#define RTC_YEAR 6
++#define RTC_REGISTERS 7
++
++#define RTC_CLOCK_HALT 0x80
++#define RTC_12_HOUR 0x40
++#define RTC_PM 0x20
++
++#define BCD_TO_BINARY(b) (((b) >> 4) * 10 + ((b) & 0xf))
++#define BINARY_TO_BCD(b) (UCHAR)((((b) / 10) << 4) | ((b) % 10))
++
+=1 31 4
++BOOLEAN
++HalpReadClockRegisters (
++    OUT PUCHAR Registers
++    );
++
++BOOLEAN
++HalpWriteClockRegisters (
++    IN PUCHAR Registers
++    );
++
++LARGE_INTEGER
++HalpSystemTimerTime (
++    VOID
++    );
++
++//
++// The local time of the memory clock at the system timer zero, valid once
++// the firmware date or a time set is in.
++//
++
++static LARGE_INTEGER HalpClockBase;
++static BOOLEAN HalpClockBaseValid;
++
++//
++// The realtime clock lock: one processor at a time transfers the clock
++// registers over the I2C bus and changes the memory clock.
++//
++
++static KSPIN_LOCK HalpRtcLock;
++
+=1 46 21
++    If the realtime clock is present and running, then the time values are
++    read from the realtime clock and a value of TRUE is returned. Otherwise,
++    a value of FALSE is returned.
+=1 70 5
++    UCHAR Registers[RTC_REGISTERS];
++    UCHAR Hour;
++    KIRQL OldIrql;
++    BOOLEAN Valid;
++    LARGE_INTEGER Time;
++
++    //
++    // Read the realtime clock registers in one transfer: the clock latches
++    // its time at the start of the read. Without a running clock, the memory
++    // clock gives the time.
+=1 82 3
++    KiAcquireSpinLock(&HalpRtcLock);
++    Valid = HalpReadClockRegisters(Registers);
++    Time = HalpSystemTimerTime();
++    KiReleaseSpinLock(&HalpRtcLock);
+=1 108 1 -4
++    if (!Valid || (Registers[RTC_SECOND] & RTC_CLOCK_HALT) != 0) {
++        if (!HalpClockBaseValid) {
++            return FALSE;
++        }
++
++        Time.QuadPart += HalpClockBase.QuadPart;
++        RtlTimeToTimeFields(&Time, TimeFields);
++        return TRUE;
++    }
++
++    Hour = Registers[RTC_HOUR];
++    if ((Hour & RTC_12_HOUR) != 0) {
++        TimeFields->Hour = (CSHORT)(BCD_TO_BINARY(Hour & 0x1f) % 12 + ((Hour & RTC_PM) != 0 ? 12 : 0));
++
++    } else {
++        TimeFields->Hour = (CSHORT)BCD_TO_BINARY(Hour & 0x3f);
++    }
++
++    TimeFields->Year = 2000 + (CSHORT)BCD_TO_BINARY(Registers[RTC_YEAR]);
++    TimeFields->Month = (CSHORT)BCD_TO_BINARY(Registers[RTC_MONTH] & 0x1f);
++    TimeFields->Day = (CSHORT)BCD_TO_BINARY(Registers[RTC_DAY_OF_MONTH] & 0x3f);
++    TimeFields->Weekday = (CSHORT)(Registers[RTC_DAY_OF_WEEK] & 0x7) - 1;
++    TimeFields->Minute = (CSHORT)BCD_TO_BINARY(Registers[RTC_MINUTE] & 0x7f);
++    TimeFields->Second = (CSHORT)BCD_TO_BINARY(Registers[RTC_SECOND] & 0x7f);
+=1 107 1 -4
++    return TRUE;
++}
++
+=1 117 21
++    The time is set in the memory clock. If the realtime clock is present and
++    the time is one it holds, then the time values are written to the realtime
++    clock (which starts it) too. A value of TRUE is returned if the time is
++    valid. Otherwise, a value of FALSE is returned.
+=1 70 5
++    UCHAR Registers[RTC_REGISTERS];
++    KIRQL OldIrql;
++    LARGE_INTEGER Time;
++
++    if (!RtlTimeFieldsToTime(TimeFields, &Time)) {
++        return FALSE;
++    }
+=1 83 2
++    KiAcquireSpinLock(&HalpRtcLock);
++    HalpClockBase.QuadPart = Time.QuadPart - HalpSystemTimerTime().QuadPart;
++    HalpClockBaseValid = TRUE;
++    KiReleaseSpinLock(&HalpRtcLock);
+=1 108 1 -4
++    if (TimeFields->Year < 2000 || TimeFields->Year > 2099) {
++        return TRUE;
++    }
++
++    Registers[RTC_SECOND] = BINARY_TO_BCD(TimeFields->Second);
++    Registers[RTC_MINUTE] = BINARY_TO_BCD(TimeFields->Minute);
++    Registers[RTC_HOUR] = BINARY_TO_BCD(TimeFields->Hour);
++    Registers[RTC_DAY_OF_WEEK] = (UCHAR)(TimeFields->Weekday + 1);
++    Registers[RTC_DAY_OF_MONTH] = BINARY_TO_BCD(TimeFields->Day);
++    Registers[RTC_MONTH] = BINARY_TO_BCD(TimeFields->Month);
++    Registers[RTC_YEAR] = BINARY_TO_BCD(TimeFields->Year - 2000);
+=1 84 1
++    KiAcquireSpinLock(&HalpRtcLock);
++    HalpWriteClockRegisters(Registers);
++    KiReleaseSpinLock(&HalpRtcLock);
+=1 108 2 -4
++}
++
++LARGE_INTEGER
++HalpSystemTimerTime (
++    VOID
+=1 49 6
++    This routine returns the time since power on in 100ns units from the
++    64-bit 1 MHz system timer, its high word read again if the low one wrapped
++    between the reads.
+=1 70 5
++    LARGE_INTEGER Time;
++    ULONG High;
++
++    do {
++        High = HAL_REG(HAL_ST_CHI);
++        Time.LowPart = HAL_REG(HAL_ST_CLO);
++        Time.HighPart = HAL_REG(HAL_ST_CHI);
++    } while (Time.HighPart != (LONG)High);
++
++    Time.QuadPart *= 10;
++    return Time;
++}
++
++VOID
++HalpInitializeClock (
++    IN PLOADER_PARAMETER_BLOCK LoaderBlock
+=1 49 6
++    This routine starts the memory clock at midnight of the date of the ARC
++    firmware ("mm/dd/yy", in the device specific data of the system entry of
++    the configuration tree), as the firmware's own time does.
+=1 59 3
++    LoaderBlock - Supplies a pointer to the loader parameter block.
+=1 70 5
++    PCONFIGURATION_COMPONENT_DATA SystemEntry;
++    PCM_PARTIAL_RESOURCE_LIST List;
++    PCHAR Date;
++    TIME_FIELDS TimeFields;
++    LARGE_INTEGER Time;
++
++    SystemEntry = KeFindConfigurationEntry(LoaderBlock->ConfigurationRoot, SystemClass, ArcSystem, NULL);
++    if (SystemEntry == NULL || SystemEntry->ConfigurationData == NULL ||
++        SystemEntry->ComponentEntry.ConfigurationDataLength <
++            sizeof(CM_PARTIAL_RESOURCE_LIST) + sizeof(ARM_SYSTEM_FIRMWARE_DATA)) {
++        return;
++    }
++
++    List = (PCM_PARTIAL_RESOURCE_LIST)SystemEntry->ConfigurationData;
++    if (List->Count != 1 || List->PartialDescriptors[0].Type != CmResourceTypeDeviceSpecific) {
++        return;
++    }
++
++    Date = ((PARM_SYSTEM_FIRMWARE_DATA)(List + 1))->SystemFirmwareDate;
++    if (Date[2] != '/' || Date[5] != '/') {
++        return;
++    }
++
++    RtlZeroMemory(&TimeFields, sizeof(TimeFields));
++    TimeFields.Month = (CSHORT)((Date[0] - '0') * 10 + Date[1] - '0');
++    TimeFields.Day = (CSHORT)((Date[3] - '0') * 10 + Date[4] - '0');
++    TimeFields.Year = (CSHORT)(2000 + (Date[6] - '0') * 10 + Date[7] - '0');
++    if (!RtlTimeFieldsToTime(&TimeFields, &Time)) {
++        return;
++    }
++
++    HalpClockBase.QuadPart = Time.QuadPart - HalpSystemTimerTime().QuadPart;
++    HalpClockBaseValid = TRUE;
++}
++
++BOOLEAN
++HalpClockTransfer (
++    IN OUT PUCHAR Buffer,
++    IN ULONG Length,
++    IN BOOLEAN Read
+=1 49 6
++    This routine performs one transfer with the realtime clock on the BSC1
++    I2C controller: a write of the bytes of the buffer, or a read into it.
+=1 59 3
++    Buffer - Supplies the bytes to write, or receives the bytes read.
++
++    Length - Supplies the number of bytes, at most the depth of the FIFO.
++
++    Read - Supplies TRUE for a read, FALSE for a write.
+=1 64 3
++    TRUE if the clock acknowledged the transfer and it completed, FALSE
++    otherwise.
+=1 70 5
++    ULONG Index;
++    ULONG Start;
++    ULONG Status;
++
++    //
++    // Route GPIO 2 and 3 to BSC1 (function 0) and run its clock at 100 kHz.
++    //
++
++    HAL_REG(HAL_GPFSEL0) = (HAL_REG(HAL_GPFSEL0) & ~0xfc0u) | 0x900u;
++    HAL_REG(HAL_BSC1_DIV) = HAL_BSC_DIVIDER;
++
++    //
++    // Start the transfer, the FIFO cleared first, then move the bytes through
++    // the FIFO until it is done, at most 10 ms.
++    //
++
++    HAL_REG(HAL_BSC1_S) = HAL_BSC_S_CLKT | HAL_BSC_S_ERR | HAL_BSC_S_DONE;
++    HAL_REG(HAL_BSC1_A) = RTC_I2C_ADDRESS;
++    HAL_REG(HAL_BSC1_DLEN) = Length;
++    HAL_REG(HAL_BSC1_C) = HAL_BSC_C_I2CEN | HAL_BSC_C_ST | HAL_BSC_C_CLEAR | (Read ? HAL_BSC_C_READ : 0);
++    Index = 0;
++    Start = HAL_REG(HAL_ST_CLO);
++    do {
++        Status = HAL_REG(HAL_BSC1_S);
++        if (Index < Length && (Status & (Read ? HAL_BSC_S_RXD : HAL_BSC_S_TXD)) != 0) {
++            if (Read) {
++                Buffer[Index] = (UCHAR)HAL_REG(HAL_BSC1_FIFO);
++
++            } else {
++                HAL_REG(HAL_BSC1_FIFO) = Buffer[Index];
++            }
++
++            Index += 1;
++        }
++
++    } while ((Status & HAL_BSC_S_DONE) == 0 && HAL_REG(HAL_ST_CLO) - Start < 10000);
++
++    HAL_REG(HAL_BSC1_S) = HAL_BSC_S_CLKT | HAL_BSC_S_ERR | HAL_BSC_S_DONE;
++    return (Status & HAL_BSC_S_DONE) != 0 &&
++           (Status & (HAL_BSC_S_ERR | HAL_BSC_S_CLKT)) == 0 &&
++           Index == Length;
++}
++
++BOOLEAN
++HalpReadClockRegisters (
++    OUT PUCHAR Registers
+=1 49 6
++    This routine reads the time registers of the realtime clock: it sets the
++    clock's register address to the first, then reads them in sequence.
+=1 59 3
++    Registers - Supplies a pointer to the buffer that receives the registers.
+=1 64 3
++    TRUE if the clock answered, FALSE otherwise.
+=1 70 5
++    UCHAR Address = RTC_SECOND;
++
++    return HalpClockTransfer(&Address, 1, FALSE) &&
++           HalpClockTransfer(Registers, RTC_REGISTERS, TRUE);
++}
++
++BOOLEAN
++HalpWriteClockRegisters (
++    IN PUCHAR Registers
+=1 49 6
++    This routine writes the time registers of the realtime clock, the
++    register address of the first followed by their values.
+=1 59 3
++    Registers - Supplies a pointer to the register values.
+=1 64 3
++    TRUE if the clock answered, FALSE otherwise.
+=1 70 5
++    UCHAR Buffer[RTC_REGISTERS + 1];
++    ULONG Index;
++
++    Buffer[0] = RTC_SECOND;
++    for (Index = 0; Index < RTC_REGISTERS; Index += 1) {
++        Buffer[Index + 1] = Registers[Index];
++    }
++
++    return HalpClockTransfer(Buffer, RTC_REGISTERS + 1, FALSE);
++}

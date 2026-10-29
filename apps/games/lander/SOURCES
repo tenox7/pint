@@ -1,0 +1,11 @@
+MAJORCOMP=games
+MINORCOMP=lander
+
+TARGETNAME=lander
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+SOURCES=lander.c
+
+UMTYPE=windows
+UMENTRY=winmain

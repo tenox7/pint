@@ -1,0 +1,217 @@
+#ntdiff private/ntos/boot/lib/mips/ntsetup.c private/ntos/boot/lib/alpha/ntsetup.c
+=1 1 10
++    This module implements the ARM specific routines necessary to set up the
++    NT specific data structures (the ARM BOOT\LIB\MIPS\NTSETUP.C).
+=1 18 3
++    Kernel mode only.
+=1 24 5
++#include "string.h"
+=1 69 6
++
++static VOID
++BlpCacheGeometry (
++    IN PLOADER_PARAMETER_BLOCK BlLoaderBlock,
++    IN CONFIGURATION_TYPE Type,
++    OUT PULONG CacheSize,
++    OUT PULONG FillSize
+=1 79 6
++    This function computes the size and fill size of a cache from its entry
++    in the configuration tree, or returns zero for both if there is none.
+=1 96 4
+=1 101 1
+=1 105 2
+=1 178 3
++                                           Type,
++                                           NULL);
++
++    if (ConfigEntry == NULL) {
++        *CacheSize = 0;
++        *FillSize = 0;
++        return;
++    }
++
+=1 185 2 -4
++    *FillSize = LinesPerBlock * LineSize;
++    *CacheSize = 1 << ((ConfigEntry->ComponentEntry.Key & 0xffff) + PAGE_SHIFT);
++}
++
++static ARC_STATUS
++BlpAllocateStack (
+=2 90 1
++    OUT PULONG StackTop
+=1 79 6
++    This function allocates the pages of a kernel stack and returns the KSEG0
++    address of its top.
+=1 96 4
++    ULONG KernelPage;
++    ARC_STATUS Status;
++
++    Status = BlAllocateDescriptor(MemoryType,
+=1 275 4
++    if (Status == ESUCCESS) {
++        *StackTop = (KSEG0_BASE | (KernelPage << PAGE_SHIFT)) + KERNEL_STACK_SIZE;
++    }
++
++    return Status;
+=1 141 3 -4
++// The variables of the firmware's environment the HAL takes over: those of the
++// ARC specification and LastKnownGood of the configuration manager.
++//
++
++static PCHAR BlpEnvironmentVariables[] = {
++    "CONSOLEIN",
++    "CONSOLEOUT",
++    "FWSEARCHPATH",
++    "SYSTEMPARTITION",
++    "OSLOADER",
++    "OSLOADPARTITION",
++    "OSLOADFILENAME",
++    "OSLOADOPTIONS",
++    "LOADIDENTIFIER",
++    "AUTOLOAD",
++    "COUNTDOWN",
++    "TIMEZONE",
++    "LASTKNOWNGOOD"
++};
++
++static PCHAR
++BlpCopyEnvironment (
++    VOID
+=1 79 6
++    This function copies the variables of the firmware's environment into the
++    loader's heap for the HAL, as "NAME=value" strings, each zero terminated,
++    ended by an empty one: a Jazz HAL reads them from the nonvolatile RAM, which
++    the Pi has not, and the firmware is not resident once the system runs.
+=1 91 3
++    The address of the copy, or NULL if the heap is exhausted.
+=1 96 4
++    PCHAR Environment;
++    ULONG Index;
++    ULONG Length;
++    PCHAR Next;
++    PCHAR Value;
++
++    Length = 1;
++    for (Index = 0; Index < sizeof(BlpEnvironmentVariables) / sizeof(PCHAR); Index += 1) {
++        Value = ArcGetEnvironmentVariable(BlpEnvironmentVariables[Index]);
++        if (Value != NULL) {
++            Length += strlen(BlpEnvironmentVariables[Index]) + strlen(Value) + 2;
+=1 140 3
++    Environment = (PCHAR)BlAllocateHeap(Length);
++    if (Environment == NULL) {
++        return NULL;
++    }
++
++    Next = Environment;
++    for (Index = 0; Index < sizeof(BlpEnvironmentVariables) / sizeof(PCHAR); Index += 1) {
++        Value = ArcGetEnvironmentVariable(BlpEnvironmentVariables[Index]);
++        if (Value != NULL) {
++            sprintf(Next, "%s=%s", BlpEnvironmentVariables[Index], Value);
++            Next += strlen(Next) + 1;
+=1 140 3
++    *Next = 0;
++    return Environment;
++}
++
++ARC_STATUS
++BlSetupForNt (
+=1 78 7
++    This function initializes the ARM specific kernel data structures
+=1 86 14
++    PARM_LOADER_BLOCK Arm = &BlLoaderBlock->u.Arm;
+=1 101 3
++    PCHAR NewIdentifier;
++    ULONG ProcessorId;
++    ULONG Page;
+=1 110 4
++    // the processor and floating point identification to the processor
++    // identification string: the variant and revision of the main ID and
++    // of the floating point system ID registers.
+=1 116 13
++                    (ProcessorId >> 20) & 0xf,
++                    ProcessorId & 0xf,
++                    (FloatingId >> 4) & 0xf,
++                    FloatingId & 0xf);
+=1 133 11
+=1 174 2
++    // be present on all ARC compliant systems. The secondary cache is
++    // optional and unified.
++    //
++
++    BlpCacheGeometry(BlLoaderBlock, PrimaryDcache,
++                     &Arm->FirstLevelDcacheSize, &Arm->FirstLevelDcacheFillSize);
++
++    BlpCacheGeometry(BlLoaderBlock, PrimaryIcache,
++                     &Arm->FirstLevelIcacheSize, &Arm->FirstLevelIcacheFillSize);
++
++    if (Arm->FirstLevelDcacheSize == 0 || Arm->FirstLevelIcacheSize == 0) {
+=1 192 3
++    BlpCacheGeometry(BlLoaderBlock, SecondaryCache,
++                     &Arm->SecondLevelDcacheSize, &Arm->SecondLevelDcacheFillSize);
++
++    Arm->SecondLevelIcacheSize = 0;
++    Arm->SecondLevelIcacheFillSize = 0;
++
++    //
++    // Allocate the DPC, idle thread kernel, and panic stacks for the boot
++    // processor.
++    //
++
++    Status = BlpAllocateStack(LoaderStartupDpcStack, &Arm->InterruptStack);
+=1 279 1
++        return Status;
++    }
++
++    Status = BlpAllocateStack(LoaderStartupKernelStack, &BlLoaderBlock->KernelStack);
+=1 279 1
++        return Status;
++    }
++
++    Status = BlpAllocateStack(LoaderStartupPanicStack, &Arm->PanicStack);
+=1 279 1
++        return Status;
+=1 141 3
+=1 319 3
++    Status = BlAllocateDescriptor(LoaderStartupPcrPage, 0, 2, &Arm->PcrPage);
+=1 279 1
++        return Status;
++    }
++
++    Arm->PcrPage2 = Arm->PcrPage + 1;
++    RtlZeroMemory((PVOID)(KSEG0_BASE | (Arm->PcrPage << PAGE_SHIFT)), PAGE_SIZE * 2);
++
++    //
++    // Allocate and zero the two pages of the PDR.
++    //
++
++    Status = BlAllocateDescriptor(LoaderStartupPdrPage, 0, 2, &Arm->PdrPage);
+=1 279 1
++        return Status;
++    }
++
++    RtlZeroMemory((PVOID)(KSEG0_BASE | (Arm->PdrPage << PAGE_SHIFT)), PAGE_SIZE * 2);
++
++    //
++    // ARM has no exception page whose second half could hold the processor
++    // control block, the idle thread object, and the idle process object (the
++    // MIPS KERNEL_STRUCTURES), so a page is allocated for each and zeroed.
++    //
++
++    Status = BlAllocateDescriptor(LoaderStartupPdrPage, 0, 3, &Page);
+=1 279 1
++        return Status;
++    }
++
++    RtlZeroMemory((PVOID)(KSEG0_BASE | (Page << PAGE_SHIFT)), PAGE_SIZE * 3);
++    BlLoaderBlock->Prcb = KSEG0_BASE | (Page << PAGE_SHIFT);
++    BlLoaderBlock->Process = KSEG0_BASE | ((Page + 1) << PAGE_SHIFT);
++    BlLoaderBlock->Thread = KSEG0_BASE | ((Page + 2) << PAGE_SHIFT);
++
++    //
++    // Copy the firmware's environment for the HAL.
++    //
++
++    Arm->Environment = BlpCopyEnvironment();
+=1 368 9
++    return ESUCCESS;
++}

@@ -1,0 +1,5 @@
+#ntdiff private/ntos/w32/ntgdi/direct/ddraw/ddsover.c
+=1 1 1596
++	LEAVE_DDRAW();
++	return DDERR_UNSUPPORTED;
+=1 1597 100

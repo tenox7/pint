@@ -1,0 +1,5 @@
+#ntdiff private/rpc/runtime/mtrt/wmsgclnt.cxx
+=1 1 1234
++            // (the call: the address of the function is never 0)
+=1 843 2 4
+=1 1237 3018

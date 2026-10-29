@@ -1,0 +1,44 @@
+#ntdiff private/rpc/midl20/codegen/pickle.cxx
+=1 1 28
++void GenArmArgumentBlock( CCB * pCCB, CG_PROC * pProc );
+=1 28 121
++    // For ARM, the parameters copied to a block (GenArmArgumentBlock): the
++    // engine takes the addresses of their copies.
++
++    pStream->Write( IF_ARM );
+=1 465 2
++    pStream->NewLine();
++    GenArmArgumentBlock( pCCB, this );
++    GenMesProcEncodeDecodeCall( pCCB, 0, TRUE );
+=1 479 1
+=1 481 2
++    pStream->Write( "#else" );
+=1 148 3
+=1 145 1 -4
++    pStream->NewLine();
+=1 150 10
++    BOOL        fAlpha,
++    BOOL        fArm )
+=1 161 10
++    fArm    - The ARM version flag (the parameters in the ARM block).
+=1 171 70
++        CG_NDR *    pOldCGNodeContext = pCCB->SetCGNodeContext( this );
++
+=1 241 2
++            if ( fArm )
++                {
++                char    Buffer[80];
++                PNAME   pName;
++
++                sprintf( Buffer, "( unsigned char __RPC_FAR * )"
++                         ARM_ARGS_VAR_NAME " + %ld",
++                         pCG->GetStackOffset( pCCB, MIPS_STACK_SIZING ) );
++                pName = new char [strlen( Buffer ) + 1];
++                strcpy( pName, Buffer );
++                pProc->SetParam( new expr_variable( pName ) );
++                continue;
++                }
+=1 243 6
++
++        pCCB->SetCGNodeContext( pOldCGNodeContext );
+=1 249 760

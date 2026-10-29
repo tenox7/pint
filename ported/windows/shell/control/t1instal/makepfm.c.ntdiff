@@ -1,0 +1,6 @@
+#ntdiff private/windows/shell/control/t1instal/makepfm.c
+=1 1 2162
++  return(FALSE);
+=1 2163 48
++  return(FALSE);
+=1 2211 79

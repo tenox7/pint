@@ -1,0 +1,16 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=ping
+
+TARGETNAME=ping
+TARGETPATH=obj
+TARGETTYPE=UMAPPL_NOLIB
+USE_CRTDLL=1
+
+INCLUDES=$(BASEDIR)\private\inc
+
+SOURCES=
+
+UMTYPE=console
+UMAPPL=ping
+UMLIBS=$(BASEDIR)\public\sdk\lib\*\icmp.lib \
+       $(BASEDIR)\public\sdk\lib\*\wsock32.lib

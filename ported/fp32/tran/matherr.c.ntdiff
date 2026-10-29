@@ -1,0 +1,4 @@
+#ntdiff private/fp32/tran/matherr.c
+=1 1 30
++int _matherr(struct _exception *pexcept)
+=1 32 3

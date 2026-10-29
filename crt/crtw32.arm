@@ -1,0 +1,74 @@
+# The ARM_SOURCES of the components of the Visual C++ 4.2 run-time (sdktools\vctools\crt):
+# their MIPS_SOURCES for ARM, the portable C of what MIPS has in assembler and the ARM
+# assembler of what MIPS has in assembler. A line: DIRECTORY SOURCE. DIRECTORY is a
+# component, for each of its library types that has MIPS_SOURCES (misc of DLLLIB has none),
+# or one library type (crtw32\misc\nt); SOURCE is named from the directory of the library
+# type, as there: ..\memccpy.c, ..\arm\chandler.c (the port's, crt\<path>).
+crtw32/eh ../arm/trnsctrl.cpp
+crtw32/eh ../arm/ehstate.cpp
+crtw32/eh ../arm/handlers.asm
+crtw32/helper ../arm/sdiv.asm
+crtw32/helper ../arm/udiv.asm
+crtw32/helper ../arm/sdiv64.asm
+crtw32/helper ../arm/udiv64.asm
+crtw32/helper ../arm/srsh.asm
+crtw32/helper ../arm/ursh.asm
+crtw32/helper ../arm/divby0.asm
+crtw32/helper ../arm/rthelpc.c
+crtw32/helper ../arm/llcvt.c
+crtw32/misc ../arm/chandler.c
+crtw32/misc ../arm/setjmp.asm
+crtw32/misc ../arm/setjmpex.asm
+crtw32/misc ../arm/longjmp.asm
+crtw32/misc ../arm/jmpuwind.asm
+crtw32/startup ../arm/chkstk.asm
+crtw32/mbstring ../mbscat.c
+crtw32/mbstring ../mbsdup.c
+crtw32/string ../memccpy.c
+crtw32/string ../memchr.c
+crtw32/string ../memcmp.c
+crtw32/string ../memcpy.c
+crtw32/string ../memicmp.c
+crtw32/string ../memmove.c
+crtw32/string ../memset.c
+crtw32/string ../strcat.c
+crtw32/string ../strchr.c
+crtw32/string ../strcmp.c
+crtw32/string ../strcspn.c
+crtw32/string ../strdup.c
+crtw32/string ../stricmp.c
+crtw32/string ../strlen.c
+crtw32/string ../strncat.c
+crtw32/string ../strncmp.c
+crtw32/string ../strncpy.c
+crtw32/string ../strnicmp.c
+crtw32/string ../strnset.c
+crtw32/string ../strpbrk.c
+crtw32/string ../strrchr.c
+crtw32/string ../strrev.c
+crtw32/string ../strset.c
+crtw32/string ../strspn.c
+crtw32/string ../strstr.c
+fpw32/tran ../asincos.c
+fpw32/tran ../atan.c
+fpw32/tran ../ceil.c
+fpw32/tran ../exp.c
+fpw32/tran ../fabs.c
+fpw32/tran ../floor.c
+fpw32/tran ../fmod.c
+fpw32/tran ../hypot.c
+fpw32/tran ../log.c
+fpw32/tran ../modf.c
+fpw32/tran ../pow.c
+fpw32/tran ../powhlp.c
+fpw32/tran ../sincos.c
+fpw32/tran ../sincosh.c
+fpw32/tran ../sqrt.c
+fpw32/tran ../tan.c
+fpw32/tran ../tanh.c
+fpw32/tran ../arm/dtoul.asm
+fpw32/tran ../arm/filter.c
+fpw32/tran ../arm/fpctrl.asm
+fpw32/tran ../arm/frnd.asm
+fpw32/tran ../arm/huge.asm
+fpw32/tran ../arm/ieee.c

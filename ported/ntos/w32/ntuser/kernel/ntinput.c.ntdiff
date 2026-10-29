@@ -1,0 +1,4 @@
+#ntdiff private/ntos/w32/ntuser/kernel/ntinput.c
+=1 1 1752
++    return 0;
+=1 1753 669

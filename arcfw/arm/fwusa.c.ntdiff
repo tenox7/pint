@@ -1,0 +1,18 @@
+#ntdiff private/ntos/fw/mips/fwusa.c private/ntos/fw/alpha/fwusa.c
+=1 1 10
++    This module contains the firmware strings in English (the ARM
++    FW\MIPS\FWUSA.C).
+=1 20 3
++#include "fwp.h"
++
++PCHAR FW_TITLE_MSG = "ARC Firmware for the Raspberry Pi";
+=2 35 2
+=1 39 1
++PCHAR FW_NOT_ENOUGH_ENTRIES_MSG = "Error: Not enough entries in the lookup table.\r\n";
+=1 59 4
+=1 42 2
++PCHAR FW_RUN_ARCDOS_MSG = "Run the ARC DOS shell";
+=1 45 4
+=1 53 5
+=1 64 2
+=1 85 26

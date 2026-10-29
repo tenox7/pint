@@ -1,0 +1,18 @@
+MAJORCOMP=games
+MINORCOMP=wintown
+
+TARGETNAME=wintown
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+INCLUDES=..
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\comdlg32.lib
+
+# WinTown and the simulator of Micropolis (s_*.c) it builds on
+SOURCES=anim.c animtab.c assets.c budget.c charts.c disastr.c eval.c gdifix.c main.c mapgen.c \
+        newgame.c notify.c scenario.c sim.c sprite.c tiles.c tools.c \
+        s_disast.c s_eval.c s_gen.c s_power.c s_scan.c s_sim.c s_traf.c s_zone.c \
+        wintown.rc
+
+UMTYPE=windows
+UMENTRY=winmain

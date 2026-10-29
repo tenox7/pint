@@ -1,0 +1,6 @@
+#ntdiff private/windows/setup/setupapi/inf.h
+=1 1 399
++#elif defined(_ARM_)
++
++#define DISTR_INF_NTPLATFORM_SUFFIX (TEXT(".") INFSTR_PLATFORM_NTARM)
+=1 399 229

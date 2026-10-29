@@ -1,0 +1,7 @@
+#ntdiff private/sm/server/sminit.c
+=1 1 1291
++    case PROCESSOR_ARCHITECTURE_ARM:
++        ValueData = L"ARM";
+=1 1290 569
+=1 2817 5
+=1 1862 2833

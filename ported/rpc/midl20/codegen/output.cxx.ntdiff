@@ -1,0 +1,6 @@
+#ntdiff private/rpc/midl20/codegen/output.cxx
+=1 1 508
++                        pStream->Write("#if defined(_MIPS_) || defined(_PPC_) || defined(_ARM_)");
+=1 510 19
++                        pStream->Write( "#if defined(_MIPS_) || defined(_ARM_)" );
+=1 530 4738

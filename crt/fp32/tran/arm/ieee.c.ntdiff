@@ -1,0 +1,27 @@
+#ntdiff private/fp32/tran/mips/ieee.c private/fp32/tran/alpha/ieee.c
+=1 1 6
++*   IEEE control and status routines (the MIPS ones over the ARM FPSCR).
+=1 8 18
++extern unsigned int _get_fpscr();
++extern void _set_fpscr(unsigned int);
++
++#define STATUSMASK 0x0000009f
++#define FZ	   (1<<24)
++#define CWMASK	   0x01c01f00
+=1 32 18
++    return _abstract_sw(_get_fpscr());
+=1 51 21
++    status = _get_fpscr();
+=1 73 1
++    _set_fpscr(status);
+=1 75 27
++    oldCw = _get_fpscr();
+=1 103 7
++    _set_fpscr(newCw);
+=1 111 31
++	excptrs->ContextRecord->Fpscr = _get_fpscr(); //use current FZ bit
+=1 143 66
++    if (cw & FZ) {
+=1 210 71
++	cw |= FZ;
+=1 282 41

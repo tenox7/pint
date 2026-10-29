@@ -1,0 +1,5 @@
+# rtl\boot ARM_SOURCES (its MIPS_SOURCES: debugstb.s largeint.s lzntmips.s xxmvmem.s; lznt1.c
+# has the C form of lzntmips.s for the other machines)
+rtl/debugstb.asm
+rtl/largeint.c
+rtl/xxmvmem.asm

@@ -1,0 +1,4 @@
+#ntdiff private/windows/spooler/splsetup/upgrade.c
+=1 1 634
++                                PlatformARM,
+=1 628 73

@@ -1,0 +1,4 @@
+# sdktools\imagehlp: the ARM sources beside its walkers (walkx86, walkmip, walkalp, walkppc) and the
+# per-machine checksum routine (i386\chksum.asm, mips\chksum.s, alpha\chksum.s, ppc\chksum.c)
+chksum.asm
+walkarm.c

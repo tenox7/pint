@@ -1,0 +1,2 @@
+# NTCON\SERVER ARM_SOURCES (its MIPS_SOURCES: mips\thunk.s)
+w32/thunk.asm

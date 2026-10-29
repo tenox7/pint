@@ -1,0 +1,49 @@
+#ntdiff ../nt35/PRIVATE/NET/RAS/SRC/AUTH/COMMON/CRYPT/CBC.C
++/*
++** The CBC routines of the LSA crypt engine, whose source is not in the tree:
++** those of its RAS copy (NET\RAS\SRC\AUTH\COMMON\CRYPT\CBC.C) as the engine
++** objects define them, with an 8 byte key (DES_CBC) and a 7 byte LAN Manager
++** key (DES_CBC_LM).
++*/
++
+=1 5 1
++#include "engine.h"
++
++
++static unsigned Cbc(
++    void (_cdecl *InitKey)(const char *),
+=1 9 2
++    unsigned char *IV,
++    unsigned char *Source,
++    unsigned char *Dest,
+=1 14 3
++   unsigned char buffer[8];
++   unsigned char buffer2[8];
++   unsigned char buffer3[8];
++   unsigned char *inp = Source;
++   unsigned char *outp = Dest;
+=1 22 6
++      return CRYPT_ERR;
+=1 29 3
++      for (counter = 0 ; counter < Size / 8; counter++ ) {
+=1 33 15
++      return CRYPT_OK;
+=1 49 4
++      for (counter = 0 ; counter < Size / 8 ; counter++ ) {
+=1 54 10
++      return CRYPT_OK;
++   }
++
++   return CRYPT_ERR;
+=1 68 3
++unsigned DES_CBC(unsigned Option, const char *Key, unsigned char *IV,
++                 unsigned char *Source, unsigned char *Dest, unsigned Size)
++{
++   return Cbc(InitNormalKey, Option, Key, IV, Source, Dest, Size);
++}
++
++unsigned DES_CBC_LM(unsigned Option, const char *Key, unsigned char *IV,
++                    unsigned char *Source, unsigned char *Dest, unsigned Size)
++{
++   return Cbc(InitLanManKey, Option, Key, IV, Source, Dest, Size);
++}

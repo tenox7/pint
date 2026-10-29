@@ -1,0 +1,12 @@
+#ntdiff private/lsa/server/dbinstal.c
+=1 1 1032
++
++            //
++            // No domain id: the primary domain is a workgroup, which has no SID.
++            //
++
++            PrimaryDomainSid = NULL;
++            goto PrimaryDomainDone;
+=1 1035 90
++PrimaryDomainDone:
+=1 1125 211

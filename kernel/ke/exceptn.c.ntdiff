@@ -1,0 +1,154 @@
+#ntdiff private/ntos/ke/mips/exceptn.c private/ntos/ke/alpha/exceptn.c private/ntos/ke/ppc/exceptn.c
+=1 1 13
++    ARM port of KE/MIPS/EXCEPTN.C. A breakpoint exception carries the
++    breakpoint code in its first parameter (ke\trapc.c), as the MIPS break
++    code is. The misaligned references that ARMv7 does not perform in
++    hardware are emulated (ke\alignem.c), by default in user and in kernel
++    mode as on Alpha: Microsoft C for ARM moves data as the alignment of
++    its type allows. The VFPv4 unit implements IEEE arithmetic completely,
++    so there is no floating point emulation.
+=1 13 9
+=1 24 4
++
++//
++// Define the breakpoint codes.
++//
++
++#define KDDEBUG_BREAKPOINT BREAKIN_BREAKPOINT
++#define DIVIDE_BREAKPOINT DIVIDE_BY_ZERO_BREAKPOINT
++#define MULTIPLY_BREAKPOINT MULTIPLY_OVERFLOW_BREAKPOINT
++#define OVERFLOW_BREAKPOINT DIVIDE_OVERFLOW_BREAKPOINT
+=1 39 5
++#define KERNEL_BREAKPOINT_INSTRUCTION KERNEL_BREAKPOINT
+=3 38 15
+=2 56 2
+=1 822 4
++    );
++
++VOID
++KiDataBusError (
+=2 35 5
++VOID
++KiInstructionBusError (
+=2 35 5
+=2 101 33
++    ULONG Index;
+=2 134 6
++        ContextFrame->Sp = TrapFrame->Sp;
++        ContextFrame->Lr = TrapFrame->Lr;
++        ContextFrame->Pc = TrapFrame->Pc;
++        ContextFrame->Cpsr = TrapFrame->Cpsr;
+=2 150 7
++        ContextFrame->R0 = TrapFrame->R0;
++        ContextFrame->R1 = TrapFrame->R1;
++        ContextFrame->R2 = TrapFrame->R2;
++        ContextFrame->R3 = TrapFrame->R3;
++        ContextFrame->R4 = ExceptionFrame->R4;
++        ContextFrame->R5 = ExceptionFrame->R5;
++        ContextFrame->R6 = ExceptionFrame->R6;
++        ContextFrame->R7 = ExceptionFrame->R7;
++        ContextFrame->R8 = ExceptionFrame->R8;
++        ContextFrame->R9 = ExceptionFrame->R9;
++        ContextFrame->R10 = ExceptionFrame->R10;
++        ContextFrame->R11 = ExceptionFrame->R11;
++        ContextFrame->R12 = TrapFrame->R12;
+=2 209 7
++        for (Index = 0; Index < 8; Index += 1) {
++            ContextFrame->u.D[Index] = TrapFrame->VolatileD[Index];
++            ContextFrame->u.D[Index + 16] = TrapFrame->VolatileD[Index + 8];
++            ContextFrame->u.D[Index + 24] = TrapFrame->VolatileD[Index + 16];
++        }
++
++        ContextFrame->u.D[8] = ExceptionFrame->D8;
++        ContextFrame->u.D[9] = ExceptionFrame->D9;
++        ContextFrame->u.D[10] = ExceptionFrame->D10;
++        ContextFrame->u.D[11] = ExceptionFrame->D11;
++        ContextFrame->u.D[12] = ExceptionFrame->D12;
++        ContextFrame->u.D[13] = ExceptionFrame->D13;
++        ContextFrame->u.D[14] = ExceptionFrame->D14;
++        ContextFrame->u.D[15] = ExceptionFrame->D15;
+=3 189 3
++    return;
++}
++
+=1 178 41
++    ULONG Index;
+=1 219 6
++        TrapFrame->Sp = ContextFrame->Sp;
++        TrapFrame->Lr = ContextFrame->Lr;
++        TrapFrame->Pc = ContextFrame->Pc;
++        TrapFrame->Cpsr = SANITIZE_PSR(ContextFrame->Cpsr, PreviousMode);
+=1 235 7
++        TrapFrame->R0 = ContextFrame->R0;
++        TrapFrame->R1 = ContextFrame->R1;
++        TrapFrame->R2 = ContextFrame->R2;
++        TrapFrame->R3 = ContextFrame->R3;
++        ExceptionFrame->R4 = ContextFrame->R4;
++        ExceptionFrame->R5 = ContextFrame->R5;
++        ExceptionFrame->R6 = ContextFrame->R6;
++        ExceptionFrame->R7 = ContextFrame->R7;
++        ExceptionFrame->R8 = ContextFrame->R8;
++        ExceptionFrame->R9 = ContextFrame->R9;
++        ExceptionFrame->R10 = ContextFrame->R10;
++        ExceptionFrame->R11 = ContextFrame->R11;
++        TrapFrame->R12 = ContextFrame->R12;
+=1 146 7
++        for (Index = 0; Index < 8; Index += 1) {
++            TrapFrame->VolatileD[Index] = ContextFrame->u.D[Index];
++            TrapFrame->VolatileD[Index + 8] = ContextFrame->u.D[Index + 16];
++            TrapFrame->VolatileD[Index + 16] = ContextFrame->u.D[Index + 24];
++        }
++
++        ExceptionFrame->D8 = ContextFrame->u.D[8];
++        ExceptionFrame->D9 = ContextFrame->u.D[9];
++        ExceptionFrame->D10 = ContextFrame->u.D[10];
++        ExceptionFrame->D11 = ContextFrame->u.D[11];
++        ExceptionFrame->D12 = ContextFrame->u.D[12];
++        ExceptionFrame->D13 = ContextFrame->u.D[13];
++        ExceptionFrame->D14 = ContextFrame->u.D[14];
++        ExceptionFrame->D15 = ContextFrame->u.D[15];
+=3 339 3
++    return;
++}
++
+=1 312 16
++    If the exception is a bus error, the bus error processing routine is
++    called. If the previous mode is kernel, then the exception dispatcher is
++    called directly to process the exception. Otherwise the exception record,
++    exception frame, and trap frame contents are copied to the user mode
++    stack. The contents of the exception frame and trap are then modified
++    such that when control is returned, execution will commense in user mode
++    in a routine which will call the exception dispatcher.
+=1 347 22
+=3 430 4
+=1 377 4
+=1 400 11
+=1 428 21
+=3 436 4
+=3 444 16
+=3 465 11
+=1 489 8
++            TrapFrame->Pc += 2;
+=1 498 154
+=3 686 3
+=2 887 16
++                UserStack1 = (ContextFrame.Sp & (~15)) - Length;
+=1 688 14
+=2 918 4
+=1 706 12
++                TrapFrame->Sp = UserStack2;
++                ExceptionFrame->R4 = UserStack1;
++                ExceptionFrame->R5 = UserStack2;
+=3 779 9
+=1 731 7
++                TrapFrame->Pc = KeUserExceptionDispatcher & ~1;
++                TrapFrame->Cpsr = (TrapFrame->Cpsr & ~CPSR_IT_MASK) | PSR_THUMB;
+=3 801 36
+=1 775 11
++                TrapFrame->Pc = (ULONG)USPCR2;
+=3 850 34
++
+=1 822 72
++    TrapFrame->Pc = KeRaiseUserExceptionDispatcher & ~1;
++    TrapFrame->Cpsr = (TrapFrame->Cpsr & ~CPSR_IT_MASK) | PSR_THUMB;
+=1 895 2

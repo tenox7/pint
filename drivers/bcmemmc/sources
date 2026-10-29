@@ -1,0 +1,12 @@
+MAJORCOMP=ntos
+MINORCOMP=miniport
+
+TARGETNAME=bcmemmc
+TARGETPATH=\nt\public\sdk\lib
+TARGETTYPE=DRIVER
+
+INCLUDES=..\..\inc
+
+TARGETLIBS=\nt\public\sdk\lib\*\scsiport.lib
+
+SOURCES=bcmemmc.c

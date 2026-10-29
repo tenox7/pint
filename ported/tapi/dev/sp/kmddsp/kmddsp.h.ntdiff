@@ -1,0 +1,6 @@
+#ntdiff private/tapi/dev/sp/kmddsp/kmddsp.h
+=1 1 35
++struct _ASYNC_REQUEST_WRAPPER;
++
++typedef LONG (*POSTPROCESSPROC)(struct _ASYNC_REQUEST_WRAPPER *, LONG, LPDWORD);
+=1 37 116

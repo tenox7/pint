@@ -1,0 +1,7 @@
+#ntdiff private/windows/setup/localinf/local.c
+=1 1 40
++#define NUMBER_OF_PLATFORMS 5
+=1 42 6
++     { "ppc",   NULL },
++     { "arm",   NULL }};
+=1 49 195

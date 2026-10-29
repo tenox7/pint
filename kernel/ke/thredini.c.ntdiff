@@ -1,0 +1,42 @@
+#ntdiff private/ntos/ke/mips/thredini.c private/ntos/ke/alpha/thredini.c
+=1 1 10
++    This module implements the machine dependent function to set the initial
++    context and data alignment handling mode for a thread object.
++
++    ARM port of KE/MIPS/THREDINI.C.
+=1 13 9
+=1 24 16
++
++#define PSR_MODE_SVC 0x13
++#define PSR_F        0x40
++#define PSR_A        0x100
++
+=1 41 39
++        if the thread is a user thread and will execute in user mode.
+=1 82 8
+=2 106 12
++        TrFrame = (PKTRAP_FRAME)((InitialStack - sizeof(KTRAP_FRAME)) & 0xfffffff0);
+=2 120 18
+=1 121 11
++        ExFrame->Lr = 0;
++
++    } else {
++        TrFrame = NULL;
++        CxFrame = (PKEXCEPTION_FRAME)((InitialStack -
+=2 166 11
++    // The thread starts in supervisor mode with interrupts enabled, as a
++    // thread that switched in KiSwapThread resumes, at DISPATCH_LEVEL until
++    // KiThreadStartup lowers IRQL to APC_LEVEL; asynchronous aborts and fast
++    // interrupts stay masked, as in all kernel code.
+=1 147 3
++    CxFrame->R11 = (ULONG)TrFrame;
++    CxFrame->R4 = (ULONG)ContextRecord;
++    CxFrame->R5 = (ULONG)StartContext;
++    CxFrame->R6 = (ULONG)StartRoutine;
++    CxFrame->R7 = (ULONG)SystemRoutine;
++    CxFrame->Fpscr = 0;
++    CxFrame->Psr = PSR_A | PSR_F | PSR_MODE_SVC;
+=2 198 5
+=1 161 3
++
+=2 207 121

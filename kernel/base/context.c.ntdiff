@@ -1,0 +1,41 @@
+#ntdiff private/windows/base/client/mips/context.c
+=1 1 11
++    Win32 (the ARM port of BASE\CLIENT\MIPS\CONTEXT.C).
+=1 13 48
+=1 64 5
+=1 70 1
++    Context->Sp = (ULONG)InitialSp;
++    Context->Lr = 1;
++    Context->Cpsr = 0x10;
+=1 74 3
++            Context->Pc = (ULONG)BaseThreadStart;
++
++        } else {
++            Context->Pc = (ULONG)BaseFiberStart;
++        }
++
++        Context->R0 = (ULONG)InitialPc;
++        Context->R1 = (ULONG)Parameter;
++    } else {
++
++        //
++        // The process starts in kernel32, which is mapped before the thread
++        // runs in user mode, as on the other machines but MIPS.
++        //
++
++        Context->Pc = (ULONG)BaseProcessStart;
++        Context->R0 = (ULONG)InitialPc;
++    }
++
++    //
++    // A Thumb start address has the Thumb state bit set: the thread begins
++    // in Thumb state at the address.
++    //
++
++    if (Context->Pc & 1) {
++        Context->Pc &= ~1;
++        Context->Cpsr |= 0x20;
+=1 94 31
++    BaseThreadStart((LPTHREAD_START_ROUTINE)Fiber->FiberContext.R0,
++                    (LPVOID)Fiber->FiberContext.R1);
++}

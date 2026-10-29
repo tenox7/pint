@@ -1,0 +1,175 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/eh/frame.cpp
+=1 1 117
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 119 60
++#if defined(_M_ARM)
+=1 192 5
++#elif defined(_M_MRX000) /*IFSTRIP=IGN*/
+=1 180 73
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 254 64
++#if defined(_M_PPC) || defined(_M_ARM)
+=1 319 18
++#if defined(_M_ARM)
++                        if( (_GetUnwindContext() != NULL) && IS_TARGET_UNWIND(PER_FLAGS(pExcept))
++                          && (pDC->TargetPc & ~1) == _GetUnwindContext()->Pc ) {
++#else
+=1 337 1
++#endif
+=1 338 29
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 368 15
++#if defined(_M_ARM)
++                        //
++                        // The target of any other unwind (a long jump) goes on at the
++                        // target address: unwind the frame to the state of that address.
++                        //
++                        if (IS_TARGET_UNWIND(PER_FLAGS(pExcept))) {
++                                __FrameUnwindToTargetState(pRN, pDC, pFuncInfo);
+=1 380 3
++#if defined(_M_PPC) || defined(_M_ARM)
+=1 384 15
++#if defined(_M_ARM)
+=1 399 1
++          && (PER_MAGICNUM(pExcept) > EH_MAGIC_NUMBER1) )
++            {
++            _SetThrowImageBase( (ULONG)PER_PTHROWIB(pExcept) );
++            }
++#endif
+=1 399 146
++#if defined(_M_ARM)
++        //
++        // The images of the function and of the thrown object, for after a
++        // catch that rethrew.
++        //
++        ULONG ImageBase = _GetImageBase();
++        ULONG ThrowImageBase = (ULONG)PER_PTHROWIB(pExcept);
++        _SetThrowImageBase(ThrowImageBase);
++#endif
++
++#if _WIN32 && (!defined(_M_MRX000) || defined(_M_ARM)) /*IFSTRIP=IGN*/
+=1 546 24
++#if defined(_M_ARM)
++                    const int *ppCatchable = THROW_CTLIST(*PER_PTHROW(pExcept));
++#define CATCHABLE(pp)   ((CatchableType *)_RVA_TO_PTR(_GetThrowImageBase(), *(pp)))
++#else
+=1 570 1
++#define CATCHABLE(pp)   (*(pp))
++#endif
+=1 571 3
++                        if (TypeMatch( pCatch, CATCHABLE(ppCatchable), PER_PTHROW(pExcept)) )
+=1 575 21
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 597 9
++											 pCatch, CATCHABLE(ppCatchable), pEntry,
+=1 607 1
++#if defined(_M_ARM)
++								_SetImageBase(ImageBase);
++								_SetThrowImageBase(ThrowImageBase);
++#endif
+=1 608 13
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 622 94
++#if defined(_M_ARM)
++    ULONG ImageBase = _GetImageBase();  // The image of the function, for after the callouts
++#endif
++
+=1 716 8
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 725 14
++#if defined(_M_ARM)
++                _SetImageBase(ImageBase);
+=1 738 12
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 751 22
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 774 11
++#if defined(_M_ARM)
++            _SetImageBase(ImageBase);
++#endif
+=1 785 25
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 811 311
++#if defined(_M_ARM)
++    ULONG ImageBase = _GetImageBase();  // The image of the function, for after the actions
+=1 1121 13
++#if defined(_M_ARM)
++            //
++            // The frame is in the state the action takes it to while the action
++            // runs: an unwind of the frame from within the action does not run it
++            // again.
++            //
++            SetState( pRN, pDC, pFuncInfo, UWE_TOSTATE(FUNC_UNWIND(*pFuncInfo, curState)) );
+=1 1637 3
+=1 1135 5
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 1141 24
++#if defined(_M_ARM)
++                _CallSettingFrame( UWE_ACTION(FUNC_UNWIND(*pFuncInfo, curState)), pRN, pDC->NonVolatileRegisters, 0x103 );
++                _SetImageBase(ImageBase);
++#elif defined(_M_IX86) || defined(_M_MRX000) || defined(_M_PPC) /*IFSTRIP=IGN*/
+=1 1166 89
++#if defined(_M_ARM)
++    CONTEXT             *pSaveExitContext;
++    FRAMEINFO           *pCatchFrameInfo;   // Frame info of the frame if a catch funclet
++    EHRegistrationNode  *pEstablisher = _GetEstablisherFrame(pRN, pDC, pFuncInfo, &pCatchFrameInfo);
++    ULONG               ImageBase = _GetImageBase();    // For after the callouts
+=1 1254 25
++#elif defined(_M_PPC) || defined(_M_ARM)
+=1 1280 4
++#if defined(_M_ARM)
++        _SetImageBase(ImageBase);
+=1 1283 6
++#if defined(_M_ARM)
++        //
++        // The context the unwind leaves for the frame that caught is the context
++        // to continue in after the catch; an unwind within the unwind (a catch in
++        // a destructor) has its own.
++        //
++        pSaveExitContext = pExitContext;
+=1 1290 1
++        _UnwindNestedFrames( pRN, pExcept, pContext );
++        pExitContext = pSaveExitContext;
++        _SetImageBase(ImageBase);
++
+=1 1495 1
+=1 1290 44
++#if defined(_M_ARM)
++	pFrameInfo = _CreateFrameInfo(&FrameInfo, pDC, pEstablisher, &ExitContext,
++	  _GetStateOfFrame(pRN, pDC, pFuncInfo), pEntry, CatchDepth + 1);
+=1 1345 1
++#elif defined(_M_MRX000) /*IFSTRIP=IGN*/
+=1 1335 24
++#if defined(_M_ARM)
++    //
++    // The frame of the catch funclet is its frame info; leaving the catch, by a
++    // return, a rethrow or an exception, unlinks it.
++    //
++    __try {
++        continuationAddress = CallCatchBlock( pExcept, (EHRegistrationNode *)pFrameInfo, pContext, pFuncInfo, HT_HANDLER(*pCatch), CatchDepth, 0x100 );
++        }
++    __finally {
++        _UnlinkFrame(pFrameInfo);
++        }
++#elif defined(_M_IX86) || defined(_M_MRX000) || defined(_M_ALPHA) /*IFSTRIP=IGN*/
+=1 1360 59
++#if !defined(_M_ARM)
++        pExitContext = NULL;
++#endif
+=1 1420 75
++#elif defined(_M_ARM)
++                        continuationAddress = _CallSettingFrame( handlerAddress, pRN, ((FRAMEINFO *)pRN)->pNonVolatileRegisters, NLGCode );
+=1 1495 130
++#if defined(_M_ARM)
++    _SetThrowImageBase( (ULONG)PER_PTHROWIB(pExcept) );
++#endif
++
+=1 1625 8
++#if defined(_M_MRX000) && !defined(_M_ARM) /*IFSTRIP=IGN*/
+=1 1634 204
++#if defined(_M_ARM)
++    if ( (pExcept)!=NULL ) {
++        _SetThrowImageBase( (ULONG)PER_PTHROWIB(pExcept) );
++        }
++#endif
+=1 1838 124

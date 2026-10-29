@@ -1,0 +1,89 @@
+#ntdiff private/rpc/midl20/codegen/procndr.cxx
+=1 1 520
++GenArmArgumentBlock(
++    CCB *       pCCB,
++    CG_PROC *   pProc )
+=1 31 4
++    ARM passes floating point parameters in the floating point registers,
++    apart from the others, so the parameters of a stub are not in memory in
++    the order the interpreter takes them.  The stub copies them to a block
++    laid out as the MIPS stack (8 byte aligned parameters at 8 byte
++    boundaries), whose stack offsets the format strings of ARM take, and
++    hands the interpreter that block.  This emits the block and the copies.
+=1 36 4
++    pProc    - the procedure of the stub
+=1 40 3
++	ISTREAM *		pStream = pCCB->GetStream();
+=1 887 1
++	CG_PARAM *		pParam;
++	CG_NDR *		pOldCGNodeContext;
++	long			Size;
++	long			Offset;
++	char			Buffer[160];
++
++	pOldCGNodeContext = pCCB->SetCGNodeContext( pProc );
++
++	Size = pProc->IsObject() ? 4 : 0;
++
++	pProc->GetMembers( Iterator );
++
++	while ( ITERATOR_GETNEXT( Iterator, pParam ) )
++		{
++		Offset = pParam->GetStackOffset( pCCB, MIPS_STACK_SIZING ) +
++				 pParam->GetStackSize();
++		if ( Offset > Size )
++			Size = Offset;
++		}
++
++	sprintf( Buffer, "__int64 " ARM_ARGS_VAR_NAME "[%ld];",
++			 Size ? (Size + 7) / 8 : 1 );
+=1 944 1 -2
+=1 830 1
++	pStream->Write( "memset( " ARM_ARGS_VAR_NAME ", 0, sizeof( "
++					ARM_ARGS_VAR_NAME " ) );" );
++
++	if ( pProc->IsObject() )
+=1 1491 2
++		pStream->Write( "memcpy( ( unsigned char __RPC_FAR * )"
++						ARM_ARGS_VAR_NAME ", &This, sizeof( This ) );" );
++		}
++
++	pProc->GetMembers( Iterator );
++
++	while ( ITERATOR_GETNEXT( Iterator, pParam ) )
++		{
++		PNAME	pName = pParam->GetType()->GetSymName();
++
++		sprintf( Buffer, "memcpy( ( unsigned char __RPC_FAR * )"
++				 ARM_ARGS_VAR_NAME " + %ld, &",
++				 pParam->GetStackOffset( pCCB, MIPS_STACK_SIZING ) );
++		pStream->NewLine();
+=1 944 1 -1
++		pStream->Write( pName );
++		pStream->Write( ", sizeof( " );
++		pStream->Write( pName );
++		pStream->Write( " ) );" );
+=1 684 3 -2
+=1 289 2
+=1 344 3
+=1 521 100
++	// For ARM, the parameters copied to a block (GenArmArgumentBlock).
+=1 556 3
++	pStream->Write( ELSE_IF_ARM );
+=1 922 2
+=1 560 2
++	GenArmArgumentBlock( pCCB, this );
++	pFinalExpr = GenCoreNdrSingleClientCall( pCCB, 3 ); // 3 for ARM
+=1 635 3
++	pStream->Write( '}' );
+=1 620 4
+=1 625 360
++                pStream->Write( "#if defined(_MIPS_) || defined(_ARM_)" );
+=1 986 1566
++ 	WhichRisc	- 3 if ARM, 2 if alpha, 1 if Mips or PPC , 0 otherwise.
+=1 2553 80
++	else if( 3 == WhichRisc )
++		{
++		pExpr	= new expr_variable( ARM_ARGS_VAR_NAME, 0 );
++		pExpr	= MakeCastExprPtrToUChar( pExpr );
+=1 2631 358

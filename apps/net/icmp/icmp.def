@@ -1,0 +1,11 @@
+LIBRARY ICMP
+
+DESCRIPTION 'ICMP Echo API DLL'
+
+EXPORTS
+    IcmpCreateFile
+    IcmpCloseHandle
+    IcmpSendEcho
+    register_icmp
+    do_echo_req
+    do_echo_rep

@@ -1,0 +1,13 @@
+MAJORCOMP=games
+MINORCOMP=riscoban
+
+TARGETNAME=riscoban
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+INCLUDES=..
+
+SOURCES=RISCoban.c RISCoban.rc
+
+UMTYPE=windows
+UMENTRY=winmain

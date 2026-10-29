@@ -1,0 +1,12 @@
+#ntdiff private/rpc/ndr20/interp.h
+=1 1 36
++#ifdef _ARM_
++//
++// ARM passes float and double arguments in the floating point registers
++// s0 - s15 (d0 - d7).  The stubless client and the server keep their image
++// in the bytes below the other arguments: the stack offsets of these
++// arguments are negative (typeinfo.cxx).
++//
++#define ARM_FLOAT_ARGUMENT_SIZE     64
++#endif
+=1 36 332

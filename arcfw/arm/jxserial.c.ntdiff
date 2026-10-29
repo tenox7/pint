@@ -1,0 +1,184 @@
+#ntdiff private/ntos/fw/mips/jxserial.c private/ntos/fw/alpha/jxserial.c private/ntos/fw/mips/jxkbd.c
+=1 3 10
++    This module implements the serial boot driver for the Raspberry Pi (the
++    ARM FW\MIPS\JXSERIAL.C) over the PL011 UART, serial port 0 on GPIO 14 and
++    15. Its reference clock is the 48 MHz the VideoCore gives it when the
++    UART is enabled (enable_uart=1), which runs it at 115200 baud. A board
++    with Bluetooth (Pi 3, Pi 4) wires the UART to its Bluetooth chip on GPIO 32
++    and 33 (ALT3); those pins are made inputs, so it receives from GPIO 15 alone.
++    The pulls of GPIO 14 and 15 are turned off: the BCM2711 holds them in a
++    two-bit field per pin instead of the clocked pull registers of the BCM2835.
+=1 14 7
++    Kernel mode
+=1 23 6
++
++//
++// Define the PL011 registers.
++//
++
++#define UART_DR(SP)     (*(volatile ULONG *)((SP) + 0x00))
++#define UART_FR(SP)     (*(volatile ULONG *)((SP) + 0x18))
++#define UART_IBRD(SP)   (*(volatile ULONG *)((SP) + 0x24))
++#define UART_FBRD(SP)   (*(volatile ULONG *)((SP) + 0x28))
++#define UART_LCRH(SP)   (*(volatile ULONG *)((SP) + 0x2C))
++#define UART_CR(SP)     (*(volatile ULONG *)((SP) + 0x30))
++#define UART_IMSC(SP)   (*(volatile ULONG *)((SP) + 0x38))
++#define UART_ICR(SP)    (*(volatile ULONG *)((SP) + 0x44))
++
++#define FR_TXFF         0x20
++#define FR_RXFE         0x10
++#define LCRH_FEN        0x10
++#define LCRH_WLEN8      0x60
++#define CR_UARTEN       0x001
++#define CR_TXE          0x100
++#define CR_RXE          0x200
++
++//
++// Define the GPIO registers that select the UART on pins 14 and 15, and take it
++// off pins 32 and 33.
++//
++
++#define GPFSEL1         (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200004))
++#define GPFSEL3         (*(volatile ULONG *)(PERIPHERAL_BASE + 0x20000C))
++#define GPIO_ALT3       7
++#define GPPUD           (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200094))
++#define GPPUDCLK0       (*(volatile ULONG *)(PERIPHERAL_BASE + 0x200098))
++#define GPIO_PUP_PDN0   (*(volatile ULONG *)(PERIPHERAL_BASE + 0x2000E4))
+=1 30 22
++    OUT PVOID Buffer,
+=1 53 29
++
++//
++// Define serial device table.
++//
++
+=1 85 13
+=1 76 5
+=1 115 48
++
+=1 164 5
+=1 116 5
+=1 173 14
+=1 548 3
++    //
++    // wait for room in the transmit fifo
++    //
++
++    while ((UART_FR(SP) & FR_TXFF) != 0) {
+=1 359 3
+=1 198 2
++
++    UART_DR(SP) = (UCHAR)Char;
+=1 245 4
+=1 204 6
+=1 116 5
+=1 214 20
++
++{
++    ARC_STATUS Status;
++    PCHAR Character = (PCHAR)Buffer;
+=1 236 2
++        if ((Status = SerialBootWrite(*Character++,
++                                      BlFileTable[FileId].u.SerialContext.PortBase)) != ESUCCESS) {
++            return Status;
+=1 563 3 4
+=1 245 35
++
++{
++    ULONG SP = BlFileTable[FileId].u.SerialContext.PortBase;
++    PCHAR Character = (PCHAR)Buffer;
+=1 236 2
++
+=1 295 3
++
++        while ((UART_FR(SP) & FR_RXFE) != 0) {
+=1 359 3 4
++        // Read character
++        //
++
++        *Character++ = (CHAR)UART_DR(SP);
++    }
++
+=1 245 4
+=1 320 31
++
++    //
++    // Check for the serial port to open, the PL011 is port 0.
++    //
++
+=1 354 3
++                             ) || (Port != 0)) {
+=1 358 6
++
+=1 364 1
++    BlFileTable[*FileId].u.SerialContext.PortBase = SERIAL_PORT0_BASE;
+=1 366 4
++
+=1 370 3
+=1 105 3
+=1 376 7
++    This routine initializes the serial port controller: it selects the UART
++    on GPIO 14 and 15 without pulls, makes GPIO 32 and 33 inputs if they
++    select it, and programs 115200 baud, eight bits, no parity, one stop bit,
++    with the fifos enabled and interrupts masked.
+=1 384 10
++
++{
++    ULONG Select;
++
++    Select = GPFSEL1 & ~((7 << 12) | (7 << 15));
++    GPFSEL1 = Select | (4 << 12) | (4 << 15);
++    Select = GPFSEL3;
++    if (((Select >> 6) & 7) == GPIO_ALT3) {
++        Select &= ~(7 << 6);
++    }
++
++    if (((Select >> 9) & 7) == GPIO_ALT3) {
++        Select &= ~(7 << 9);
++    }
++
++    GPFSEL3 = Select;
++    if (FwBcm2711) {
++        GPIO_PUP_PDN0 &= ~(0xF << 28);
++
++    } else {
++        GPPUD = 0;
++        FwStallExecution(5);
++        GPPUDCLK0 = (1 << 14) | (1 << 15);
++        FwStallExecution(5);
++        GPPUDCLK0 = 0;
++    }
++
++    while ((UART_FR(SP) & 0x08) != 0) {
++    }
++
++    UART_CR(SP) = 0;
++    UART_ICR(SP) = 0x7FF;
++    UART_IBRD(SP) = 26;
++    UART_FBRD(SP) = 3;
++    UART_LCRH(SP) = LCRH_WLEN8 | LCRH_FEN;
++    UART_IMSC(SP) = 0;
++    UART_CR(SP) = CR_UARTEN | CR_TXE | CR_RXE;
+=1 136 3
+=1 449 3
+=1 116 5
+=1 456 11
++
++{
++    if ((UART_FR(BlFileTable[FileId].u.SerialContext.PortBase) & FR_RXFE) != 0) {
++        return EAGAIN;
++    }
++
+=1 245 4
+=1 478 9
++    A serial port has no media.
+=1 131 8
+=1 63 4
+=1 115 6
++    A serial port has no position.
+=1 512 10
++
+=1 523 28
+=3 412 4
+=1 556 2
++}

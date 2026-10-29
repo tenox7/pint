@@ -1,0 +1,265 @@
+#ntdiff private/ntos/rtl/mips/exdsptch.c private/ntos/rtl/alpha/exdsptch.c private/ntos/rtl/alpha/unwindr.c private/ntos/rtl/mips/ntrtlmip.h
+=1 1 11
++    procedure call frames (the ARM port of RTL\MIPS\EXDSPTCH.C).
++
++    The function tables of ARM images hold image relative addresses, so the
++    function table lookup also returns the base of the image. A virtual unwind
++    (vunwind.c) leaves the program counter of the context at the return
++    address of the call that left the caller, and marks the context unwound to
++    a call; control is then considered to have left the caller two bytes
++    before that address, within the call, so that a call that ends a function
++    or a scope is within it (the MIPS dispatcher takes the delay slot of the
++    jal for the same reason).
++
++    The exception filters and termination handlers of a frame run on the frame
++    of their function: the handlers are given the nonvolatile registers of the
++    frame, as they were where control left the function.
+=1 13 14
++
+=1 28 17
++// Define the point where control left the function of a context: within the
++// call if the program counter is the return address of a call.
++//
++
++#define CONTROL_PC(Context) \
++    ((((Context)->ContextFlags & CONTEXT_UNWOUND_TO_CALL) != 0) ? \
++        (Context)->Pc - 2 : (Context)->Pc)
+=1 58 5
+=4 25 17
+=1 62 17
+=1 741 7
++    );
++
++static VOID
++RtlpCaptureNonVolatileRegisters (
+=1 83 1
++    OUT PNONVOLATILE_REGISTERS NonVolatileRegisters
++    )
++
++{
++    RtlMoveMemory(&NonVolatileRegisters->R[0], &ContextRecord->R4, sizeof(NonVolatileRegisters->R));
++    RtlMoveMemory(&NonVolatileRegisters->D[0], &ContextRecord->u.D[8], sizeof(NonVolatileRegisters->D));
++}
++
+=1 100 45
++    PEXCEPTION_ROUTINE ExceptionRoutine;
+=1 145 2
++    PVOID HandlerData;
++    ULONG HighLimit;
++    ULONG ImageBase;
++    ULONG Index;
+=1 150 3
++    NONVOLATILE_REGISTERS NonVolatileRegisters;
+=1 153 9
++    ControlPc = CONTROL_PC(&ContextRecord1);
+=1 163 16
++        FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
+=1 180 9
++            RtlpCaptureNonVolatileRegisters(&ContextRecord1, &NonVolatileRegisters);
++            ExceptionRoutine = RtlVirtualUnwind(ImageBase,
+=1 232 2 -4
++                                                &ContextRecord1,
++                                                &HandlerData,
+=1 193 3 10
+=1 196 9
++               ((EstablisherFrame & 0x3) != 0)) {
+=1 206 3
++            } else if (ExceptionRoutine != NULL) {
+=1 210 10
++                DispatcherContext.ImageBase = ImageBase;
+=1 220 2
++                DispatcherContext.TargetPc = 0;
+=1 222 1
++                DispatcherContext.LanguageHandler = ExceptionRoutine;
++                DispatcherContext.HandlerData = HandlerData;
++                DispatcherContext.NonVolatileRegisters = &NonVolatileRegisters;
+=1 223 19
++                                                   ExceptionRoutine);
+=1 243 81
++            // Set point at which control left the previous routine: a leaf
++            // routine returns through the link register.
++            //
++
++            NextPc = (ContextRecord1.Lr & ~1) - 2;
+=1 328 9
++
++            ContextRecord1.Pc = ContextRecord1.Lr & ~1;
++            ContextRecord1.ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
+=1 337 6
++        ControlPc = CONTROL_PC(&ContextRecord1);
++    } while (ContextRecord1.Sp < HighLimit);
+=1 345 8
++
+=1 354 2
++    IN ULONG ControlPc,
++    OUT PULONG ImageBase
+=1 357 14
++    ImageBase - Supplies a pointer to a variable that receives the base of
++        the image that contains the function.
+=1 370 14
++    ULONG Begin;
++    ULONG End;
++    ULONG UnwindData;
++    LONG High;
++    PVOID Base;
++    LONG Low;
++    LONG Middle;
++    ULONG Rva;
+=1 389 5
++    Base = RtlPcToFileHeader((PVOID)ControlPc, &Base);
+=1 395 6
++    if (Base != NULL) {
++        *ImageBase = (ULONG)Base;
++        Rva = ControlPc - (ULONG)Base;
+=1 402 1
++                         Base, TRUE, IMAGE_DIRECTORY_ENTRY_EXCEPTION,
+=1 404 18
++            // entry that subsumes the specified PC. The length of a function
++            // is in its packed unwind data or in the header of its unwind
++            // data, in halfwords.
+=1 423 14
++                Begin = FunctionEntry->BeginAddress & ~1;
++                if (Rva < Begin) {
++                    High = Middle - 1;
++                    continue;
++                }
++
++                UnwindData = FunctionEntry->UnwindData;
++                if ((UnwindData & 3) != 0) {
++                    End = Begin + ((UnwindData >> 2) & 0x7ff) * 2;
++
++                } else {
++                    End = Begin + (*(PULONG)((ULONG)Base + UnwindData) & 0x3ffff) * 2;
++                }
++
++                if (Rva >= End) {
+=1 441 3
+=1 461 12
++
++//
++// The shell routines below are compiled without optimization: the compiler
++// would otherwise expand the routine they call in line, or jump to it, and
++// the shell routine would have no call frame of its own.
++//
++
++#pragma optimize("", off)
++
+=1 474 32
++
++#pragma optimize("", on)
+=1 68 4
+=1 510 25
++    PVOID HandlerData;
++    ULONG ImageBase;
+=1 537 9
++    ControlPc = ContextRecord.Pc - 2;
++    FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
++    RtlVirtualUnwind(ImageBase,
+=1 232 2 -31
++                     &ContextRecord,
++                     &HandlerData,
+=1 193 3 -17
++    ExceptionRecord->ExceptionAddress = (PVOID)ContextRecord.Pc;
+=1 557 11
++
++#pragma optimize("", off)
++
+=1 569 33
++
++#pragma optimize("", on)
+=1 73 4
+=1 606 27
++    PVOID HandlerData;
++    ULONG ImageBase;
+=1 635 17
++    ControlPc = ContextRecord.Pc - 2;
++    FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
++    RtlVirtualUnwind(ImageBase,
+=1 232 2 -31
++                     &ContextRecord,
++                     &HandlerData,
+=1 193 3 -17
++    ExceptionRecord.ExceptionAddress = (PVOID)ContextRecord.Pc;
+=1 663 11
++
+=1 675 65
++
+=1 741 56
++    PEXCEPTION_ROUTINE ExceptionRoutine;
+=1 797 3
++    PVOID HandlerData;
++    ULONG HighLimit;
++    ULONG ImageBase;
+=1 2057 1
+=1 802 2
++    NONVOLATILE_REGISTERS NonVolatileRegisters;
+=1 804 9
++    ControlPc = ContextRecord->Pc - 2;
++    FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
++    RtlVirtualUnwind(ImageBase,
+=1 232 2 -31
++                     ContextRecord,
++                     &HandlerData,
+=1 193 3 -17
++    ControlPc = CONTROL_PC(ContextRecord);
+=1 824 36
++        FunctionEntry = RtlLookupFunctionEntry(ControlPc, &ImageBase);
+=1 861 8
++            RtlMoveMemory(&LocalContext, ContextRecord, sizeof(CONTEXT));
++            ExceptionRoutine = RtlVirtualUnwind(ImageBase,
+=1 232 2 -4
++                                                &LocalContext,
++                                                &HandlerData,
+=1 193 3 10
+=1 876 12
++               ((EstablisherFrame & 0x3) != 0)) {
+=1 889 2
++            } else if (ExceptionRoutine != NULL) {
+=1 892 17
++                RtlpCaptureNonVolatileRegisters(ContextRecord, &NonVolatileRegisters);
+=1 909 1
++                DispatcherContext.ImageBase = ImageBase;
+=1 910 2
++                DispatcherContext.TargetPc = (ULONG)TargetIp;
+=1 912 1
++                DispatcherContext.LanguageHandler = ExceptionRoutine;
++                DispatcherContext.HandlerData = HandlerData;
++                DispatcherContext.NonVolatileRegisters = &NonVolatileRegisters;
+=1 913 23
++                    ContextRecord->R0 = (ULONG)ReturnValue;
+=1 937 5
++                                                    DispatcherContext.LanguageHandler);
+=1 943 25
++                            RtlVirtualUnwind(ImageBase,
+=1 232 2 -7
++                                             ContextRecord,
++                                             &HandlerData,
+=1 193 2 7
+=1 974 15
++                        ImageBase = DispatcherContext.ImageBase;
+=1 989 2
++                        DispatcherContext.TargetPc = (ULONG)TargetIp;
+=1 992 24
++                    RtlMoveMemory(ContextRecord, &LocalContext, sizeof(CONTEXT));
+=1 318 6
++            // Set point at which control left the previous routine: a leaf
++            // routine returns through the link register.
++            //
++
++            NextPc = (ContextRecord->Lr & ~1) - 2;
+=1 1032 9
++
++            ContextRecord->Pc = ContextRecord->Lr & ~1;
++            ContextRecord->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
+=1 337 6
++        ControlPc = CONTROL_PC(ContextRecord);
+=1 1053 5
++    // pointer, then continue execution at the target address. Otherwise, an
++    // exit unwind was performed or the target of the unwind did not exist
++    // and the debugger and subsystem are given a second chance to handle the
+=1 1061 4
++        ContextRecord->R0 = (ULONG)ReturnValue;
++        ContextRecord->Pc = (ULONG)TargetIp & ~1;
++        ContextRecord->ContextFlags &= ~CONTEXT_UNWOUND_TO_CALL;
++        ContextRecord->Cpsr &= ~CPSR_IT_MASK;
+=1 1066 6

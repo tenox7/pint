@@ -1,0 +1,15 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=ipconfig
+
+TARGETNAME=ipconfig
+TARGETPATH=obj
+TARGETTYPE=UMAPPL_NOLIB
+USE_CRTDLL=1
+
+INCLUDES=$(BASEDIR)\private\inc
+
+SOURCES=
+
+UMTYPE=console
+UMAPPL=ipconfig
+UMLIBS=$(BASEDIR)\public\sdk\lib\*\dhcpcsvc.lib

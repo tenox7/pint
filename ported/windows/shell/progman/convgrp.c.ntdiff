@@ -1,0 +1,4 @@
+#ntdiff private/windows/shell/progman/convgrp.c
+=1 1 99
++    return NULL;
+=1 100 244

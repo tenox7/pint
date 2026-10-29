@@ -1,0 +1,5 @@
+#ntdiff private/windows/shell/shelldll/futil.c
+=1 1 14
++#elif defined(_ARM_)
++const TCHAR c_szAutoRunDotPlatform[] = TEXT("AutoRun.Arm");
+=1 15 818

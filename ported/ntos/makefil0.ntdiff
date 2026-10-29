@@ -1,0 +1,49 @@
+#ntdiff private/ntos/makefil0
+=1 1 60
++                $(NTOSINC)\arm.h            \
+=1 61 4
++                $(SDKINC)\ntarm.h           \
+=1 65 25
++                   $(SDKINC)\ntarm.h    \
++                   $(NTOSINC)\ppc.h     \
++                   $(NTOSINC)\arm.h     \
+=1 91 7
++                $(SDKINC)\ntarm.h           \
+=1 98 15
++                $(NTOSINC)\ppc.h \
++                $(NTOSINC)\arm.h
+=1 114 57
++                $(NTOSINC)\arm.h            \
+=1 171 4
++                $(SDKINC)\ntarm.h           \
+=1 175 52
++                $(NTOSINC)\arm.h            \
+=1 227 4
++                $(SDKINC)\ntarm.h           \
+=1 231 53
++                $(NTOSINC)\arm.h            \
+=1 284 125
++#if defined(_ARM_)
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#pragma intrinsic(_MoveFromCoprocessor)
++#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
++#define KeGetCurrentThread() ((struct _KTHREAD *)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 399 1
++#endif // defined(_ARM_)
+=1 408 933
++#if defined(_ARM_)
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#pragma intrinsic(_MoveFromCoprocessor)
++#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
++#define KeGetCurrentThread() ((struct _KTHREAD *)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 399 1
++#endif // defined(_ARM_)
+=1 1340 585
++#if defined(_ARM_)
++unsigned int _MoveFromCoprocessor(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
++#pragma intrinsic(_MoveFromCoprocessor)
++#define PCR ((struct _KPCR *)_MoveFromCoprocessor(15, 0, 13, 0, 4))
++#define KeGetCurrentThread() ((struct _KTHREAD *)_MoveFromCoprocessor(15, 0, 13, 0, 3))
+=1 399 1
++#endif // defined(_ARM_)
+=1 1924 607

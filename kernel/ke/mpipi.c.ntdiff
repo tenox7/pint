@@ -1,0 +1,20 @@
+#ntdiff private/ntos/ke/mips/xxmpipi.c private/ntos/ke/alpha/ipi.c
+=1 1 6
++    mpipi.c
+=1 8 3
++    This module implements the ARM specific MP routines (the ARM KE\MIPS\
++    XXMPIPI.C): the processor state save and restore used by bug check and
++    the debugger, and the interprocessor request service.
+=1 12 134
++    //
++    // ARM port: save the system control and translation registers (MIPS saves
++    // its TB entries).
++    //
++
++    ProcessorState->Sctlr = _MoveFromCoprocessor(15, 0, 1, 0, 0);
++    ProcessorState->Ttbr0 = _MoveFromCoprocessor(15, 0, 2, 0, 0);
++    ProcessorState->Ttbr1 = _MoveFromCoprocessor(15, 0, 2, 0, 1);
++    ProcessorState->Ttbcr = _MoveFromCoprocessor(15, 0, 2, 0, 2);
++    ProcessorState->Dacr = _MoveFromCoprocessor(15, 0, 3, 0, 0);
++    ProcessorState->Contextidr = _MoveFromCoprocessor(15, 0, 13, 0, 1);
+=1 156 54

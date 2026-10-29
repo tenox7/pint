@@ -1,0 +1,209 @@
+#ntdiff private/sdktools/vctools/langapi/include/ehdata.h
+=1 1 99
++#if defined(_M_ARM)
++#define EH_EXCEPTION_PARAMETERS 4			// Number of parameters in exception record
++#else
+=1 100 1
++#endif
++
++#if defined(_M_ARM)
++//
++// On ARM the compiler describes the thrown object and the function with
++// offsets from the base of their image: that of the image that threw, which
++// the exception record holds, and that of the image of the function the frame
++// handler examines.  The run-time keeps both for the thread, for the macros
++// below.
++//
+=1 806 3
++ULONG __cdecl _GetImageBase(void);
++void __cdecl _SetImageBase(ULONG);
++ULONG __cdecl _GetThrowImageBase(void);
++void __cdecl _SetThrowImageBase(ULONG);
+=1 848 3
++#define _RVA_TO_PTR(base, rva)	((void *)((base) + (rva)))
++#endif
+=1 101 83
++#if defined(_M_ARM)
++	int				pType;					// Image offset of the type descriptor for this type
++#else
+=1 184 1
++#endif
+=1 185 4
++#if defined(_M_ARM)
++	int				copyFunction;			// Image offset of copy constructor or CC-closure
++#else
+=1 189 1
++#endif
+=1 190 7
++#if defined(_M_ARM)
++#define CT_PTD(ct)			((TypeDescriptor *)_RVA_TO_PTR(_GetThrowImageBase(), (ct).pType))
++#else
+=1 197 1
++#endif
+=1 198 2
++#if defined(_M_ARM)
++#define CT_COPYFUNC(ct)		((ct).copyFunction ? (PMFN)_RVA_TO_PTR(_GetThrowImageBase(), (ct).copyFunction) : (PMFN)NULL)
++#else
+=1 200 1
++#endif
+=1 201 18
++#if defined(_M_ARM)
++	int				arrayOfCatchableTypes[];	// Image offsets of the catchable types
++#else
+=1 219 1
++#endif
+=1 220 23
++#if defined(_M_ARM)
++	int				pmfnUnwind;			// Image offset of the destructor to call
++										// when exception has been handled or aborted.
++
++	int				pForwardCompat;		// Image offset of forward compatibility frame handler
++
++	int				pCatchableTypeArray;	// Image offset of list of types.
++#else
+=1 243 6
++#endif
+=1 249 7
++#if defined(_M_ARM)
++#define THROW_UNWINDFUNC(t)		((t).pmfnUnwind ? (PMFN)_RVA_TO_PTR(_GetThrowImageBase(), (t).pmfnUnwind) : (PMFN)NULL)
++#define THROW_FORWARDCOMPAT(t)	((t).pForwardCompat ? (int (__cdecl *)(...))_RVA_TO_PTR(_GetThrowImageBase(), (t).pForwardCompat) : (int (__cdecl *)(...))NULL)
++#define THROW_PCTARRAY(t)		((CatchableTypeArray *)_RVA_TO_PTR(_GetThrowImageBase(), (t).pCatchableTypeArray))
++#define THROW_COUNT(t)			(THROW_PCTARRAY(t)->nCatchableTypes)
++#define THROW_CTLIST(t)			(THROW_PCTARRAY(t)->arrayOfCatchableTypes)
++#define THROW_PCT(t, n)			((CatchableType *)_RVA_TO_PTR(_GetThrowImageBase(), THROW_CTLIST(t)[n]))
++#define THROW_CT(t, n)			(*THROW_PCT(t, n))
++#else
+=1 256 7
++#endif
+=1 263 49
++#if defined(_M_ARM)
++	int				pType;				// Image offset of the corresponding type descriptor
++#else
+=1 312 1
++#endif
+=1 313 5
++#if defined(_M_ARM)
++	int				addressOfHandler;	// Image offset of 'catch' code
++#else
+=1 318 1
++#endif
+=1 319 9
++#if defined(_M_ARM)
++#define HT_PTD(ht)				((ht).pType ? (TypeDescriptor *)_RVA_TO_PTR(_GetImageBase(), (ht).pType) : (TypeDescriptor *)NULL)
++#else
+=1 328 1
++#endif
+=1 329 4
++#if defined(_M_ARM)
++#define HT_HANDLER(ht)			(_RVA_TO_PTR(_GetImageBase(), (ht).addressOfHandler))
++#else
+=1 333 1
++#endif
+=1 334 28
++#if defined(_M_ARM)
++	int			pHandlerArray;		// Image offset of list of handlers for this try
++#else
+=1 362 1
++#endif
+=1 363 6
++#if defined(_M_ARM)
++#define TBME_PLIST(hm)		((HandlerType *)_RVA_TO_PTR(_GetImageBase(), (hm).pHandlerArray))
++#else
+=1 369 1
++#endif
+=1 370 25
++#if defined(_M_ARM)
++	int				action;				// Image offset of funclet to call to effect state change
++#else
+=1 395 1
++#endif
+=1 396 3
++#if defined(_M_ARM)
++#define UWE_ACTION(uwe)		((uwe).action ? (void (*)(void))_RVA_TO_PTR(_GetImageBase(), (uwe).action) : (void (*)(void))NULL)
++#else
+=1 399 1
++#endif
++
++#if _M_MRX000 >= 4000 || defined(_M_MPPC) || defined(_M_PPC) || defined(_M_ARM)	 /*IFSTRIP=IGN*/
+=1 402 16
++#if defined(_M_ARM)
++	int					pUnwindMap;			// Image offset of the unwind map
++#else
+=1 418 1
++#endif
+=1 419 1
++#if defined(_M_ARM)
++	int					pTryBlockMap;		// Image offset of the handler map
++#else
+=1 420 1
++#endif
+=1 421 9
++#elif defined(_M_ARM)
++	int					pIPtoStateMap;		// Image offset of the IP to state map
++	ptrdiff_t			dispUnwindHelp;		// Displacement of the state of the frame
++											// from its establisher frame
++	int					dispESTypeList;		// Image offset of the exception specification (reserved)
++	int					EHFlags;			// Flags of the function (reserved)
+=1 430 11
++#if defined(_M_ARM)
++#define FUNC_PUNWINDMAP(fi)		((UnwindMapEntry *)_RVA_TO_PTR(_GetImageBase(), (fi).pUnwindMap))
++#define FUNC_PHANDLERMAP(fi)	((TryBlockMapEntry *)_RVA_TO_PTR(_GetImageBase(), (fi).pTryBlockMap))
++#else
+=1 441 2
++#endif
+=1 443 3
++#if defined(_M_ARM)
++#define FUNC_IPMAP(fi)			((IptoStateMapEntry *)_RVA_TO_PTR(_GetImageBase(), (fi).pIPtoStateMap))
++#define FUNC_UNWIND(fi, st)		(FUNC_PUNWINDMAP(fi)[st])
++#else
+=1 446 2
++#endif
+=1 448 1
++#if defined(_M_ARM)
++#define FUNC_TRYBLOCK(fi,n)		(FUNC_PHANDLERMAP(fi)[n])
++#else
+=1 449 1
++#endif
+=1 450 7
++#elif defined(_M_ARM)
++#define FUNC_IPTOSTATE(fi,n)	(FUNC_IPMAP(fi)[n])
+=1 453 2
+=1 457 261
++#elif defined(_M_ARM)
++//
++// On ARM we don't have a registration node, just a pointer to the stack
++// frame base (the stack pointer at the entry of the function)
+=1 690 14
++    ULONG UnwindData;
+=1 636 2
++typedef struct _NONVOLATILE_REGISTERS {
++    ULONG R[8];
++    DWORDLONG D[8];
++} NONVOLATILE_REGISTERS, *PNONVOLATILE_REGISTERS;
+=1 545 4
++    ULONG ImageBase;
+=1 549 2
++    ULONG TargetPc;
+=1 551 1
++    PVOID LanguageHandler;
++    PVOID HandlerData;
++    PNONVOLATILE_REGISTERS NonVolatileRegisters;
+=1 716 26
++#if defined(_M_ARM)
++		void *		pThrowImageBase;	// Base of the image of the description
++#endif
+=1 742 11
++#if defined(_M_ARM)
++#define PER_PTHROWIB(per)	((per)->params.pThrowImageBase)
++#endif
+=1 753 95
++#if defined(_M_ARM) && !defined(_NTSUBSET_)
+=1 842 2
++    IN ULONG ControlPc,
++    OUT PULONG ImageBase
++    );
++
++VOID
++RtlCaptureContext (
++    OUT PCONTEXT ContextRecord
+=1 845 15

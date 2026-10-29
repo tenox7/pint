@@ -1,0 +1,4 @@
+#ntdiff private/crt32/convert/wcstombs.c
+=1 1 212
++	return count;
++}

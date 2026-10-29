@@ -1,0 +1,982 @@
+#ntdiff private/sdktools/imagehlp/walkalp.c private/sdktools/imagehlp/walkmip.c ../nt35/PRIVATE/SDKTOOLS/IMAGEHLP/WALKALP.C ../nt35/PRIVATE/SDKTOOLS/IMAGEHLP/WALKMIP.C
+=1 1 6
++    walkarm.c
+=1 8 3
++    This file implements the ARM stack walking api.
++
++    A frame is unwound by the unwind data of its function: the function table
++    entry of the image (.pdata), image relative, with the packed unwind data
++    of a function of canonical form or the address of its .xdata record. The
++    unwind codes are those RtlVirtualUnwind executes; the stack, the unwind
++    data and the frames of the system are read through the read memory
++    routine.
++
++    The entries a function table access routine returns (IMAGE_FUNCTION_ENTRY,
++    from the symbol handler) carry no unwind data, so the walker finds the
++    entry in the exception directory of the image, as RtlLookupFunctionEntry
++    does, with the base the get module base routine gives.
+=1 12 11
++#define TARGET_ARM
+=2 24 7
++WalkArmInit(
+=1 37 4
++    PFUNCTION_TABLE_ACCESS_ROUTINE    FunctionTableAccessRoutine,
++    PGET_MODULE_BASE_ROUTINE          GetModuleBaseRoutine
+=1 42 3
++WalkArmNext(
+=1 37 4
++    PFUNCTION_TABLE_ACCESS_ROUTINE    FunctionTableAccessRoutine,
++    PGET_MODULE_BASE_ROUTINE          GetModuleBaseRoutine
+=3 47 9
+=1 60 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
++    );
++
++//
++// The integer registers of a context by number: r0 - r12, sp, lr and pc.
++//
++
++#define REGISTER(Context, Number) (((LPDWORD)&(Context)->R0)[Number])
++#define SP 13
++#define LR 14
++
++//
++// The system unwind codes, the second byte of the 0xEE code.
++//
++
++#define UNWIND_MACHINE_FRAME 1
++#define UNWIND_CONTEXT 2
++#define UNWIND_TRAP_FRAME 3
++#define UNWIND_REDZONE_LR 4
++
++//
++// The maximum length of the unwind codes made from packed unwind data.
++//
++
++#define MAXIMUM_PACKED_CODES 16
++
++//
++// The process whose memory holds the stack and the unwind data.
++//
++
++typedef struct _UNWIND_MEMORY {
++    HANDLE                            hProcess;
++    PREAD_PROCESS_MEMORY_ROUTINE      ReadMemory;
++} UNWIND_MEMORY, *PUNWIND_MEMORY;
+=1 77 3
++WalkArm(
+=1 81 4
+=1 60 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
+=1 86 6
++        rval = WalkArmNext( hProcess,
+=1 93 3 -2
+=1 1070 1 4
++                            GetModuleBase
++                          );
+=1 98 3
++        rval = WalkArmInit( hProcess,
+=1 93 3 -2
+=1 1070 1 4
++                            GetModuleBase
++                          );
+=1 107 7
++static BOOL
++ReadTarget(
++    PUNWIND_MEMORY  Memory,
++    DWORD           Address,
++    LPVOID          Buffer,
++    DWORD           Size
++    )
++{
++    DWORD cb;
++
++    if (!Memory->ReadMemory( Memory->hProcess, (LPCVOID)Address, Buffer, Size, &cb )) {
++        return FALSE;
++    }
++
++    return cb == Size;
+=2 101 4
++UnwindCodeLength(
++    PUCHAR  Code,
++    LPDWORD InstructionSize
+=1 122 6
++    This function returns the length of an unwind code and the size of the
++    instruction it describes, zero for an end code or a system code.
+=1 200 4
++    UCHAR Op = Code[0];
++
++    *InstructionSize = 2;
++    if (Op < 0x80) {
++        return 1;
++    }
++
++    if (Op < 0xc0) {
++        *InstructionSize = 4;
++        return 2;
++    }
++
++    if (Op < 0xd8) {
++        return 1;
++    }
++
++    if (Op < 0xe8) {
++        *InstructionSize = 4;
++        return 1;
++    }
++
++    if (Op < 0xec) {
++        *InstructionSize = 4;
++        return 2;
++    }
++
++    if (Op < 0xee) {
++        return 2;
++    }
++
++    if (Op == 0xee) {
++        *InstructionSize = 0;
++        return 2;
++    }
++
++    if (Op == 0xef) {
++        *InstructionSize = 4;
++        return 2;
++    }
++
++    if (Op < 0xf5) {
++        *InstructionSize = 0;
++        return 1;
++    }
++
++    if (Op < 0xf7) {
++        *InstructionSize = 4;
++        return 2;
++    }
++
++    if (Op == 0xf7) {
++        return 3;
++    }
++
++    if (Op == 0xf8) {
++        return 4;
++    }
++
++    if (Op == 0xf9) {
++        *InstructionSize = 4;
++        return 3;
++    }
++
++    if (Op == 0xfa) {
++        *InstructionSize = 4;
++        return 4;
++    }
++
++    if ((Op == 0xfb) || (Op == 0xfd)) {
++        return 1;
++    }
++
++    if ((Op == 0xfc) || (Op == 0xfe)) {
++        *InstructionSize = 4;
++        return 1;
++    }
++
++    *InstructionSize = 0;
++    return 1;
+=2 101 4
++UnwindSequenceSize(
++    PUCHAR  Code,
++    PUCHAR  CodeEnd,
++    BOOL    Epilogue
+=1 122 6
++    This function returns the size of the instructions a sequence of unwind
++    codes describes. The end code of an epilogue may also describe its final
++    branch.
+=1 200 4
++    DWORD Size;
++    DWORD Total = 0;
++
++    while (Code < CodeEnd) {
++        if (Code[0] >= 0xfd) {
++            if (Epilogue && (Code[0] != 0xff)) {
++                Total += (Code[0] == 0xfd) ? 2 : 4;
++            }
++
++            break;
++        }
++
++        Code += UnwindCodeLength( Code, &Size );
++        Total += Size;
++    }
++
++    return Total;
+=1 111 3
++static BOOL
++PopRegisters(
++    PUNWIND_MEMORY  Memory,
++    PCONTEXT        Context,
++    DWORD           Mask
+=1 122 6
++    This function pops the integer registers of a mask, bit n for register n,
++    from the stack of a context, in ascending register order.
+=1 200 4
++    DWORD Number;
++
++    for (Number = 0; Number <= LR; Number += 1) {
++        if ((Mask & (1 << Number)) == 0) {
++            continue;
++        }
++
++        if (!ReadTarget( Memory, Context->Sp, &REGISTER(Context, Number), sizeof(DWORD) )) {
++            return FALSE;
++        }
++
++        Context->Sp += sizeof(DWORD);
+=2 703 6
++static BOOL
++PopFloatingRegisters(
++    PUNWIND_MEMORY  Memory,
++    PCONTEXT        Context,
++    DWORD           First,
++    DWORD           Last
+=1 122 6
++    This function pops the floating registers First - Last from the stack of
++    a context.
+=1 200 4
++    DWORD Number;
++
++    for (Number = First; Number <= Last; Number += 1) {
++        if (!ReadTarget( Memory, Context->Sp, &Context->u.D[Number], sizeof(ULONGLONG) )) {
++            return FALSE;
++        }
++
++        Context->Sp += sizeof(ULONGLONG);
+=2 703 6
++static BOOL
++UnwindSystemFrame(
++    PUNWIND_MEMORY  Memory,
++    PCONTEXT        Context,
++    UCHAR           Type,
++    PBOOL           Frame
+=1 122 6
++    This function executes a system unwind code: a machine frame, a context
++    record or a trap frame at the stack pointer, or the link register saved
++    below it.
+=1 200 4
++    DWORD       MachineFrame[2];
++    CONTEXT     SavedContext;
++    KTRAP_FRAME TrapFrame;
++
++    switch (Type & 0xf) {
++    case UNWIND_MACHINE_FRAME:
++        if (!ReadTarget( Memory, Context->Sp, MachineFrame, sizeof(MachineFrame) )) {
++            return FALSE;
++        }
++
++        Context->Pc = MachineFrame[1];
++        Context->Sp = MachineFrame[0];
++        *Frame = TRUE;
++        return TRUE;
++
++    case UNWIND_CONTEXT:
++        if (!ReadTarget( Memory, Context->Sp, &SavedContext, sizeof(CONTEXT) )) {
++            return FALSE;
++        }
++
++        memcpy( &Context->R0, &SavedContext.R0, 17 * sizeof(DWORD) );
++        Context->Fpscr = SavedContext.Fpscr;
++        memcpy( &Context->u.D[0], &SavedContext.u.D[0], sizeof(SavedContext.u.D) );
++        *Frame = TRUE;
++        return TRUE;
++
++    case UNWIND_TRAP_FRAME:
++        if (!ReadTarget( Memory, Context->Sp, &TrapFrame, sizeof(KTRAP_FRAME) )) {
++            return FALSE;
++        }
++
++        Context->R0    = TrapFrame.R0;
++        Context->R1    = TrapFrame.R1;
++        Context->R2    = TrapFrame.R2;
++        Context->R3    = TrapFrame.R3;
++        Context->R12   = TrapFrame.R12;
++        Context->Lr    = TrapFrame.Lr;
++        Context->Pc    = TrapFrame.Pc;
++        Context->Cpsr  = TrapFrame.Cpsr;
++        Context->Fpscr = TrapFrame.Fpscr;
++        Context->Sp    = TrapFrame.Sp;
++        *Frame = TRUE;
++        return TRUE;
++
++    case UNWIND_REDZONE_LR:
++        return ReadTarget( Memory, Context->Sp - 8, &Context->Lr, sizeof(DWORD) );
+=2 703 6
++static BOOL
++ExecuteUnwindCodes(
++    PUNWIND_MEMORY  Memory,
++    PUCHAR          Code,
++    PUCHAR          CodeEnd,
++    DWORD           SkipSize,
++    PCONTEXT        Context,
++    PBOOL           Frame
+=1 122 6
++    This function executes a sequence of unwind codes on a context, after
++    skipping the codes of the first SkipSize bytes of instructions. Frame is
++    set if a system code restored the program counter from a frame.
+=1 200 4
++    DWORD   Length;
++    DWORD   Number;
++    UCHAR   Op;
++    DWORD   Size;
++    DWORD   Value;
++    BOOL    rval = TRUE;
++
++    *Frame = FALSE;
++    for (; rval && (Code < CodeEnd); Code += Length) {
++        Op = Code[0];
++        if (Op >= 0xfd) {
++            break;
++        }
++
++        Length = UnwindCodeLength( Code, &Size );
++        if (SkipSize != 0) {
++            SkipSize = (SkipSize > Size) ? SkipSize - Size : 0;
++            continue;
++        }
++
++        if (Op < 0x80) {
++            Context->Sp += (Op & 0x7f) * 4;                             // add sp, sp, #X
++
++        } else if (Op < 0xc0) {
++            Value = ((Op & 0x3f) << 8) | Code[1];                       // pop {r0 - r12, lr}
++            rval = PopRegisters( Memory, Context, (Value & 0x1fff) | (((Value >> 13) & 1) << LR) );
++
++        } else if (Op < 0xd0) {
++            Context->Sp = REGISTER(Context, Op & 0xf);                  // mov sp, rX
++
++        } else if (Op < 0xe0) {
++            Number = (Op & 3) + ((Op < 0xd8) ? 4 : 8);                  // pop {r4 - rX, lr}
++            rval = PopRegisters( Memory,
++                                 Context,
++                                 (((1 << (Number + 1)) - 1) & ~0xf) | (((Op >> 2) & 1) << LR) );
++
++        } else if (Op < 0xe8) {
++            rval = PopFloatingRegisters( Memory, Context, 8, 8 + (Op & 7) );   // vpop {d8 - dX}
++
++        } else if (Op < 0xec) {
++            Context->Sp += (((Op & 3) << 8) | Code[1]) * 4;             // addw sp, sp, #X
++
++        } else if (Op < 0xee) {
++            rval = PopRegisters( Memory, Context, Code[1] | ((Op & 1) << LR) );  // pop {r0 - r7, lr}
++
++        } else if (Op == 0xee) {
++            rval = UnwindSystemFrame( Memory, Context, Code[1], Frame );
++
++        } else if (Op == 0xef) {
++            rval = ReadTarget( Memory, Context->Sp, &Context->Lr, sizeof(DWORD) );  // ldr lr, [sp], #X
++            Context->Sp += (Code[1] & 0xf) * 4;
++
++        } else if ((Op == 0xf5) || (Op == 0xf6)) {
++            Number = (Op == 0xf6) ? 16 : 0;                             // vpop {dS - dE}
++            rval = PopFloatingRegisters( Memory, Context, Number + (Code[1] >> 4), Number + (Code[1] & 0xf) );
++
++        } else if ((Op == 0xf7) || (Op == 0xf9)) {
++            Context->Sp += ((Code[1] << 8) | Code[2]) * 4;              // add sp, sp, #X
++
++        } else if ((Op == 0xf8) || (Op == 0xfa)) {
++            Context->Sp += ((Code[1] << 16) | (Code[2] << 8) | Code[3]) * 4;
+=1 385 3
+=2 100 5
++PushPopCode(
++    PUCHAR  Code,
++    DWORD   Mask,
++    BOOL    Pop
+=1 122 6
++    This function makes the unwind code of a push or pop of the integer
++    registers of a mask (bit 15 the program counter, popped by an epilogue
++    into the place of the link register), 16-bit if the instruction is.
+=1 200 4
++    DWORD Link = Mask & ((1 << LR) | (1 << 15));
++    BOOL  Narrow;
++
++    Mask &= 0x1fff;
++    Narrow = ((Mask & ~0xff) == 0) &&
++             ((Link == 0) || (Link == (DWORD)(1 << (Pop ? 15 : LR))));
++
++    if (Narrow) {
++        Code[0] = (UCHAR)(0xec | (Link != 0));
++        Code[1] = (UCHAR)Mask;
++        return 2;
++    }
++
++    Mask |= (Link != 0) << 13;
++    Code[0] = (UCHAR)(0x80 | (Mask >> 8));
++    Code[1] = (UCHAR)Mask;
++    return 2;
+=2 101 4
++StackAdjustCode(
++    PUCHAR  Code,
++    DWORD   Words
++    )
++{
++    if (Words <= 0x7f) {
++        Code[0] = (UCHAR)Words;
++        return 1;
++    }
++
++    Code[0] = (UCHAR)(0xe8 | (Words >> 8));
++    Code[1] = (UCHAR)Words;
++    return 2;
+=1 111 3
++static VOID
++PackedCodes(
++    DWORD   Data,
++    PUCHAR  Prologue,
++    LPDWORD PrologueEnd,
++    PUCHAR  Epilogue,
++    LPDWORD EpilogueEnd
+=1 122 6
++    This function makes the unwind codes of the prologue and the epilogue the
++    packed unwind data of a function of canonical form describes.
+=1 200 4
++    DWORD   Ret = (Data >> 13) & 3;
++    BOOL    H = (Data >> 15) & 1;
++    DWORD   Reg = (Data >> 16) & 7;
++    BOOL    R = (Data >> 19) & 1;
++    BOOL    L = (Data >> 20) & 1;
++    BOOL    C = (Data >> 21) & 1;
++    DWORD   StackAdjust = (Data >> 22) & 0x3ff;
++    BOOL    PrologueFold = FALSE;
++    BOOL    EpilogueFold = FALSE;
++    DWORD   StackWords = StackAdjust;
++    DWORD   PrologueMask = 0;
++    DWORD   EpilogueMask = 0;
++    DWORD   First;
++    DWORD   Last;
++    DWORD   e = 0;
++    DWORD   p = 0;
++
++    //
++    // A stack adjustment of 0x3f4 or more is one to four words, which the
++    // prologue or the epilogue may fold into its push or pop.
++    //
++
++    if (StackAdjust >= 0x3f4) {
++        PrologueFold = (StackAdjust & 4) != 0;
++        EpilogueFold = (StackAdjust & 8) != 0;
++        StackWords = (StackAdjust & 3) + 1;
+=1 235 3
++    // The integer registers pushed and popped: r4 - rN, N = 4 + Reg, unless
++    // the floating registers are saved, preceded by the words of a folded
++    // stack adjustment, r11 if a frame chain is made, and the link register,
++    // which the epilogue pops into the program counter if it returns so.
++    //
++
++    Last = R ? 3 : Reg + 4;
++    if (!R || PrologueFold) {
++        First = PrologueFold ? (~StackAdjust & 3) : 4;
++        PrologueMask = ((1 << (Last + 1)) - 1) & ~((1 << First) - 1);
++    }
++
++    if (!R || EpilogueFold) {
++        First = EpilogueFold ? (~StackAdjust & 3) : 4;
++        EpilogueMask = ((1 << (Last + 1)) - 1) & ~((1 << First) - 1);
++    }
++
++    if (C) {
++        PrologueMask |= 1 << 11;
++        EpilogueMask |= 1 << 11;
++    }
++
++    if (L) {
++        PrologueMask |= 1 << LR;
++        if (Ret != 0) {
++            EpilogueMask |= 1 << LR;
++        } else if (!H) {
++            EpilogueMask |= 1 << 15;
+=1 385 4
++    // The prologue codes, in the reverse of the order of the instructions:
++    // the stack allocation, the push of the floating registers, the frame
++    // chain, the push of the integer registers and that of the arguments.
++    //
++
++    if ((StackWords != 0) && !PrologueFold) {
++        p += StackAdjustCode( &Prologue[p], StackWords );
++    }
++
++    if (R && (Reg != 7)) {
++        Prologue[p++] = (UCHAR)(0xe0 | Reg);
++    }
++
++    if (C) {
++        Prologue[p++] = (UCHAR)((R && !PrologueFold) ? 0xfb : 0xfc);
++    }
++
++    if (PrologueMask != 0) {
++        p += PushPopCode( &Prologue[p], PrologueMask, FALSE );
++    }
++
++    if (H) {
++        Prologue[p++] = 0x04;
++    }
++
++    Prologue[p++] = 0xff;
++
++    //
++    // The epilogue codes, in the order of the instructions: the stack
++    // deallocation, the pop of the floating registers, the pop of the integer
++    // registers, the deallocation of the arguments, and the return.
++    //
++
++    if ((StackWords != 0) && !EpilogueFold) {
++        e += StackAdjustCode( &Epilogue[e], StackWords );
++    }
++
++    if (R && (Reg != 7)) {
++        Epilogue[e++] = (UCHAR)(0xe0 | Reg);
++    }
++
++    if (EpilogueMask != 0) {
++        e += PushPopCode( &Epilogue[e], EpilogueMask, TRUE );
++    }
++
++    if (H) {
++        if (L && (Ret == 0)) {
++            Epilogue[e++] = 0xef;
++            Epilogue[e++] = 0x05;
++        } else {
++            Epilogue[e++] = 0x04;
+=1 385 3
++    Epilogue[e++] = (UCHAR)((Ret == 1) ? 0xfd : ((Ret == 2) ? 0xfe : 0xff));
++
++    *PrologueEnd = p;
++    *EpilogueEnd = e;
+=1 111 3
++static BOOL
++UnwindPacked(
++    PUNWIND_MEMORY      Memory,
++    DWORD               ImageBase,
++    DWORD               ControlPc,
++    PRUNTIME_FUNCTION   FunctionEntry,
++    PCONTEXT            Context,
++    PBOOL               Frame
+=1 122 6
++    This function unwinds a function of canonical form from its packed unwind
++    data, by the unwind codes of the prologue and epilogue the data describes.
+=1 200 4
++    UCHAR   Epilogue[MAXIMUM_PACKED_CODES];
++    UCHAR   Prologue[MAXIMUM_PACKED_CODES];
++    DWORD   Data = FunctionEntry->UnwindData;
++    DWORD   FunctionLength = ((Data >> 2) & 0x7ff) * 2;
++    DWORD   Ret = (Data >> 13) & 3;
++    DWORD   Offset = ControlPc - (ImageBase + (FunctionEntry->BeginAddress & ~1));
++    DWORD   PrologueSize;
++    DWORD   EpilogueSize;
++    DWORD   e;
++    DWORD   p;
++
++    PackedCodes( Data, Prologue, &p, Epilogue, &e );
++
++    //
++    // Within the prologue, undo the instructions that executed (a function
++    // fragment has none); within the epilogue at the end of the function,
++    // execute the instructions that remain; within the body, undo the whole
++    // prologue.
++    //
++
++    if ((Data & 3) == 1) {
++        PrologueSize = UnwindSequenceSize( Prologue, &Prologue[p], FALSE );
++        if (Offset < PrologueSize) {
++            return ExecuteUnwindCodes( Memory, Prologue, &Prologue[p], PrologueSize - Offset, Context, Frame );
+=1 385 3
++    if (Ret != 3) {
++        EpilogueSize = UnwindSequenceSize( Epilogue, &Epilogue[e], TRUE );
++        if ((Offset < FunctionLength) && (Offset >= FunctionLength - EpilogueSize)) {
++            return ExecuteUnwindCodes( Memory,
++                                       Epilogue,
++                                       &Epilogue[e],
++                                       Offset - (FunctionLength - EpilogueSize),
++                                       Context,
++                                       Frame );
+=1 385 3
++    return ExecuteUnwindCodes( Memory, Prologue, &Prologue[p], 0, Context, Frame );
+=1 111 3
++static BOOL
++UnwindFull(
++    PUNWIND_MEMORY      Memory,
++    DWORD               ImageBase,
++    DWORD               ControlPc,
++    PRUNTIME_FUNCTION   FunctionEntry,
++    PCONTEXT            Context,
++    PBOOL               Frame
+=1 122 6
++    This function unwinds a function by the unwind codes of its .xdata
++    record: its header, the epilogue scopes and the unwind codes, read from
++    the image.
+=1 200 4
++    DWORD   Header[2];
++    DWORD   XData = ImageBase + FunctionEntry->UnwindData;
++    DWORD   FunctionLength;
++    BOOL    EBit;
++    BOOL    FBit;
++    DWORD   EpilogueCount;
++    DWORD   CodeWords;
++    DWORD   ScopeCount;
++    DWORD   HeaderWords = 1;
++    LPDWORD Scope;
++    PUCHAR  Code;
++    PUCHAR  CodeEnd;
++    DWORD   Offset = ControlPc - (ImageBase + (FunctionEntry->BeginAddress & ~1));
++    DWORD   PrologueSize;
++    DWORD   EpilogueSize;
++    DWORD   EpilogueStart;
++    DWORD   Index;
++    BOOL    rval;
++
++    if (!ReadTarget( Memory, XData, Header, sizeof(Header) )) {
++        return FALSE;
++    }
++
++    FunctionLength = (Header[0] & 0x3ffff) * 2;
++    EBit = (Header[0] >> 21) & 1;
++    FBit = (Header[0] >> 22) & 1;
++    EpilogueCount = (Header[0] >> 23) & 0x1f;
++    CodeWords = (Header[0] >> 28) & 0xf;
++    if ((EpilogueCount == 0) && (CodeWords == 0)) {
++        EpilogueCount = Header[1] & 0xffff;
++        CodeWords = (Header[1] >> 16) & 0xff;
++        HeaderWords = 2;
++    }
++
++    ScopeCount = EBit ? 0 : EpilogueCount;
++    Scope = (LPDWORD) LocalAlloc( LPTR, (ScopeCount + CodeWords) * sizeof(DWORD) + 1 );
++    if (!Scope) {
++        return FALSE;
++    }
++
++    if (!ReadTarget( Memory,
++                     XData + HeaderWords * sizeof(DWORD),
++                     Scope,
++                     (ScopeCount + CodeWords) * sizeof(DWORD) )) {
++        LocalFree( Scope );
++        return FALSE;
++    }
++
++    Code = (PUCHAR)&Scope[ScopeCount];
++    CodeEnd = Code + CodeWords * 4;
++
++    //
++    // Within the prologue, undo the instructions that executed (a function
++    // fragment has none).
++    //
++
++    if (!FBit) {
++        PrologueSize = UnwindSequenceSize( Code, CodeEnd, FALSE );
++        if (Offset < PrologueSize) {
++            rval = ExecuteUnwindCodes( Memory, Code, CodeEnd, PrologueSize - Offset, Context, Frame );
++            LocalFree( Scope );
++            return rval;
+=1 385 4
++    // Within an epilogue, execute the instructions that remain. A single
++    // epilogue described in the header ends the function.
++    //
++
++    if (EBit) {
++        EpilogueSize = UnwindSequenceSize( Code + EpilogueCount, CodeEnd, TRUE );
++        EpilogueStart = FunctionLength - EpilogueSize;
++        if ((Offset >= EpilogueStart) && (Offset < FunctionLength)) {
++            rval = ExecuteUnwindCodes( Memory, Code + EpilogueCount, CodeEnd, Offset - EpilogueStart, Context, Frame );
++            LocalFree( Scope );
++            return rval;
+=1 385 3
++    for (Index = 0; Index < ScopeCount; Index += 1) {
++        EpilogueStart = (Scope[Index] & 0x3ffff) * 2;
++        if (Offset < EpilogueStart) {
++            continue;
++        }
++
++        EpilogueSize = UnwindSequenceSize( Code + (Scope[Index] >> 24), CodeEnd, TRUE );
++        if (Offset < EpilogueStart + EpilogueSize) {
++            rval = ExecuteUnwindCodes( Memory,
++                                       Code + (Scope[Index] >> 24),
++                                       CodeEnd,
++                                       Offset - EpilogueStart,
++                                       Context,
++                                       Frame );
++            LocalFree( Scope );
++            return rval;
+=1 385 4
++    // Within the body of the function, undo the whole prologue.
++    //
++
++    rval = ExecuteUnwindCodes( Memory, Code, CodeEnd, 0, Context, Frame );
++    LocalFree( Scope );
+=1 110 4
++static BOOL
++ReadFunctionEntry(
++    PUNWIND_MEMORY      Memory,
++    DWORD               ImageBase,
++    DWORD               ControlPc,
++    PRUNTIME_FUNCTION   FunctionEntry
+=1 122 6
++    This function reads the function table entry of the function that
++    contains an address from the exception directory of its image. The table
++    is sorted by the address of the functions; the end of a function is its
++    length, in its packed unwind data or the header of its .xdata record.
+=1 164 3
++    TRUE if the address is in a function of the table.
+=1 200 4
++    IMAGE_DOS_HEADER    DosHeader;
++    IMAGE_NT_HEADERS    NtHeaders;
++    DWORD               Table;
++    DWORD               Low = 0;
++    DWORD               High;
++    DWORD               Middle;
++    DWORD               Header;
++    DWORD               Length;
++    DWORD               Rva = ControlPc - ImageBase;
++
++    if (!ReadTarget( Memory, ImageBase, &DosHeader, sizeof(DosHeader) ) ||
++        (DosHeader.e_magic != IMAGE_DOS_SIGNATURE) ||
++        !ReadTarget( Memory, ImageBase + DosHeader.e_lfanew, &NtHeaders, sizeof(NtHeaders) ) ||
++        (NtHeaders.Signature != IMAGE_NT_SIGNATURE) ||
++        (NtHeaders.OptionalHeader.NumberOfRvaAndSizes <= IMAGE_DIRECTORY_ENTRY_EXCEPTION)) {
++        return FALSE;
++    }
++
++    Table = ImageBase + NtHeaders.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].VirtualAddress;
++    High = NtHeaders.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].Size / sizeof(RUNTIME_FUNCTION);
++
++    //
++    // Find the last entry that begins at or below the address.
++    //
++
++    while (Low < High) {
++        Middle = (Low + High) / 2;
++        if (!ReadTarget( Memory, Table + Middle * sizeof(RUNTIME_FUNCTION), FunctionEntry, sizeof(RUNTIME_FUNCTION) )) {
++            return FALSE;
++        }
++
++        if (Rva < (FunctionEntry->BeginAddress & ~1)) {
++            High = Middle;
++        } else {
++            Low = Middle + 1;
+=1 385 3
++    if ((Low == 0) ||
++        !ReadTarget( Memory, Table + (Low - 1) * sizeof(RUNTIME_FUNCTION), FunctionEntry, sizeof(RUNTIME_FUNCTION) )) {
++        return FALSE;
++    }
++
++    if ((FunctionEntry->UnwindData & 3) != 0) {
++        Length = ((FunctionEntry->UnwindData >> 2) & 0x7ff) * 2;
++    } else {
++        if (!ReadTarget( Memory, ImageBase + FunctionEntry->UnwindData, &Header, sizeof(Header) )) {
++            return FALSE;
++        }
++
++        Length = (Header & 0x3ffff) * 2;
++    }
++
++    return Rva < (FunctionEntry->BeginAddress & ~1) + Length;
+=1 1007 4
++ArmFunctionExtent(
++    DWORD   UnwindData,
++    LPDWORD Record,
++    LPDWORD FunctionLength,
++    LPDWORD PrologueLength
+=1 122 6
++    This function returns the length of a function and that of its prologue
++    from the unwind data of its function table entry, for the function table
++    of the symbol handler (debug.c).
+=1 151 3
++    UnwindData - Supplies the unwind data of the function table entry.
++
++    Record - Supplies the address of the .xdata record of the function if the
++        unwind data is not packed.
+=1 164 3
++    TRUE if the unwind data was read.
+=1 200 4
++    UCHAR   Epilogue[MAXIMUM_PACKED_CODES];
++    UCHAR   Prologue[MAXIMUM_PACKED_CODES];
++    DWORD   EpilogueCount;
++    DWORD   CodeWords;
++    DWORD   HeaderWords = 1;
++    PUCHAR  Code;
++    DWORD   e;
++    DWORD   p;
++
++    *PrologueLength = 0;
++
++    if ((UnwindData & 3) != 0) {
++        *FunctionLength = ((UnwindData >> 2) & 0x7ff) * 2;
++        if ((UnwindData & 3) == 1) {
++            PackedCodes( UnwindData, Prologue, &p, Epilogue, &e );
++            *PrologueLength = UnwindSequenceSize( Prologue, &Prologue[p], FALSE );
+=2 703 5 4
++    if (!Record) {
++        return FALSE;
++    }
++
++    *FunctionLength = (Record[0] & 0x3ffff) * 2;
++    EpilogueCount = (Record[0] >> 23) & 0x1f;
++    CodeWords = (Record[0] >> 28) & 0xf;
++    if ((EpilogueCount == 0) && (CodeWords == 0)) {
++        EpilogueCount = Record[1] & 0xffff;
++        CodeWords = (Record[1] >> 16) & 0xff;
++        HeaderWords = 2;
+=1 235 3
++    // The prologue codes follow the epilogue scopes, unless the header
++    // describes the only epilogue; a function fragment has no prologue.
++    //
++
++    if (((Record[0] >> 22) & 1) == 0) {
++        Code = (PUCHAR)&Record[HeaderWords + (((Record[0] >> 21) & 1) ? 0 : EpilogueCount)];
++        *PrologueLength = UnwindSequenceSize( Code, Code + CodeWords * 4, FALSE );
+=2 703 6
++static BOOL
++VirtualUnwind(
++    HANDLE                            hProcess,
++    DWORD                             ImageBase,
++    DWORD                             ControlPc,
++    PRUNTIME_FUNCTION                 FunctionEntry,
+=2 109 8
+=1 128 1
++    prologue code backwards, or its epilogue code forward, as RtlVirtualUnwind
++    does.
+=1 132 2
++    the previous frame is the link register. If the function is a nested
++    function, but not an exception or interrupt frame, then it is the return
++    address the prologue saved. Otherwise, an exception or interrupt entry to
++    the system is being unwound and its prologue restores the program counter
++    from the frame it describes.
+=1 151 3
++    ImageBase - Supplies the base of the image that contains the function.
+=1 153 4
++    FunctionEntry - Supplies the function table entry of the function.
+=2 143 3
++Return Value:
++
++    TRUE if the frame was unwound: the program counter of the context is the
++    address where control left the previous frame, and the context is marked
++    unwound to a call if it is the return address of a call.
+=1 200 4
++    UNWIND_MEMORY   Memory;
++    BOOL            Frame = FALSE;
++    BOOL            rval;
++
++    Memory.hProcess = hProcess;
++    Memory.ReadMemory = ReadMemory;
++
++    if ((FunctionEntry->UnwindData & 3) != 0) {
++        rval = UnwindPacked( &Memory, ImageBase, ControlPc, FunctionEntry, Context, &Frame );
++    } else {
++        rval = UnwindFull( &Memory, ImageBase, ControlPc, FunctionEntry, Context, &Frame );
++    }
++
++    if (!rval) {
++        return FALSE;
++    }
++
++    if (Frame) {
++        Context->Pc &= ~1;
++        Context->ContextFlags &= ~CONTEXT_UNWOUND_TO_CALL;
++    } else {
++        Context->Pc = Context->Lr & ~1;
++        Context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
+=2 703 6
+=3 49 7
+=1 60 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
++    )
++{
++    UNWIND_MEMORY       Memory;
++    RUNTIME_FUNCTION    rf;
++    DWORD               ControlPc = *ReturnAddress;
++    DWORD               ImageBase;
++    DWORD               Sp = Context->Sp;
++
++    //
++    // A return address follows the call, which is in the function that made
++    // it: the call may be the last instruction of the function.
++    //
++
++    if (Context->ContextFlags & CONTEXT_UNWOUND_TO_CALL) {
++        ControlPc -= 2;
++    }
++
++    Memory.hProcess = hProcess;
++    Memory.ReadMemory = ReadMemory;
++    ImageBase = GetModuleBase( hProcess, ControlPc );
++
++    if (ImageBase && ReadFunctionEntry( &Memory, ImageBase, ControlPc, &rf )) {
++
++        if (!VirtualUnwind( hProcess, ImageBase, ControlPc, &rf, Context, ReadMemory )) {
++            return FALSE;
+=1 788 5 -12
++        // a leaf function, or code without unwind data: the return address
++        // is in the link register
++        //
++
++        Context->Pc = Context->Lr & ~1;
++        Context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
+=1 107 3
++    if ((Context->Pc == 0) || (Context->Pc == *ReturnAddress && Context->Sp == Sp)) {
++        return FALSE;
++    }
++
++    *ReturnAddress = Context->Pc;
++    *FramePointer  = Context->Sp;
+=1 1089 6
++WalkArmInit(
+=1 81 4
+=1 60 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
+=4 372 16
++            // successfully read an exception frame from the stack: the
++            // nonvolatile state a thread swapped out with
++            //
++            Context->Sp    = StackFrame->AddrFrame.Offset;
++            Context->Cpsr  = ExceptionFrame.Psr;
++            Context->Pc    = ExceptionFrame.SwapReturn & ~1;
++            Context->Lr    = ExceptionFrame.SwapReturn;
++            Context->R4    = ExceptionFrame.R4;
++            Context->R5    = ExceptionFrame.R5;
++            Context->R6    = ExceptionFrame.R6;
++            Context->R7    = ExceptionFrame.R7;
++            Context->R8    = ExceptionFrame.R8;
++            Context->R9    = ExceptionFrame.R9;
++            Context->R10   = ExceptionFrame.R10;
++            Context->R11   = ExceptionFrame.R11;
++            Context->Fpscr = ExceptionFrame.Fpscr;
++            memcpy( &Context->u.D[8], &ExceptionFrame.D8, 8 * sizeof(ULONGLONG) );
++            Context->ContextFlags &= ~CONTEXT_UNWOUND_TO_CALL;
+=1 1046 9
++    StackFrame->AddrPC.Offset       = Context->Pc;
+=1 1056 2
++    StackFrame->AddrFrame.Offset    = Context->Sp;
+=3 1051 11
+=1 1070 1
++                        GetModuleBase ) ) {
++
++        StackFrame->AddrReturn.Offset = Context->Lr & ~1;
+=1 1074 11
++    StackFrame->Params[0] = Context->R0;
++    StackFrame->Params[1] = Context->R1;
++    StackFrame->Params[2] = Context->R2;
++    StackFrame->Params[3] = Context->R3;
+=1 1089 6
++WalkArmNext(
+=1 81 4
+=1 60 1
++    PGET_MODULE_BASE_ROUTINE          GetModuleBase
+=4 457 12
+=1 1070 1
++                        GetModuleBase ) ) {
+=3 1105 16
+=1 1070 1
++                        GetModuleBase ) ) {
+=1 1193 8
++    StackFrame->Params[0] = ContextSave.R0;
++    StackFrame->Params[1] = ContextSave.R1;
++    StackFrame->Params[2] = ContextSave.R2;
++    StackFrame->Params[3] = ContextSave.R3;
+=1 109 3

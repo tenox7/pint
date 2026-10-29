@@ -1,0 +1,3 @@
+# WINDOWS\WIN4HELP\WINHELP ARM_SOURCES (its mips_SOURCES: sdff.c, which maps the structures of help files
+# between their disk format and that of memory on the RISC machines)
+/work/private/windows/win4help/winhelp/sdff.c

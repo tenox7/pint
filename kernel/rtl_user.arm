@@ -1,0 +1,13 @@
+# RTL\USER ARM_SOURCES (the MIPS_SOURCES of its mips\sources: chkstk.s context.c debugstb.s exdsptch.c getcalr.c
+# largeint.s lzntmips.s trampoln.s xcptmisc.s xxcaptur.s xxmvmem.s; __chkstk is the C run-time's, and ARM takes
+# the C LZNT1DecompressChunk of lznt1.c)
+rtl/context.c
+rtl/debugstb.asm
+rtl/exdsptch.c
+rtl/vunwind.c
+rtl/getcalr.c
+rtl/xcptmisc.asm
+rtl/largeint.c
+rtl/trampoln.asm
+rtl/xxcaptur.asm
+rtl/xxmvmem.asm

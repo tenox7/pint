@@ -1,0 +1,13 @@
+#ntdiff private/ntos/kd/mips/kdpcpu.h private/ntos/kd/alpha/kdpcpu.h
+=1 1 10
++    Machine specific kernel debugger data types and constants.
++
++    ARM port of kd/mips/kdpcpu.h: the breakpoint instruction is the Thumb
++    breakpoint trap (THUMB_BREAKPOINT).
+=1 12 5
+=1 19 5
++#define KDP_BREAKPOINT_TYPE  USHORT
++#define KDP_BREAKPOINT_ALIGN 1
++#define KDP_BREAKPOINT_VALUE THUMB_BREAKPOINT
++
++#endif // _KDPCPU_

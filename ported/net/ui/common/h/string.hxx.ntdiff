@@ -1,0 +1,4 @@
+#ntdiff private/net/ui/common/h/string.hxx
+=1 1 228
++    ISTR& operator++( int ) { return operator++(); }
+=1 229 863

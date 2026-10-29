@@ -1,0 +1,35 @@
+#ntdiff private/fp32/include/trans.h
+=1 1 116
++#elif defined(_M_ARM)
++#define D_IND_HI 0x7ff80000
++#define D_IND_LO 0x0
+=1 117 201
++#elif defined(_M_ARM)
+=1 217 3
++// The internal control word is the VFP FPSCR with the exception enable bits
++// inverted into masks (as the MIPS one is the FCSR): all five exceptions masked
++// and round to nearest for the transcendentals.
++//
++
++#define ICW		0x00001f00		/* Internal CW for transcendentals */
++#define IMCW		0xffffff60		/* Internal CW Mask */
++
++#define IMCW_EM 	0x00001f00		/* interrupt Exception Masks */
++#define IEM_INVALID	0x00000100		/*   invalid */
++#define IEM_ZERODIVIDE	0x00000200		/*   zero divide */
++#define IEM_OVERFLOW	0x00000400		/*   overflow */
++#define IEM_UNDERFLOW	0x00000800		/*   underflow */
++#define IEM_INEXACT	0x00001000		/*   inexact (precision) */
++
++
++#define IMCW_RC 	0x00c00000		/* Rounding Control */
++#define IRC_CHOP	0x00c00000		/*   chop */
++#define IRC_UP		0x00400000		/*   up */
++#define IRC_DOWN	0x00800000		/*   down */
+=1 206 3
++#define ISW_INVALID	(1<<0)	/* invalid */
++#define ISW_ZERODIVIDE	(1<<1)	/* zero divide */
++#define ISW_OVERFLOW	(1<<2)	/* overflow */
+=1 212 1
++#define ISW_INEXACT	(1<<4)	/* inexact (precision) */
+=1 317 174

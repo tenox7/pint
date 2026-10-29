@@ -1,0 +1,8 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/h/mtdll.h
+=1 1 363
++#if defined(_M_ARM)
+=1 365 3
++        unsigned long _ImageBase;   /* image of the function examined */
++        unsigned long _ThrowImageBase; /* image of the thrown object */
++#elif defined(_M_MRX000)
+=1 365 151

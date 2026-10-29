@@ -1,0 +1,8 @@
+#!/bin/sh
+# msvcexe TOOL ARG...: a tool of Microsoft C for ARM (cl, link) on its arm64 Wine, for an NT
+# build tool on the 32-bit one that runs it by name (obj/host/CL.EXE, LINK.EXE: msvcexe.c).
+# Its paths are of Windows, relative ones of the current directory; the include
+# directories are those the build tool names.
+export WINEPREFIX=/opt/wine WINEDEBUG=-all MSVC_ENV=0
+unset WINEDLLOVERRIDES WINELOADER WINESERVER INCLUDE LIB
+exec wine-msvc "$@"

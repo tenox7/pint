@@ -1,0 +1,11 @@
+#ntdiff public/oak/bin/default.ini
+#crlf
+=1 1 1629
++#if defined(_RASPI_)
++        //
++        // The layout text setup writes for the keyboard of TXTSETUP.SIF (US).
++        //
++        Preload
++            1 = 00000409
++#endif // defined(_RASPI_)
+=1 1630 136

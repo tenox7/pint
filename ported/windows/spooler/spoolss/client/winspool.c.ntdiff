@@ -1,0 +1,5 @@
+#ntdiff private/windows/spooler/spoolss/client/winspool.c
+=1 1 4488
++
++    return ReturnValue;
+=1 4489 705

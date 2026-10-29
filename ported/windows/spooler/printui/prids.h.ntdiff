@@ -1,0 +1,4 @@
+#ntdiff private/windows/spooler/printui/prids.h
+=1 1 455
++#define IDS_ENVIRONMENT_ARM             15235
+=1 456 14

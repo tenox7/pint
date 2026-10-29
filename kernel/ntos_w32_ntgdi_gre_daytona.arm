@@ -1,0 +1,7 @@
+# NTGDI\GRE ARM_SOURCES (its MIPS_SOURCES: tiler.s mutexs.s palsrch.s xxmvmem.s cachea.s
+# glyphout.s str.s): the portable C++ pattern tiler of the Alpha and the glyph metrics of
+# the port's GRE\ARM (cachea.asm, with the offsets of genarm.cxx); the handle manager
+# locks, the palette search, the glyph output and the stretch blits are portable C, and
+# the memory moves of 32-bit accesses are those of MIPS displays without 64-bit access.
+/work/private/ntos/w32/ntgdi/gre/alpha/tiler.cxx
+/work/RASPI/ported/ntos/w32/ntgdi/gre/arm/cachea.asm

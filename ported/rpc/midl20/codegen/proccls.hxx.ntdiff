@@ -1,0 +1,5 @@
+#ntdiff private/rpc/midl20/codegen/proccls.hxx
+=1 1 1443
++                                                        BOOL    fAlpha,
++                                                        BOOL    fArm = FALSE );
+=1 1445 783

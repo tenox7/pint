@@ -1,0 +1,86 @@
+# The Internet services (the TCP/IP service table, RFC 1700): the name, the
+# port/protocol and its aliases. # starts a comment.
+
+echo                7/tcp
+echo                7/udp
+discard             9/tcp    sink null
+discard             9/udp    sink null
+systat             11/tcp    users
+daytime            13/tcp
+daytime            13/udp
+netstat            15/tcp
+qotd               17/tcp    quote
+qotd               17/udp    quote
+chargen            19/tcp    ttytst source
+chargen            19/udp    ttytst source
+ftp-data           20/tcp
+ftp                21/tcp
+telnet             23/tcp
+smtp               25/tcp    mail
+time               37/tcp    timserver
+time               37/udp    timserver
+rlp                39/udp    resource
+nameserver         42/tcp    name
+nameserver         42/udp    name
+nicname            43/tcp    whois
+domain             53/tcp
+domain             53/udp
+mtp                57/tcp
+bootps             67/udp    dhcps
+bootpc             68/udp    dhcpc
+tftp               69/udp
+gopher             70/tcp
+rje                77/tcp    netrjs
+finger             79/tcp
+http               80/tcp    www
+link               87/tcp    ttylink
+supdup             95/tcp
+hostnames         101/tcp    hostname
+iso-tsap          102/tcp
+pop2              109/tcp    postoffice
+pop3              110/tcp
+sunrpc            111/tcp
+sunrpc            111/udp
+auth              113/tcp    authentication ident
+sftp              115/tcp
+uucp-path         117/tcp
+nntp              119/tcp    usenet
+ntp               123/udp
+loc-srv           135/tcp    epmap
+loc-srv           135/udp    epmap
+netbios-ns        137/tcp    nbname
+netbios-ns        137/udp    nbname
+netbios-dgm       138/udp    nbdatagram
+netbios-ssn       139/tcp    nbsession
+imap              143/tcp    imap4
+snmp              161/udp
+snmptrap          162/udp    snmp-trap
+xdmcp             177/udp
+bgp               179/tcp
+irc               194/tcp
+exec              512/tcp
+biff              512/udp    comsat
+login             513/tcp
+who               513/udp    whod
+cmd               514/tcp    shell
+syslog            514/udp
+printer           515/tcp    spooler
+talk              517/udp
+ntalk             518/udp
+efs               520/tcp
+router            520/udp    route routed
+timed             525/udp    timeserver
+tempo             526/tcp    newdate
+courier           530/tcp    rpc
+conference        531/tcp    chat
+netnews           532/tcp    readnews
+netwall           533/udp
+uucp              540/tcp    uucpd
+klogin            543/tcp
+kshell            544/tcp    krcmd
+new-rwho          550/udp    new-who
+remotefs          556/tcp    rfs rfs_server
+rmonitor          560/udp    rmonitord
+monitor           561/udp
+kerberos          750/udp    kdc
+kerberos          750/tcp    kdc

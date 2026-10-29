@@ -1,0 +1,11 @@
+#ntdiff private/net/sockets/wshtcpip/wshtcpip.c
+=1 1 4163
++        //
++        // The first address of the interface: the scan below sets the
++        // pointer only after this query, and the compilers of 1996 used
++        // what the register held (the query of the interface does not
++        // read the context).
++        //
++
++        addressScan = addressBuffer;
+=1 4163 243

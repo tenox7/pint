@@ -1,0 +1,22 @@
+#ntdiff private/ntos/ke/mips/allproc.c
+=1 1 136
++    ProcessorState.ContextFrame.R0 = (ULONG)KeLoaderBlock;
++    ProcessorState.ContextFrame.Pc = (ULONG)KiInitializeSystem & ~1;
++    ProcessorState.ContextFrame.Cpsr = PSR_THUMB | 0x1D3;
+=1 139 41
++        KeLoaderBlock->u.Arm.InterruptStack = MemoryBlock1 + (1 * KERNEL_STACK_SIZE);
+=1 181 6
++        ProcessorState.ContextFrame.Sp = KeLoaderBlock->KernelStack;
+=1 187 5
++        KeLoaderBlock->u.Arm.PanicStack = MemoryBlock1 + (3 * KERNEL_STACK_SIZE);
++
++        //
++        // Set the page frame of the PCR page in the loader parameter block.
++        // The PCR is reached through the privileged thread id register of
++        // the processor, not at a fixed address, so it needs no page color.
+=1 197 4
++        KeLoaderBlock->u.Arm.PcrPage = PcrPage;
+=1 203 17
+=1 221 16
++                __dmb(_ARM_BARRIER_SY);
+=1 237 156

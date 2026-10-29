@@ -1,0 +1,2 @@
+# NET\DETECT\DLL ARM_SOURCES (beside detmips.c, which is for the Jazz built-in SONIC): the built-in Ethernet of the Raspberry Pi
+netdetect/detarm.c

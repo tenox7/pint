@@ -1,0 +1,4 @@
+#ntdiff private/ntos/nthals/hal.src
+=1 1 106
++#if defined(MIPS) || defined(ALPHA) || defined(_ARM_)
+=1 108 64

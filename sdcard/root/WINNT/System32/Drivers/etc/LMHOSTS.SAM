@@ -1,0 +1,7 @@
+# A sample of LMHOSTS, the NetBIOS names of the computers on other networks:
+# copy it to LMHOSTS and add a line for each, the address then the name
+# (up to 15 characters). #PRE keeps the name in the name cache from boot,
+# #DOM:domain marks a domain controller. # starts a comment.
+#
+# 192.168.1.10    server1         #PRE
+# 192.168.1.11    pdc             #PRE #DOM:workgroup

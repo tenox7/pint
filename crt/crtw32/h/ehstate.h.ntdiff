@@ -1,0 +1,13 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/h/ehstate.h
+=1 1 83
++extern __ehstate_t GetCurrentState(EHRegistrationNode *, DispatcherContext *, FuncInfo *);
++extern __ehstate_t GetUnwindState(EHRegistrationNode *, DispatcherContext *, FuncInfo *);
+=1 86 2
++#elif defined(_M_ARM)
++//
++// These are function calls on ARM, defined in 'ehstate.cpp': the state is that
++// of the address in the function, unless its frame holds another.
++//
++extern __ehstate_t GetCurrentState(EHRegistrationNode *, DispatcherContext *, FuncInfo *);
++extern void SetState(EHRegistrationNode *, DispatcherContext *, FuncInfo *, __ehstate_t);
+=1 87 7

@@ -1,0 +1,17 @@
+#ntdiff private/ntos/mm/mips/datamips.c private/ntos/mm/alpha/datalpha.c private/ntos/mm/i386/data386.c
+=1 1 6
++   dataarm.c
+=1 8 6
++    ARM port of MM/MIPS/DATAMIPS.C (the R4000 PTE format); the color tables
++    are those of MM/I386/DATA386.C, the single primary color of a physically
++    indexed data cache.
+=1 13 5
+=1 20 14
+=1 39 1
+=2 37 2
+=1 51 4
+=1 57 22
+=2 61 20
+=1 131 6
+=3 111 27
+=1 182 10

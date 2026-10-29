@@ -1,0 +1,16 @@
+MAJORCOMP=ntos
+MINORCOMP=dd
+
+TARGETNAME=bcmusb
+TARGETPATH=\nt\public\sdk\lib
+TARGETTYPE=EXPORT_DRIVER
+
+
+INCLUDES=..\..\inc
+
+DLLDEF=bcmusb.def
+
+SOURCES=bcmusb.c \
+        usbhost.c \
+        xhci.c \
+        bcmusb.rc

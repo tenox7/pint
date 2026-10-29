@@ -1,0 +1,4 @@
+#ntdiff private/windows/shell/comdlg/color.c
+=1 1 1943
++    return (0L);
+=1 1944 110

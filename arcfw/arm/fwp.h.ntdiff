@@ -1,0 +1,247 @@
+#ntdiff private/ntos/fw/mips/fwp.h private/ntos/fw/alpha/fwp.h private/ntos/fw/duobase/mips/firmware.h
+=1 1 10
++    This module contains the private definitions of the ARC firmware for the
++    Raspberry Pi 2 (the ARM FW\MIPS\FWP.H and FIRMWARE.H).
+=1 18 6
++#include "bootlib.h"
++#include "ntimage.h"
+=1 46 8
++
+=1 55 64
+=1 125 46
+=1 178 9
+=1 195 12
+=1 208 34
++// Define the memory allocation structure.
+=3 40 6
+=3 28 4
++// Define the firmware pool.
++//
++
++#define FW_POOL_SIZE 0x10000
+=1 240 6
++DisplayInitialize (
+=1 257 5
++KeyboardInitialize (
+=1 257 5
++SerialInitialize (
+=1 257 5
++HardDiskInitialize (
+=1 275 4
++//
++// Define special character values.
+=1 408 12
++#define ASCII_DEL 0x7F
+=1 421 18
+=1 466 4
++FwInitialize (
+=1 471 4
++FwVendorInitialize (
+=1 471 4
++FwInitializeMemory (
+=1 471 4
++FwResetMemory (
+=1 116 3
++PMEMORY_DESCRIPTOR
++FwGetMemoryDescriptor (
++    IN PMEMORY_DESCRIPTOR MemoryDescriptor OPTIONAL
+=3 96 11
++FwLoadInitialize (
+=1 471 4
+=1 470 9
++ARC_STATUS
++FwOpen (
++    IN PCHAR OpenPath,
++    IN OPEN_MODE OpenMode,
++    OUT PULONG FileId
+=1 494 3
++FwClose (
+=3 57 3
++ARC_STATUS
++FwRead (
++    IN ULONG FileId,
++    OUT PVOID Buffer,
++    IN ULONG Length,
++    OUT PULONG Count
+=1 494 3
++FwWrite (
++    IN ULONG FileId,
++    IN PVOID Buffer,
++    IN ULONG Length,
++    OUT PULONG Count
+=1 494 3
++FwGetReadStatus (
+=3 57 3
++BOOLEAN
++FwGetPathMnemonicKey (
+=1 481 5
++ARC_STATUS
++FwLoad (
++    IN PCHAR ImagePath,
++    IN ULONG TopAddress,
++    OUT PULONG EntryAddress,
++    OUT PULONG LowAddress
+=1 494 3
++FwInvoke (
++    IN ULONG ExecAddr,
++    IN ULONG StackAddr,
++    IN ULONG Argc,
++    IN PCHAR Argv[],
++    IN PCHAR Envp[]
+=1 494 3
++FwExecute (
++    IN PCHAR Path,
++    IN ULONG Argc,
++    IN PCHAR Argv[],
++    IN PCHAR Envp[]
+=1 132 3
++FwEnvironmentInitialize (
+=2 441 4
++FwGetEnvironmentVariable (
+=2 446 4
++FwSetEnvironmentVariable (
++    IN PCHAR Variable,
++    IN PCHAR Value
+=1 484 3
++FwEnvironmentLoad (
+=1 471 4
++FwTimeInitialize (
+=1 471 4
++FwSystemIdInitialize (
+=1 471 4
++FwTerminationInitialize (
+=1 471 4
+=3 94 4
+=2 349 2
+=1 493 4
++SerialBootWrite (
+=2 602 5
++SerialBootSetup (
++    IN ULONG SP
+=1 132 3
++FwBootSystem (
+=1 476 4
+=1 598 5
+=1 542 9
++FwGetString (
+=1 552 7
++ULONG
++FwGetRelativeTime (
+=1 165 4
++// Raspberry Pi support routines: the VideoCore mailbox, the system timer,
++// the DWC2 USB host with its boot protocol keyboard, and the MMU.
++//
++// The system on a chip follows from the core (FwSocInitialize reads the MIDR).
++// The Cortex-A7 and Cortex-A53 boards (BCM2836, BCM2837) have the BCM2835
++// peripherals at 0x3F000000 and the BCM2836 per-core block at 0x40000000. The
++// Cortex-A72 board, the Raspberry Pi 4 (BCM2711), has them at 0xFE000000 and
++// 0xFF800000 in its low peripheral mode, with its own peripherals (GENET,
++// PCIe) below them from 0xFC000000 and a GIC-400 in the per-core block.
++//
++
++extern BOOLEAN FwBcm2711;
++extern ULONG FwPeripheralBase;
++
++#define PERIPHERAL_BASE         FwPeripheralBase
++#define SERIAL_PORT0_BASE       (PERIPHERAL_BASE + 0x201000)
++
++VOID
++FwSocInitialize (
+=1 471 4
++FwSetScsiAdapter(
++    IN ULONG PhysicalBase,
++    IN BOOLEAN Emmc2
+=1 137 3
++MailboxPropertyCall (
++    IN OUT volatile ULONG *Buffer
+=1 137 3
++MailboxBusToPhysical (
++    IN ULONG BusAddress
+=1 137 3
++MailboxPhysicalToBus (
++    IN ULONG PhysicalAddress
+=1 137 3
++MailboxSetPowerState (
++    IN ULONG DeviceId,
++    IN BOOLEAN On
+=1 137 3
++MailboxNotifyXhciReset (
++    IN ULONG DeviceAddress
+=1 477 3
++PcieInitialize (
++    OUT PULONG Registers
+=1 477 3
++FwProbeRead (
++    IN ULONG Address,
++    OUT PULONG Value
++    );
++
++extern UCHAR FwExceptionVectors[];
++
++ULONG
++MailboxGetClockRate (
++    IN ULONG ClockId
+=1 137 3
++MailboxGetArmMemory (
+=1 116 3
++ULONG
++MailboxGetBoardSerial (
++    OUT PULONG High
+=1 137 3
++MailboxGetBoardRevision (
+=1 116 3
++ULONG
++MailboxGetFirmwareRevision (
+=1 476 4
++MailboxGetBoardMacAddress (
++    OUT PUCHAR Address
+=1 132 3
++FwAddNetworkController (
++    IN PCHAR Identifier
+=1 132 3
++FwAddPciBus (
+=1 116 3
++ULONG
++FwGetMicroseconds (
+=1 476 4
++UsbInitialize (
+=1 476 4
++UsbKeyboardPresent (
+=1 476 4
++UsbKeyboardReport (
++    OUT UCHAR Report[8]
+=1 132 3
++UsbPrintDevices (
+=1 471 4
++FwMmuInitialize (
+=1 471 4
++FwMmuInitializeProcessor (
+=1 165 4
++// The processors: the four cores of every board, processor n the core with
++// affinity n. Each has a restart block after the system parameter block; the
++// boot processor releases the others into the firmware, where each waits for
++// the start bit of its block (FwProcessorSystemBoot), as processor B of a Duo
++// does. The Raspberry Pi firmware holds a secondary core until its mailbox 3
++// in the per-core block receives the address it is to run.
++//
++
++#define ARC_PROCESSORS          4
++
++#define LOCAL_PERIPHERAL_BASE   (FwBcm2711 ? 0xFF800000 : 0x40000000)
++#define LOCAL_MAILBOX3_SET(n)   (*(volatile ULONG *)(LOCAL_PERIPHERAL_BASE + 0x8C + 0x10 * (n)))
++#define LOCAL_MAILBOX3_CLEAR(n) (*(volatile ULONG *)(LOCAL_PERIPHERAL_BASE + 0xCC + 0x10 * (n)))
++
++extern char FwStart[];
++extern volatile ULONG FwProcessorsReleased;
++
++VOID
++FwStartProcessors (
+=1 471 4
++FwProcessorSystemBoot (
++    IN ULONG Number
+=1 132 3
++VenRestartBlock (
+=1 122 4
+=1 616 6
+=1 629 23
++#endif // _FWP_

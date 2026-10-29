@@ -1,0 +1,8 @@
+#ntdiff private/ole32/com/dcomrem/resolver.cxx
+=1 1 1437
++            // (the member function by its address, as the 1996 compiler took its name: it
++            // reads static members alone)
++            DWORD (_stdcall CRpcResolver::*pfnWorker)(void *) = &CRpcResolver::WorkerThreadLoop;
+=1 1438 1
++                              *(LPTHREAD_START_ROUTINE *)&pfnWorker,
+=1 1440 1520

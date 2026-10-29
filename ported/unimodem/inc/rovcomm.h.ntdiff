@@ -1,0 +1,4 @@
+#ntdiff private/unimodem/inc/rovcomm.h
+=1 1 789
++#define RovComm_ProcessIniFile()    ((BOOL)TRUE)
+=1 791 297

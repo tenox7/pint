@@ -1,0 +1,38 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/eh/ppc/ehstate.cpp
+=1 1 6
++*	Routine for calculatng current state on ARM.
+=1 8 25
++//
++// This routine is a replacement for the corresponding macro in 'ehdata.h':
++// the state the frame holds, else that of the address control left it at.
+=1 39 7
++    __ehstate_t state = *_GetStateOfFrame(pRN, pDC, pFuncInfo);
++
++    if (state == EH_STATE_FROM_PC) {
++	return _StateFromControlPc(pFuncInfo, pDC, pDC->ControlPc);
++    }
++
++    return state;
+=1 58 4
++// This routine sets the state the frame holds.
++//
++
++extern void SetState(
+=1 42 2
++    FuncInfo *pFuncInfo,
++    __ehstate_t newState
++) {
++    *_GetStateOfFrame(pRN, pDC, pFuncInfo) = newState;
+=1 110 7
++extern __ehstate_t _StateFromControlPc(
++    FuncInfo *pFuncInfo,
+=1 43 1
+=1 119 4
++    ULONG Ip;				// image offset, without the Thumb bit
+=1 124 7
++    ControlPc -= pDC->ImageBase;
+=1 131 1
++	Ip = FUNC_IPTOSTATE(*pFuncInfo, index).Ip & ~1;
+=1 133 4
++	      index - 1).State;
+=1 138 5

@@ -1,0 +1,3 @@
+# W32\UMODE ARM_SOURCES (its MIPS_SOURCES: mips\usrstubs.s, the user mode stubs of the
+# services of win32k.sys, which its makefile.inc makes with GENSRV)
+arm/usrstubs.asm

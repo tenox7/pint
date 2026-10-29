@@ -1,0 +1,6 @@
+#ntdiff private/windows/media/mixerapp/volume.c
+=1 1 1631
++    return pmxud->dwReturn;
+=1 1632 103
++    return DefWindowProc(hwnd, msg, wparam, lparam);
+=1 1736 202

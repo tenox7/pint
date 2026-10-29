@@ -1,0 +1,13 @@
+# The module definition statements of the 16-bit and OS/2 linkers that the NT
+# librarian ignored and that of today rejects: the initialization of a LIBRARY,
+# PROTMODE, EXETYPE, the attributes of the CODE and DATA segments and of the SEGMENTS, and
+# resident names of exports.
+s/^\(LIBRARY[[:space:]]\{1,\}[^[:space:]]*\)[[:space:]]\{1,\}INIT\(INSTANCE\|GLOBAL\)/\1/I
+/^[[:space:]]*PROTMODE[[:space:]]*$/Id
+/^[[:space:]]*EXETYPE[[:space:]]/Id
+/^[[:space:]]*\(DATA\|CODE\)[[:space:]]/Id
+s/[[:space:]]\{1,\}RESIDENTNAME\>//I
+/^[[:space:]]*SEGMENTS[[:space:]]*$/Id
+# The CLASS of a section of SECTIONS (.data CLASS 'data' READ WRITE SHARED) and of a segment.
+s/[[:space:]]\{1,\}CLASS[[:space:]]\{1,\}'[^']*'//I
+/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\([[:space:]]\{1,\}\(PRELOAD\|LOADONCALL\|MOVEABLE\|MOVABLE\|FIXED\|DISCARDABLE\|NONDISCARDABLE\|PURE\|IMPURE\)\)\{1,\}[[:space:]]*$/Id

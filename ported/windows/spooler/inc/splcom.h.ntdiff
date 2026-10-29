@@ -1,0 +1,5 @@
+#ntdiff private/windows/spooler/inc/splcom.h
+=1 1 59
++#elif defined(_ARM_)
++#define LOCAL_ENVIRONMENT L"Windows NT ARM"
+=1 60 169

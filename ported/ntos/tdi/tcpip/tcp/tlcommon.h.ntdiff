@@ -1,0 +1,4 @@
+#ntdiff private/ntos/tdi/tcpip/tcp/tlcommon.h
+=1 1 19
++#define TCP_TA_SIZE     (offsetof(TRANSPORT_ADDRESS, Address)+ offsetof(TA_ADDRESS, Address)+ \
+=1 21 26

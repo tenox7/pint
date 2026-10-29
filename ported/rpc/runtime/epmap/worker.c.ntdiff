@@ -1,0 +1,5 @@
+#ntdiff private/rpc/runtime/epmap/worker.c
+=1 1 315
++   // (an inquiry type not above: as on x86 NT 4.0, where it stayed in the return register: no match)
++   return(InqType);
+=1 316 2473

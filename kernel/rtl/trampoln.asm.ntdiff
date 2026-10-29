@@ -1,0 +1,185 @@
+#ntdiff private/ntos/rtl/i386/userdisp.asm
++;++
+=1 5 3
++;    trampoln.asm
+=1 9 3
++;    The user mode dispatchers: the ARM port of RTL\MIPS\TRAMPOLN.S. The
++;    kernel redirects a thread returning to user mode here to deliver a user
++;    mode APC, to dispatch an exception, to call a user mode function for a
++;    kernel mode caller or to raise an exception for a system service. The
++;    unwind data of the dispatchers describes the frame the kernel leaves at
++;    the stack pointer: an exception that reaches a dispatcher's frame is
++;    unwound to the interrupted code.
+=1 195 3
++#include "ksarm.h"
++#include "kxarm.h"
++
++        IMPORT  ZwCallbackReturn
++        IMPORT  ZwContinue
++        IMPORT  ZwRaiseException
++        IMPORT  ZwTestAlert
++        IMPORT  RtlDispatchException
++        IMPORT  RtlRaiseException
++        IMPORT  RtlRaiseStatus
++
++        TEXTAREA
++
+=1 54 4
+=1 59 3
++;    IN PKNORMAL_ROUTINE NormalRoutine
+=1 63 5
++;    in user mode, with the context frame at sp. It calls the APC routine,
++;    then continues with the context frame. Should that fail, its status is
++;    raised as a noncontinuable exception.
+=1 195 3
++        NESTED_ENTRY KiUserApcDispatcher,,KiUserApcHandler
++        PROLOG_PUSH_CONTEXT
++        blx     r3                              ; call the APC routine
++        mov     r0, sp                          ; context frame
++        movs    r1, #1                          ; test alert
++        bl      ZwContinue
++        mov     r4, r0                          ; status
++10      mov     r0, r4
++        bl      RtlRaiseStatus
++        b       %B10
++        NESTED_END KiUserApcDispatcher
++
++;++
++;
++; EXCEPTION_DISPOSITION
++; KiUserApcHandler (
+=1 172 1
++;    IN ULONG EstablisherFrame,
++;    IN OUT PCONTEXT ContextRecord,
++;    IN OUT PDISPATCHER_CONTEXT DispatcherContext
+=1 63 4
++;    The exception handler of the APC dispatcher's frame: when an unwind
++;    goes through it, out of the APC routine, the APCs still queued to the
++;    thread are delivered (test alert).
+=1 88 3
++;    ExceptionContinueSearch.
+=1 195 3
++        NESTED_ENTRY KiUserApcHandler
++        PROLOG_PUSH {r3, lr}
++        ldr     r0, [r0, #ErExceptionFlags]
++        tst     r0, #EXCEPTION_UNWIND
++        beq     %F10                            ; no unwind in progress
++        bl      ZwTestAlert
++10      movs    r0, #ExceptionContinueSearch
++        EPILOG_POP {r3, pc}
++        NESTED_END KiUserApcHandler
++
++;++
++;
++; The prologue below is never executed: the kernel enters at the alternate
++; entry KiUserCallbackDispatcher, with the user callout frame at sp, and the
++; prologue describes the frame for an unwind through the callout. The stack
++; pointer and return address of the system service call that made the
++; callout are a machine frame within it.
+=1 195 3
++        NESTED_ENTRY KiUserCallbackDispatch
++        PROLOG_PUSH_MACHINE_FRAME
++        PROLOG_STACK_ALLOC CkSp
++
+=1 110 4
++;    VOID
+=1 117 10
++;    (sp + CkApiNumber) - The number of the function in the callback table of
++;        the process (PEB KernelCallbackTable).
++;
++;    (sp + CkBuffer) - The address of the input buffer.
++;
++;    (sp + CkLength) - The length of the input buffer.
+=1 133 6
++
++        ALTERNATE_ENTRY KiUserCallbackDispatcher
++
++        ldr     r0, [sp, #CkBuffer]             ; input buffer
++        ldr     r1, [sp, #CkLength]             ; input length
++        ldr     r2, [sp, #CkApiNumber]
++        CP_READ r3, 15, 0, 13, 0, 2             ; TEB
++        ldr     r3, [r3, #TePeb]
++        ldr     r3, [r3, #PeKernelCallbackTable]
++        ldr     r3, [r3, r2, lsl #2]            ; the callback function
++        blx     r3
++
++;
++; The callback function returned: return its status to kernel mode, with no
++; output buffer. Should that fail, its status is raised, and raised again.
++;
++
++        mov     r2, r0                          ; status
++        movs    r0, #0                          ; output buffer
++        movs    r1, #0                          ; output length
++        bl      ZwCallbackReturn
++        mov     r4, r0                          ; status
++10      mov     r0, r4
++        bl      RtlRaiseStatus
++        b       %B10
++        NESTED_END KiUserCallbackDispatch
++
+=1 168 11
++;    mode exception, with r4 = the exception record and r5 = the context
++;    record, at sp. If a frame based handler handles the exception, execution
++;    continues with the context, which it may have changed; otherwise last
++;    chance processing is performed. Should either service fail, its status
++;    is raised as a noncontinuable exception.
+=1 195 3
++        NESTED_ENTRY KiUserExceptionDispatcher
++        PROLOG_PUSH_CONTEXT
++        PROLOG_STACK_ALLOC ExceptionRecordLength
++        mov     r0, r4                          ; exception record
++        mov     r1, r5                          ; context record
++        bl      RtlDispatchException
++        cbz     r0, %F10
++        mov     r0, r5                          ; handled: continue
++        movs    r1, #0
++        bl      ZwContinue
++        b       %F20
++10      mov     r0, r4                          ; not handled: last chance
++        mov     r1, r5
++        movs    r2, #0                          ; not first chance
++        bl      ZwRaiseException
++20      mov     r6, r0                          ; status
++        mov     r0, sp
++        str     r6, [r0, #ErExceptionCode]
++        movs    r1, #EXCEPTION_NONCONTINUABLE
++        str     r1, [r0, #ErExceptionFlags]
++        str     r4, [r0, #ErExceptionRecord]
++        movs    r1, #0
++        str     r1, [r0, #ErNumberParameters]
++        bl      RtlRaiseException
++        b       %B20
++        NESTED_END KiUserExceptionDispatcher
++
+=1 268 3
++; KiRaiseUserExceptionDispatcher (
+=1 273 8
++;    N.B. It is not called: the kernel puts its address in the trap frame of
++;         a system service (KeRaiseUserException), which returns here with
++;         its status in r0 and the return address of the service call in lr,
++;         as if the service had called it.
+=1 72 3
++;    ExceptionCode (r0) - The status the exception is raised with.
+=1 88 3
++;    ExceptionCode.
+=1 195 3
++        NESTED_ENTRY KiRaiseUserExceptionDispatcher
++        PROLOG_PUSH {r4, lr}
++        PROLOG_STACK_ALLOC ExceptionRecordLength
++        mov     r4, r0                          ; status
++        str     r0, [sp, #ErExceptionCode]
++        movs    r0, #0
++        str     r0, [sp, #ErExceptionFlags]
++        str     r0, [sp, #ErExceptionRecord]
++        str     r0, [sp, #ErNumberParameters]
++        bic     r0, lr, #1
++        str     r0, [sp, #ErExceptionAddress]   ; the return address of the service call
++        mov     r0, sp
++        bl      RtlRaiseException
++        mov     r0, r4                          ; status
++        EPILOG_STACK_FREE ExceptionRecordLength
++        EPILOG_POP {r4, pc}
++        NESTED_END KiRaiseUserExceptionDispatcher
++
++        END

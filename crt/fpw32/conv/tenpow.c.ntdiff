@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/vctools/crt/fpw32/conv/tenpow.c
+=1 1 47
++    int sticky = 0;
+=1 49 193

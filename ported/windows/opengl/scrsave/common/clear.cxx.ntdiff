@@ -1,0 +1,4 @@
+#ntdiff private/windows/opengl/scrsave/common/clear.cxx
+=1 1 257
++            BOOL searchUp = FALSE;
+=1 259 152

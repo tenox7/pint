@@ -1,0 +1,5 @@
+#ntdiff private/windows/win4help/winhelp/binding.c
+=1 1 1250
++// the dummy arguments fill the argument registers: four on ARM as on MIPS
++#if defined(_MIPS_) || defined(_ARM_)
+=1 1252 314

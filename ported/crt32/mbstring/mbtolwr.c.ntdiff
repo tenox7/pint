@@ -1,0 +1,4 @@
+#ntdiff private/crt32/mbstring/mbtolwr.c
+=1 1 68
++	return(c);
+=1 69 4

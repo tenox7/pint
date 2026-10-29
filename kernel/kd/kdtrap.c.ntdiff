@@ -1,0 +1,53 @@
+#ntdiff private/ntos/kd/mips/kdtrap.c private/ntos/kd/alpha/kdtrap.c
+=1 1 13
++    ARM port of KD/MIPS/KDTRAP.C. The first parameter of a breakpoint
++    exception is the breakpoint code (ke\trapc.c); arguments are in r0-r3.
++    The breakpoint and debug service instructions are 16 bits.
+=1 13 11
++// The breakpoint code of a breakpoint exception.
++//
++
++#define BREAKPOINT_CODE(Code) (Code)
+=1 28 116
++       (BREAKPOINT_CODE(ExceptionRecord->ExceptionInformation[0]) >= DEBUG_PRINT_BREAKPOINT)) {
+=1 146 5
++        switch (BREAKPOINT_CODE(ExceptionRecord->ExceptionInformation[0])) {
+=1 153 6
++            //   r0 - Supplies a pointer to an output string buffer.
++            //   r1 - Supplies the length of the output string buffer.
+=1 161 3
++            ContextRecord->Pc += 2;
++            Output.Buffer = (PCHAR)ContextRecord->R0;
++            Output.Length = (USHORT)ContextRecord->R1;
+=1 167 2
++                    ContextRecord->R0 = (ULONG)STATUS_BREAKPOINT;
++
++                } else {
++                    ContextRecord->R0 = (ULONG)STATUS_SUCCESS;
+=1 173 3
++                ContextRecord->R0 = (ULONG)STATUS_DEVICE_NOT_CONNECTED;
+=1 177 9
++            //   r0 - Supplies a pointer to an output string buffer.
++            //   r1 - Supplies the length of the output string buffer..
++            //   r2 - supplies a pointer to an input string buffer.
++            //   r3 - Supplies the length of the input string bufffer.
+=1 190 3
++            ContextRecord->Pc += 2;
++            Output.Buffer = (PCHAR)ContextRecord->R0;
++            Output.Length = (USHORT)ContextRecord->R1;
++            Input.Buffer = (PCHAR)ContextRecord->R2;
++            Input.MaximumLength = (USHORT)ContextRecord->R3;
+=1 198 1
++            ContextRecord->R0 = Input.Length;
+=1 200 21
++            ContextRecord->Pc += 2;
+=1 167 1
++                KdpReportLoadSymbolsStateChange((PSTRING)ContextRecord->R0,
++                                                (PKD_SYMBOLS_INFO) ContextRecord->R1,
+=1 225 121
++    BreakpointCode = BREAKPOINT_CODE(ExceptionRecord->ExceptionInformation[0]);
+=1 348 149
++    BreakpointCode = BREAKPOINT_CODE(ExceptionRecord->ExceptionInformation[0]);
+=1 499 10
++        ContextRecord->Pc += 2;
+=1 510 6

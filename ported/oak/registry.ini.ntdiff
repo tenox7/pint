@@ -1,0 +1,50 @@
+#ntdiff ../nt35/PUBLIC/OAK/BIN/REGISTRY.INI
+#crlf
+=1 1 2
+=1 4 8
++// The Raspberry Pi: no paging file, the shell of NT 4.0.                   //
+=1 14 3
+=1 30 2
++;  The ID the machine uses for its internal domain (WinNt product).
++;
+=1 38 2
+=1 29 3
++;  The name of the machine.
++;
++MachineName
++    RASPI
+=1 29 3
++;  The account the Logon screen shows by default.
++;
++UserName
++    Administrator
+=1 29 3
++; The environment variables established at the beginning of each logon.
++;
++Environment
++    tmp = c:\tmp
+=1 29 3
++; The time zone.
++;
+=1 191 3
+=1 229 6
+=1 251 4
++ProductType
++    WinNt
++
++;
++;  The workgroup of the machine (a domain with a DomainId would make it a member).
++;
++Domain
++    WORKGROUP
+=1 255 3
++;  Commands for the start of winlogon.cmd, after its first line, which makes Program
++;  Manager the shell: the shell of NT 4.0 is Explorer. With ! for its end: GUI setup ends
++;  with RUNONCE -r, which runs the commands of RunOnce before the first logon.
++;  ws2setup makes the protocol catalog of Winsock 2 from the transports of Winsock 1.1,
++;  as setup does after the binding review of the network (MigrateWinsockConfiguration).
++;
++InsertScript
++    ini winlogon.Shell = "Explorer.exe"
++    ws2setup
++    !runonce -r

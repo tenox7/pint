@@ -1,0 +1,171 @@
+#ntdiff private/ntos/ps/mips/psctxmip.c private/ntos/ps/alpha/psctxalp.c
+=1 1 6
++    psctxarm.c
+=1 8 3
++    This module implements function to get and set the context of a thread
++    (the ARM analog of PS\MIPS\PSCTXMIP.C).
++
++    On every entry to the kernel from user mode the volatile user state is
++    saved in the trap frame at the base of the kernel stack and the
++    nonvolatile state in the exception frame immediately below it (trap.S),
++    so the user mode context of the current thread is located from its
++    initial stack rather than by virtually unwinding to the system entry.
+=1 18 4
++
+=1 106 30
++    ULONG Index;
+=2 61 4
++        // Get integer registers sp, lr, pc, and cpsr.
++        //
++
++        ContextRecord->Sp = TrapFrame->Sp;
++        ContextRecord->Lr = TrapFrame->Lr;
++        ContextRecord->Pc = TrapFrame->Pc;
++        ContextRecord->Cpsr = TrapFrame->Cpsr;
++    }
+=2 78 4
++        // Get volatile integer registers r0 - r3, and r12.
++        //
++
++        ContextRecord->R0 = TrapFrame->R0;
++        ContextRecord->R1 = TrapFrame->R1;
++        ContextRecord->R2 = TrapFrame->R2;
++        ContextRecord->R3 = TrapFrame->R3;
++        ContextRecord->R12 = TrapFrame->R12;
++
++        //
++        // Get nonvolatile integer registers r4 - r11.
++        //
++
++        ContextRecord->R4 = *ContextPointers->R4;
++        ContextRecord->R5 = *ContextPointers->R5;
++        ContextRecord->R6 = *ContextPointers->R6;
++        ContextRecord->R7 = *ContextPointers->R7;
++        ContextRecord->R8 = *ContextPointers->R8;
++        ContextRecord->R9 = *ContextPointers->R9;
++        ContextRecord->R10 = *ContextPointers->R10;
++        ContextRecord->R11 = *ContextPointers->R11;
++    }
+=2 138 4
++        // Get volatile floating registers d0 - d7, and d16 - d31.
++        //
++
++        for (Index = 0; Index < 8; Index += 1) {
++            ContextRecord->u.D[Index] = TrapFrame->VolatileD[Index];
++        }
++
++        for (Index = 0; Index < 16; Index += 1) {
++            ContextRecord->u.D[Index + 16] = TrapFrame->VolatileD[Index + 8];
+=1 217 3
++        // Get nonvolatile floating registers d8 - d15.
++        //
++
++        ContextRecord->u.D[8] = *ContextPointers->D8;
++        ContextRecord->u.D[9] = *ContextPointers->D9;
++        ContextRecord->u.D[10] = *ContextPointers->D10;
++        ContextRecord->u.D[11] = *ContextPointers->D11;
++        ContextRecord->u.D[12] = *ContextPointers->D12;
++        ContextRecord->u.D[13] = *ContextPointers->D13;
++        ContextRecord->u.D[14] = *ContextPointers->D14;
++        ContextRecord->u.D[15] = *ContextPointers->D15;
+=1 280 5
++        ContextRecord->Fpscr = TrapFrame->Fpscr;
+=1 286 4
++
+=1 291 24
++        the PSR and FPSCR.
+=1 84 9
++    ULONG Index;
+=2 61 4
++        // Set integer registers sp, lr, pc, and cpsr.
++        //
++
++        TrapFrame->Sp = ContextRecord->Sp;
++        TrapFrame->Lr = ContextRecord->Lr;
++        TrapFrame->Pc = ContextRecord->Pc;
++        TrapFrame->Cpsr = SANITIZE_PSR(ContextRecord->Cpsr, ProcessorMode);
++    }
+=2 78 4
++        // Set volatile integer registers r0 - r3, and r12.
++        //
++
++        TrapFrame->R0 = ContextRecord->R0;
++        TrapFrame->R1 = ContextRecord->R1;
++        TrapFrame->R2 = ContextRecord->R2;
++        TrapFrame->R3 = ContextRecord->R3;
++        TrapFrame->R12 = ContextRecord->R12;
++
++        //
++        // Set nonvolatile integer registers r4 - r11.
++        //
++
++        *ContextPointers->R4 = ContextRecord->R4;
++        *ContextPointers->R5 = ContextRecord->R5;
++        *ContextPointers->R6 = ContextRecord->R6;
++        *ContextPointers->R7 = ContextRecord->R7;
++        *ContextPointers->R8 = ContextRecord->R8;
++        *ContextPointers->R9 = ContextRecord->R9;
++        *ContextPointers->R10 = ContextRecord->R10;
++        *ContextPointers->R11 = ContextRecord->R11;
++    }
+=2 138 4
++        // Set volatile floating registers d0 - d7, and d16 - d31.
++        //
++
++        for (Index = 0; Index < 8; Index += 1) {
++            TrapFrame->VolatileD[Index] = ContextRecord->u.D[Index];
++        }
++
++        for (Index = 0; Index < 16; Index += 1) {
++            TrapFrame->VolatileD[Index + 8] = ContextRecord->u.D[Index + 16];
+=1 217 3
++        // Set nonvolatile floating registers d8 - d15.
++        //
++
++        *ContextPointers->D8 = ContextRecord->u.D[8];
++        *ContextPointers->D9 = ContextRecord->u.D[9];
++        *ContextPointers->D10 = ContextRecord->u.D[10];
++        *ContextPointers->D11 = ContextRecord->u.D[11];
++        *ContextPointers->D12 = ContextRecord->u.D[12];
++        *ContextPointers->D13 = ContextRecord->u.D[13];
++        *ContextPointers->D14 = ContextRecord->u.D[14];
++        *ContextPointers->D15 = ContextRecord->u.D[15];
+=1 463 5
++        TrapFrame->Fpscr = SANITIZE_FPSCR(ContextRecord->Fpscr, ProcessorMode);
+=1 286 4
++
+=1 474 45
++    PKEXCEPTION_FRAME ExceptionFrame;
++    PETHREAD Thread;
++    PKTRAP_FRAME TrapFrame;
++
++    //
++    // Get the address of the context block and compute the addresses of the
++    // system entry trap frame and the exception frame below it.
+=1 531 4
++    TrapFrame = (PKTRAP_FRAME)((ULONG)Thread->Tcb.InitialStack - KTRAP_FRAME_LENGTH);
++    ExceptionFrame = (PKEXCEPTION_FRAME)((ULONG)TrapFrame - sizeof(KEXCEPTION_FRAME));
+=1 545 6
++    ContextPointers.R4 = &ExceptionFrame->R4;
++    ContextPointers.R5 = &ExceptionFrame->R5;
++    ContextPointers.R6 = &ExceptionFrame->R6;
++    ContextPointers.R7 = &ExceptionFrame->R7;
++    ContextPointers.R8 = &ExceptionFrame->R8;
++    ContextPointers.R9 = &ExceptionFrame->R9;
++    ContextPointers.R10 = &ExceptionFrame->R10;
++    ContextPointers.R11 = &ExceptionFrame->R11;
++    ContextPointers.Lr = &ExceptionFrame->Lr;
++
++    ContextPointers.D8 = &ExceptionFrame->D8;
++    ContextPointers.D9 = &ExceptionFrame->D9;
++    ContextPointers.D10 = &ExceptionFrame->D10;
++    ContextPointers.D11 = &ExceptionFrame->D11;
++    ContextPointers.D12 = &ExceptionFrame->D12;
++    ContextPointers.D13 = &ExceptionFrame->D13;
++    ContextPointers.D14 = &ExceptionFrame->D14;
++    ContextPointers.D15 = &ExceptionFrame->D15;
+=1 611 12
++        PspSetContext(TrapFrame,
+=1 624 10
++        PspGetContext(TrapFrame,
+=1 635 7

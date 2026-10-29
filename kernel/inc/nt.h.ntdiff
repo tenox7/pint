@@ -1,0 +1,12 @@
+#ntdiff public/sdk/inc/nt.h
+=1 1 10
++    Top level include file for the NT API.
++
++    ARM32 port: verbatim copy of public/sdk/inc/nt.h with an _ARM_ arch branch
++    added so ntarm.h (the ntmips.h analog) is included. This shadow copy is
++    first on the include path; everything else resolves to the real headers.
+=1 24 35
++#ifdef _ARM_
++#include "ntarm.h"
++#endif // _ARM_
+=1 58 26

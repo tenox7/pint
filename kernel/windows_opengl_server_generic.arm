@@ -1,0 +1,3 @@
+# OPENGL\SERVER\GENERIC ARM_SOURCES (its MIPS_SOURCES: gencpu.c mips\matrix.s mips\xform.s; no ARM
+# assembler: asm.h gives ARM no __GL_ASM_ function, so the C versions of soft\ and generic\ serve)
+/work/private/windows/opengl/server/generic/gencpu.c

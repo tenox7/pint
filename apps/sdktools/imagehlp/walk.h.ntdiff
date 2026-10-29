@@ -1,0 +1,18 @@
+#ntdiff private/sdktools/imagehlp/walk.h
+=1 1 32
++#undef _ARM_
+=1 33 158
+=1 34 2
++// arm
+=1 37 2
++#elif defined(TARGET_ARM)
++
++#pragma message( "Compiling for target = arm" )
++
++#define _ARM_ 1
+=1 167 9
+=1 64 3
+=1 72 6
++#if !defined(_M_ARM)
++#undef _ARM_
+=1 189 12

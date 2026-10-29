@@ -1,0 +1,631 @@
+#ntdiff public/oak/bin/system.ini ../nt35/PUBLIC/OAK/BIN/SYSTEM.INI
+#crlf
+=1 1 83
+=2 101 2
++
++//
++// The Raspberry Pi 2, 3 and 4 (BCM2836, BCM2837, BCM2711): ARM machines whose disk is
++// the SD card on the Arasan SDHCI controller (the Bcmemmc SCSI miniport), whose display
++// is the VideoCore frame buffer (the Bcmvideo miniport) and whose keyboard and mouse are
++// USB devices (the Bcmusb keyboard and pointer port driver), without the PC peripherals.
++// Its system disk is made as a developer's: the hives hold what text mode setup and GUI
++// setup write into a retail system for the Pi (the code pages of TXTSETUP.SIF, the
++// processors of a 4 processor setup hive), and the first boot runs REGISTRY.INI.
++//
++#if defined(_RASPI_)
++#define RASPI 1
++#define BCMEMMC 1
++#define BCMVIDEO 1
++#define BCMUSB 1
++#endif // defined(_RASPI_)
+=1 85 343
++#if defined(RASPI)
++//
++// All four cores of the Pi run NT: GUI setup registers and licenses the processors
++// the SystemPrefix of the setup hive allows (SetEnabledProcessorCount).
++//
++                RegisteredProcessors = REG_DWORD 4
++                LicensedProcessors = REG_DWORD 4
++#endif // defined(RASPI)
+=1 427 47
++#if !defined(RASPI)
+=2 487 2
++                    //
++                    // GUI setup appends the Windows directory to the path (SetUpPath).
++                    //
++                    Path = REG_EXPAND_SZ %SystemRoot%\system32;%SystemRoot%
++#endif // !defined(RASPI)
+=1 475 133
++#if !defined(RASPI)
++                ProductType = WinNt
++#else
++//
++// The product type GUI setup writes for a workstation (SetProductTypeInRegistry): the
++// kernel matches it, case and all, to the product of the SystemPrefix below.
++//
++                ProductType = WinNT
++#endif // !defined(RASPI)
+=1 609 254
++#if defined(RASPI)
++                    //
++                    // What text setup writes from the [nls] section of TXTSETUP.SIF (USA):
++                    // the files of its code pages, then the code page of each kind.
++                    //
++                    ACP     = 1252
++                    437     = c_437.nls
++                    850     = c_850.nls
++                    OEMCP   = 437
++                    10000   = c_10000.nls
++                    MACCP   = 10000
++                    OEMHAL  = vgaoem.fon
++#endif // defined(RASPI)
+=1 862 102
++#if defined(RASPI)
++                    Default = 0409
++#endif // defined(RASPI)
+=1 963 294
++#if defined(RASPI)
++                    //
++                    // The provider of the workstation service (OEMNSVWK.INF, AddNetworkProvider).
++                    //
++                    ProviderOrder = LanmanWorkstation
++#endif // defined(RASPI)
++
++#if defined(RASPI)
++            //
++            // The name service providers of Winsock 1.1 (OEMNXPTC.INF, AddServiceProvider).
++            //
++            ServiceProvider
++                Order
++                    ExcludedProviders = REG_MULTI_SZ
++                    ProviderOrder = REG_MULTI_SZ "Tcpip"
++#endif // defined(RASPI)
+=1 1257 16
++                   Windows NT ARM
++                       Directory = REG_SZ W32ARM
+=1 1267 2
++#if defined(RASPI)
++//
++// The print processor GUI setup adds (printer.c, MiscSpoolerInit: AddPrintProcessor).
++//
++                           winprint
++                               Driver = REG_SZ winprint.dll
++#endif // defined(RASPI)
+=1 1273 13
++#if defined(RASPI)
++//
++// The local port monitor GUI setup adds (printer.c, MiscSpoolerInit: AddMonitor).
++//
++                    Local Port
++                       Driver = REG_SZ localmon.dll
++#endif // defined(RASPI)
+=1 1286 343
++#if defined(RASPI)
++//
++// What GUI setup writes for the fonts of the current profile with small fonts (font.inx,
++// [Font.CP1252.Reg.96] and [Font.CP437.Reg.96]): the size and the stock fonts.
++//
++                    Fonts
++                        LogPixels = REG_DWORD 0x00000060
++                        FIXEDFON.FON=vgafix.fon
++                        FONTS.FON=vgasys.fon
++                        OEMFONT.FON=vgaoem.fon
++#endif // defined(RASPI)
+=1 1629 21
++#if !defined(RASPI)
+=2 1210 2
++//
++// GUI setup starts the spooler automatically (syssetup.c, MyChangeServiceStart).
++//
+=2 1212 1
++#endif // !defined(RASPI)
+=1 1651 112
++#if !defined(RASPI)
+=2 1227 2
++//
++// GUI setup starts NetDDE, its DSDM and ClipBook on demand (syssetup.c).
++//
+=2 1229 1
++#endif // !defined(RASPI)
+=1 1764 23
++#if !defined(RASPI)
+=2 1227 2
++//
++// On demand, as GUI setup sets it (syssetup.c).
++//
+=2 1229 1
++#endif // !defined(RASPI)
+=1 1788 52
++#if !defined(RASPI)
+=2 1227 2
++//
++// On demand, as GUI setup sets it (syssetup.c).
++//
+=2 1229 1
++#endif // !defined(RASPI)
+=1 1841 32
++#if !defined(RASPI)
+=2 1227 2
++//
++// GUI setup starts the event log automatically (syssetup.c, MyChangeServiceStart).
++//
+=1 1672 1
++#endif // !defined(RASPI)
+=1 1874 390
++#if defined(RASPI)
++                  //
++                  // The sources the network INFs add (CreateService of UTILITY.INF).
++                  //
++                  Afd
+=2 1491 5
++                  Bcmeth
+=1 2021 2
++                  Browser
+=1 2021 2
++                  DHCP
++                    EventMessageFile = REG_EXPAND_SZ %SystemRoot%\System32\dhcpcsvc.dll
+=1 2160 2
++                  LmHosts
+=1 2021 2
++                  NetBIOS
+=1 1934 2
++                  NetBT
+=1 2021 2
++                  NetLogon
+=2 1494 2
++                    ParameterMessageFile = REG_EXPAND_SZ %SystemRoot%\System32\Kernel32.dll
++                  Rdr
+=1 2021 2
++                  server
+=1 2021 2
++                  Srv
+=1 2021 2
++                  Tcpip
+=1 2021 2
++                  workstation
+=2 1494 2
++#endif // defined(RASPI)
+=1 2264 170
++#if defined(BCMEMMC)
++            Bcmemmc
+=1 2745 2
+=1 2437 4
++#endif // defined(BCMEMMC)
+=1 2434 278
++#if !defined(RASPI)
+=1 2712 6
++#endif // !defined(RASPI)
+=1 2718 145
++#if defined(BCMUSB)
++            Bcmusb
+=1 2713 2
+=1 2866 3
++
++#endif // defined(BCMUSB)
+=1 2863 108
++#if defined(BCMVIDEO)
++            Bcmvideo
+=1 2990 8
++#endif // defined(BCMVIDEO)
++#if !defined(RASPI)
+=1 2971 210
++#endif // !defined(RASPI)
+=1 3181 138
++#if !defined(RASPI)
+=1 3319 19
++#endif // !defined(RASPI)
+=1 3338 5
++#if !defined(RASPI)
+=1 3343 27
++#endif // !defined(RASPI)
+=1 3370 16
++#if !defined(RASPI)
+=1 3386 195
++#endif // !defined(RASPI)
+=1 3581 60
++#if defined(RASPI)
++            //
++            // The network of the Pi as the network setup of NT 4.0 installs and binds it:
++            // NTLANMAN.INF with the INF of the Ethernet controller of the board (the Bcmeth
++            // miniport, adapter Bcmeth1), OEMNXPTC.INF for TCP/IP with DHCP and NetBIOS over
++            // TCP/IP, the services of LAN Manager, NetBIOS and RPC, then the binding review of
++            // the network control panel (the Linkage values, the LANA map of NetBIOS, the
++            // drivers it binds started at boot), without what DHCP writes while it runs. A
++            // service without a Security value gets the descriptor CreateService would have
++            // written (ScCreateScServiceObject); the INFs let users start NetBIOS, NtLmSsp and
++            // the RPC locator (SECURESVC 3, the descriptor of RpcSs). The developer first run
++            // writes the domain values of REGISTRY.INI (Domain, AccountDomainId) into the
++            // parameters of the workstation service, where the LSA reads them when it
++            // installs its database (LsapDbSetDomainInfo).
++            //
+=2 3560 3
+=1 1652 1
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\afd.sys
++                DisplayName = AFD Networking Support Environment
++                Group = TDI
++                DependOnGroup = REG_MULTI_SZ
++                Linkage
++                    Disabled
++                Parameters
+=2 1334 5
+=2 3300 1
++                DisplayName = Alerter
+=2 1290 1
++                DependOnGroup = REG_MULTI_SZ
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                    AlertNames = REG_MULTI_SZ
++
++            Bcmeth
+=1 3320 2
+=1 1652 1
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\bcmeth.sys
++                DisplayName = Raspberry Pi Ethernet Adapter Driver
++                Group = NDIS
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Route = REG_MULTI_SZ "\"Bcmeth1\""
++                    Disabled
++                        Bind = REG_MULTI_SZ
++                        Export = REG_MULTI_SZ
++                        Route = REG_MULTI_SZ
++                Parameters
++
++            Bcmeth1
+=2 3034 4
++                    Disabled
++                Parameters
+=2 3042 1
++                    BusType = REG_DWORD 0x00000000
+=2 3039 1
++                    AdapterType = REG_DWORD 0x00000002
++                    Tcpip
++                        EnableDHCP = REG_DWORD 0x00000001
++                        UseZeroBroadcast = REG_DWORD 0x00000000
++                        LLInterface =
++                        IPAddress = REG_MULTI_SZ "0.0.0.0"
++                        DefaultGateway = REG_MULTI_SZ
++                        SubnetMask = REG_MULTI_SZ "0.0.0.0"
+=2 1297 3
+=2 1255 2
+=2 3300 1
++                DisplayName = Computer Browser
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation" "LanmanServer" "LmHosts"
++                DependOnGroup = REG_MULTI_SZ
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
+=2 1305 4
++            DHCP
+=2 1254 3
+=2 3300 1
++                DisplayName = DHCP Client
++                Group = TDI
++                DependOnService = REG_MULTI_SZ "Tcpip" "Afd" "NetBT"
++                DependOnGroup = REG_MULTI_SZ
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                    Options
++                        1
++                            RegLocation = System\CurrentControlSet\Services\?\Parameters\Tcpip\DhcpSubnetMaskOpt
++                            KeyType = REG_DWORD 0x00000007
++                        15
++                            RegLocation = System\CurrentControlSet\Services\Tcpip\Parameters\DhcpDomain
++                            KeyType = REG_DWORD 0x00000001
++                        3
++                            RegLocation = System\CurrentControlSet\Services\?\Parameters\Tcpip\DhcpDefaultGateway
++                            KeyType = REG_DWORD 0x00000007
++                        44
++                            RegLocation = System\CurrentControlSet\Services\NetBT\Adapters\?\DhcpNameServer
++                            KeyType = REG_DWORD 0x00000001
++                        46
++                            RegLocation = System\CurrentControlSet\Services\NetBT\Parameters\DhcpNodeType
++                            KeyType = REG_DWORD 0x00000004
++                        47
++                            RegLocation = System\CurrentControlSet\Services\NetBT\Parameters\DhcpScopeID
++                            KeyType = REG_DWORD 0x00000001
++                        6
++                            RegLocation = System\CurrentControlSet\Services\Tcpip\Parameters\DhcpNameServer
++                            KeyType = REG_DWORD 0x00000001
+=2 1266 3
+=2 1255 2
+=2 3300 1
++                DisplayName = Server
++                ObjectName = LocalSystem
++                DependOnService = REG_MULTI_SZ
+=2 3514 1
++                AutotunedParameters
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\LanmanServer\NetBT_Bcmeth1"
++                    Route = REG_MULTI_SZ "\"NetBT\" \"Bcmeth\" \"Bcmeth1\""
++                    Disabled
++                        Bind = REG_MULTI_SZ
++                        Export = REG_MULTI_SZ
++                        Route = REG_MULTI_SZ
++                Parameters
++                    NullSessionPipes = REG_MULTI_SZ "COMNAP" "COMNODE" "SQL\QUERY" "SPOOLSS" "LLSRPC" "EPMAPPER" "LOCATOR"
++                    NullSessionShares = REG_MULTI_SZ "COMCFG" "DFS$"
++                    Size = REG_DWORD 0x00000001
++                    Lmannounce = REG_DWORD 0x00000000
++                Shares
++                    Security
++
+=2 1253 4
+=2 3300 1
++                DisplayName = Workstation
++                Group = NetworkProvider
++                ObjectName = LocalSystem
++                DependOnService = REG_MULTI_SZ
+=2 3514 1
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\LanmanWorkstation\NetBT_Bcmeth1"
++                    Route = REG_MULTI_SZ "\"NetBT\" \"Bcmeth\" \"Bcmeth1\""
++                    Disabled
++                        Bind = REG_MULTI_SZ
++                        Export = REG_MULTI_SZ
++                        Route = REG_MULTI_SZ
++                networkprovider
++                    Devicename = \Device\LanmanRedirector
+=2 1264 2
++                Parameters
++
++            LmHosts
+=2 1254 3
+=2 3300 1
++                DisplayName = TCP/IP NetBIOS Helper
++                DependOnService = REG_MULTI_SZ
++                DependOnGroup = REG_MULTI_SZ "NetworkProvider"
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++
++            Messenger
+=2 1254 3
+=2 3300 1
++                DisplayName = Messenger
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation" "NetBios"
++                DependOnGroup = REG_MULTI_SZ
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++
++            NetBIOS
+=1 1658 2
+=1 1652 1
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbios.sys
++                DisplayName = NetBIOS Interface
++                Group = NetBIOSGroup
++                DependOnService = REG_MULTI_SZ
+=2 3514 1
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\Netbios\NetBT_Bcmeth1"
++                    Route = REG_MULTI_SZ "\"NetBT\" \"Bcmeth\" \"Bcmeth1\""
++                    LanaMap = REG_BINARY 2 0x00000001
++                    Disabled
++                        Bind = REG_MULTI_SZ
++                        Export = REG_MULTI_SZ
++                        Route = REG_MULTI_SZ
++                Parameters
++                    Winsock
++                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\system32\wshnetbs.dll
++                        MaxSockAddrLength = REG_DWORD 0x00000014
++                        MinSockAddrLength = REG_DWORD 0x00000014
++                        Mapping = REG_BINARY 32 0x00000002 0x00000003 0x00000011 0x00000005 0x00000000 \
++                                                0x00000011 0x00000002 0x00000000
++                Security
+=1 1678 13
+=2 3548 5
++                    Disabled
++                Parameters
++                    LanaNum1 = REG_DWORD 0x00000000
+=2 3555 1
++                    Route = REG_MULTI_SZ "\"NetBT\" \"Bcmeth\" \"Bcmeth1\""
++                    MaxLana = REG_DWORD 0x00000000
++
++            NetBT
+=1 3320 2
+=1 1652 1
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\netbt.sys
++                DisplayName = WINS Client(TCP/IP)
++                Group = PNP_TDI
++                DependOnService = REG_MULTI_SZ "Tcpip"
++                DependOnGroup = REG_MULTI_SZ
++                Adapters
++                    Bcmeth1
++                Linkage
++                    OtherDependencies = REG_MULTI_SZ "Tcpip"
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\NetBT_Bcmeth1"
++                    Route = REG_MULTI_SZ "\"Bcmeth\" \"Bcmeth1\""
++                    Disabled
++                        Bind = REG_MULTI_SZ
++                        Export = REG_MULTI_SZ
++                        Route = REG_MULTI_SZ
++                Parameters
++                    NbProvider = _tcp
++                    NameServerPort = REG_DWORD 0x00000089
++                    EnableLMHOSTS = REG_DWORD 0x00000001
++                    EnableProxy = REG_DWORD 0x00000000
++                    EnableDNS = REG_DWORD 0x00000000
++                    CacheTimeout = REG_DWORD 0x000927c0
++                    BcastNameQueryCount = REG_DWORD 0x00000003
++                    BcastQueryTimeout = REG_DWORD 0x000002ee
++                    NameSrvQueryCount = REG_DWORD 0x00000003
++                    NameSrvQueryTimeout = REG_DWORD 0x000005dc
++                    Size/Small/Medium/Large = REG_DWORD 0x00000001
++                    SessionKeepAlive = REG_DWORD 0x0036ee80
++                    ScopeID =
++                    // (in quotes, which REGINI drops: RCPP joins a line that ends in a backslash with the next)
++                    TransportBindName = "\Device\"
+=2 1280 3
+=1 1810 2
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\lsass.exe
++                DisplayName = Net Logon
++                Group = RemoteValidation
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation" "LmHosts"
++                DependOnGroup = REG_MULTI_SZ
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
+=2 1292 3
++                    DBFlag = 0
++
++            NtLmSsp
+=2 1268 3
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\SERVICES.EXE
++                DisplayName = NT LM Security Support Provider
++                ObjectName = LocalSystem
++                Linkage
++                    Disabled
++                Parameters
++                Security
+=1 1678 13
+=2 3522 3
+=1 1652 1
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\rdr.sys
++                DisplayName = Rdr
++                Group = Network
++                Linkage
++                    Disabled
+=2 1342 4
+=1 1810 2
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\lmrepl.exe
++                DisplayName = Directory Replicator
+=2 1303 1
++                DependOnGroup = REG_MULTI_SZ
++                ObjectName = LocalSystem
++                Exports
++                Imports
++                Linkage
++                    Disabled
++                Parameters
++                    Replicate = REG_DWORD 0x00000002
++                    ImportPath = REG_EXPAND_SZ %SystemRoot%\System32\Repl\Import
++                    ExportPath = REG_EXPAND_SZ %SystemRoot%\System32\Repl\Export
++
++            RPCLOCATOR
+=1 1809 3
++                ImagePath = REG_EXPAND_SZ %SystemRoot%\System32\LOCATOR.EXE
++                DisplayName = Remote Procedure Call (RPC) Locator
++                ObjectName = LocalSystem
++                DependOnService = REG_MULTI_SZ "LanmanWorkstation" "Rdr"
++                Linkage
++                    Disabled
++                Parameters
++                    ExpirationAge = REG_DWORD 0x00000e10
++                Security
+=1 1678 13
+=2 3509 2
+=1 1810 2
++                ImagePath = REG_EXPAND_SZ \SystemRoot\System32\drivers\srv.sys
++                DisplayName = Srv
++                Group = Network
++                Linkage
++                    Disabled
++                Parameters
++
++            Tcpip
+=1 3320 2
+=1 1652 1
+=2 3294 1
++                DisplayName = TCP/IP Service
++                Group = PNP_TDI
++                Linkage
++                    Bind = REG_MULTI_SZ "\Device\Bcmeth1"
++                    Export = REG_MULTI_SZ "\Device\Tcpip\Bcmeth1"
++                    Route = REG_MULTI_SZ "\"Bcmeth\" \"Bcmeth1\""
++                    Disabled
++                        Bind = REG_MULTI_SZ
++                        Export = REG_MULTI_SZ
++                        Route = REG_MULTI_SZ
++                Parameters
++                    DataBasePath = REG_EXPAND_SZ %SystemRoot%\System32\drivers\etc
++                    Domain =
++                    Hostname = raspi
++                    NameServer =
++                    ForwardBroadcasts = REG_DWORD 0x00000000
++                    IPEnableRouter = REG_DWORD 0x00000000
++                    SearchList =
++                    PersistentRoutes
++                    Winsock
++                        HelperDllName = REG_EXPAND_SZ %SystemRoot%\System32\wshtcpip.dll
++                        MaxSockAddrLength = REG_DWORD 0x00000010
++                        MinSockAddrLength = REG_DWORD 0x00000010
++                        Mapping = REG_BINARY 140 0x0000000b 0x00000003 \
++                                                 0x00000002 0x00000001 0x00000006 \
++                                                 0x00000002 0x00000001 0x00000000 \
++                                                 0x00000002 0x00000000 0x00000006 \
++                                                 0x00000000 0x00000000 0x00000006 \
++                                                 0x00000000 0x00000001 0x00000006 \
++                                                 0x00000002 0x00000002 0x00000011 \
++                                                 0x00000002 0x00000002 0x00000000 \
++                                                 0x00000002 0x00000000 0x00000011 \
++                                                 0x00000000 0x00000000 0x00000011 \
++                                                 0x00000000 0x00000002 0x00000011 \
++                                                 0x00000002 0x00000003 0x00000000
++                Performance
++                    Library = Perfctrs.dll
++                    Open = OpenTcpIpPerformanceData
++                    Collect = CollectTcpIpPerformanceData
++                    Close = CloseTcpIpPerformanceData
++                ServiceProvider
++                    Class = REG_DWORD 0x00000008
++                    DnsPriority = REG_DWORD 0x000007d0
++                    HostsPriority = REG_DWORD 0x000001f4
++                    LocalPriority = REG_DWORD 0x000001f3
++                    ProviderPath = REG_EXPAND_SZ %SystemRoot%\System32\wsock32.dll
++                    NetbtPriority = REG_DWORD 0x000007d1
++                    Name = TCP/IP
++
++            WinSock
+=2 3034 4
++                    Disabled
++                Parameters
++                    Transports = REG_MULTI_SZ "Tcpip" "NetBIOS"
++
++            //
++            // The name space provider of TCP/IP in the catalog of Winsock 2 (OEMNXPTC.INF,
++            // AddNameSpaceProvider: WSCInstallNameSpace, which leaves StoresServiceClassInfo
++            // unset: FALSE). The protocol catalog is made in the first run by ws2setup
++            // (MigrateWinsockConfiguration, which setup calls after the binding review).
++            //
++            WinSock2
++                Parameters
++                    WinSock_Registry_Version = 2.0
++                    Current_NameSpace_Catalog = NameSpace_Catalog5
++                    NameSpace_Catalog5
++                        Num_Catalog_Entries = REG_DWORD 0x00000001
++                        Next_Provider_ID = REG_DWORD 0x000007d0
++                        Catalog_Entries
++                            000000000001
++                                LibraryPath = %SystemRoot%\System32\rnr20.dll
++                                DisplayString = TCP/IP
++                                ProviderId = REG_BINARY 16 0x22059d40 0x11cf7e9e 0xaa005aae 0x2b11a700
++                                SupportedNameSpace = REG_DWORD 0x0000000c
++                                Enabled = REG_DWORD 0x00000001
++                                Version = REG_DWORD 0x00000000
++                                StoresServiceClassInfo = REG_DWORD 0x00000000
++#endif // defined(RASPI)
+=1 3640 16
++#if defined(RASPI)
+=2 3597 3
++        //
++        // The SKU data text setup stores (SpSaveSKUStuff) from the setup hive of 4
++        // processors (SETUP4P.HIV, RESTRICT_CPU 4): no evaluation time, a workstation,
++        // licensed processors ~(4-1) in bits 5-9.
++        //
++        SystemPrefix = REG_BINARY 8 0x00000380 0x00000000
++#else
+=1 3656 3
++#endif // defined(RASPI)
+=1 3659 9

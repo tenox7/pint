@@ -1,0 +1,7 @@
+#ntdiff private/net/ui/acledit/acledit/ntfsacl.cxx
+=1 1 420
++                             (err = ossecdesc.SetOwner( FALSE, (const OS_SID *) NULL )) ||
++                             (err = ossecdesc.SetGroup( FALSE, (const OS_SID *) NULL ))   )
+=1 423 24
++                 (err = ossecdesc.SetOwner( FALSE, (const OS_SID *) NULL )) )
+=1 448 1578

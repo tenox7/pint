@@ -1,0 +1,6 @@
+# NTGDI\MATH ARM_SOURCES (its MIPS_SOURCES: math.cxx convert.s hardsqrt.s softsqrt.c xformer.cxx;
+# softsqrt.c is the R3000 square root, which nothing calls)
+/work/private/ntos/w32/ntgdi/math/mips/math.cxx
+gdi/convert.asm
+gdi/hardsqrt.asm
+/work/private/ntos/w32/ntgdi/math/mips/xformer.cxx

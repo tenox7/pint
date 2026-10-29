@@ -1,0 +1,47 @@
+#ntdiff private/ntos/ke/mips/services.stb
+=1 1 6
++//    sysstubs.asm, usrstubs.asm
+=1 8 3
++//    The system service stub procedures. A user mode stub executes svc with the
++//    service number in r12; a kernel mode one (Zw) enters the system service
++//    dispatcher by a branch to KiServiceInternal with the number in r12, as the
++//    trap of a svc in the supervisor mode would take the return address in lr.
+=1 16 5
++//--
++
++#include "kxarm.h"
+=1 26 10
++#define STUBS_END END
++
++#define SYSSTUBS_ENTRY1( ServiceNumber, Name, NumArgs ) SYSSTUB Zw##Name, ServiceNumber
++#define SYSSTUBS_ENTRY2( ServiceNumber, Name, NumArgs )
++#define SYSSTUBS_ENTRY3( ServiceNumber, Name, NumArgs )
++#define SYSSTUBS_ENTRY4( ServiceNumber, Name, NumArgs )
+=1 42 5
++#define USRSTUBS_ENTRY1( ServiceNumber, Name, NumArgs) USRSTUB Zw##Name, Nt##Name, ServiceNumber
++#define USRSTUBS_ENTRY2( ServiceNumber, Name, NumArgs)
++#define USRSTUBS_ENTRY3( ServiceNumber, Name, NumArgs)
++#define USRSTUBS_ENTRY4( ServiceNumber, Name, NumArgs)
++#define USRSTUBS_ENTRY5( ServiceNumber, Name, NumArgs)
+=1 52 4
++        MACRO
++        SYSSTUB $Name, $Number
++        IMPORT  KiServiceInternal
++        LEAF_ENTRY $Name
++        movw    r12, #$Number
++        b       KiServiceInternal
++        LEAF_END $Name
++        MEND
++
++        MACRO
++        USRSTUB $Zw, $Nt, $Number
++        LEAF_ENTRY $Zw
++        ALTERNATE_ENTRY $Nt
++        movw    r12, #$Number
++        svc     #1
++        bx      lr
++        LEAF_END $Zw
++        MEND
++
++        TEXTAREA
+=1 56 9

@@ -1,0 +1,2 @@
+# NTUSER\SERVER\DAYTONA ARM_SOURCES (its MIPS_SOURCES: ..\mips\thunk.s, the same thunk as that of NTCON\SERVER)
+w32/thunk.asm

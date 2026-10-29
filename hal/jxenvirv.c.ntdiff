@@ -1,0 +1,140 @@
+#ntdiff private/ntos/nthals/halfxs/mips/jxenvirv.c
+=1 1 11
++    for the Raspberry Pi 2 (the Jazz HAL's jxenvirv.c). The Pi has no
++    nonvolatile RAM, so the environment is an ARC style environment area in
++    memory: a list of "name=value" strings, each NUL terminated, ended by an
++    empty string. It starts as the firmware's, which the loader hands over in
++    the loader block, and its contents last until the system restarts.
+=1 16 5
+=1 23 4
++
++#define LENGTH_OF_ENVIRONMENT 1024
++
++static UCHAR HalpEnvironment[LENGTH_OF_ENVIRONMENT];
++static KSPIN_LOCK HalpEnvironmentLock;
++
++//
++// Find a variable in the environment: return the address of its string and,
++// in *Value, of its value; or NULL if it is not defined. Names compare without
++// regard to case.
++//
++
++static PUCHAR
++HalpFindVariable (
++    IN PCHAR Variable,
++    OUT PUCHAR *Value
++    )
++{
++    PUCHAR Entry;
++    PUCHAR Name;
++    PUCHAR Next;
++
++    for (Entry = HalpEnvironment; *Entry != 0; Entry += strlen((PCHAR)Entry) + 1) {
++        for (Name = (PUCHAR)Variable, Next = Entry; *Name != 0; Name += 1, Next += 1) {
++            if (*Next == 0 || *Next == '=' || RtlUpperChar(*Name) != RtlUpperChar(*Next)) {
+=1 504 4 4
++        if (*Name == 0 && *Next == '=') {
++            *Value = Next + 1;
++            return Entry;
+=1 430 3
++    return NULL;
++}
++
++static ULONG
++HalpEnvironmentLength (
++    VOID
++    )
++{
++    PUCHAR Entry;
++
++    for (Entry = HalpEnvironment; *Entry != 0; Entry += strlen((PCHAR)Entry) + 1) {
++    }
++
++    return Entry - HalpEnvironment;
++}
++
++VOID
++HalpInitializeEnvironment (
++    IN PLOADER_PARAMETER_BLOCK LoaderBlock
+=1 39 6
++    This function takes over the firmware's environment, which the loader copied
++    into the loader block (BlSetupForNt): the variables that fit.
+=1 46 3
++    LoaderBlock - Supplies a pointer to the loader parameter block.
+=1 103 8
++    PCHAR Entry;
++    ULONG Length;
++    ULONG Used = 0;
++
++    KeInitializeSpinLock(&HalpEnvironmentLock);
++    Entry = LoaderBlock->u.Arm.Environment;
++    if (Entry != NULL) {
++        for (; *Entry != 0; Entry += Length) {
++            Length = strlen(Entry) + 1;
++            if (Used + Length >= LENGTH_OF_ENVIRONMENT) {
+=1 314 3
++            RtlMoveMemory(&HalpEnvironment[Used], Entry, Length);
++            Used += Length;
+=1 430 3
++    HalpEnvironment[Used] = 0;
++}
++
+=1 346 25
++    ENOENT is returned, or ENOMEM if the value does not fit the buffer.
+=1 54 4
++    ARC_STATUS Status = ENOENT;
++    PUCHAR Value;
++    KIRQL OldIrql;
++
++    KeAcquireSpinLock(&HalpEnvironmentLock, &OldIrql);
++    if (HalpFindVariable(Variable, &Value) != NULL) {
++        if (strlen((PCHAR)Value) < Length) {
++            strcpy(Buffer, (PCHAR)Value);
++            Status = ESUCCESS;
++        } else {
++            Status = ENOMEM;
+=1 430 3
++    KeReleaseSpinLock(&HalpEnvironmentLock, OldIrql);
++    return Status;
++}
++
+=1 442 11
++    An empty value deletes the variable.
+=1 453 15
++    ARC_STATUS Status = ESUCCESS;
++    PUCHAR Entry;
++    PUCHAR OldValue;
++    ULONG Size;
++    ULONG Used;
++    KIRQL OldIrql;
++
++    KeAcquireSpinLock(&HalpEnvironmentLock, &OldIrql);
++
++    //
++    // Remove the current definition, if any.
++    //
++
++    Entry = HalpFindVariable(Variable, &OldValue);
++    if (Entry != NULL) {
++        Size = strlen((PCHAR)Entry) + 1;
++        Used = HalpEnvironmentLength();
++        RtlMoveMemory(Entry, Entry + Size, Used + 1 - (Entry + Size - HalpEnvironment));
+=1 162 3
++    // Append the new definition.
++    //
++
++    if (*Value != 0) {
++        Used = HalpEnvironmentLength();
++        Size = strlen(Variable) + 1 + strlen(Value) + 1;
++        if (Used + Size + 1 > LENGTH_OF_ENVIRONMENT) {
++            Status = ENOMEM;
++        } else {
++            Entry = HalpEnvironment + Used;
++            strcpy((PCHAR)Entry, Variable);
++            strcat((PCHAR)Entry, "=");
++            strcat((PCHAR)Entry, Value);
++            Entry[Size] = 0;
+=1 430 3
++    KeReleaseSpinLock(&HalpEnvironmentLock, OldIrql);
++    return Status;
++}

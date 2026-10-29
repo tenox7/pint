@@ -1,0 +1,35 @@
+#ntdiff private/windows/setup/inf/win4/inf/makefile.inc
+#crlf
+=1 1 13
++#
++# The platform switch of prodfilt, which takes the first letter of its tag: that of
++# arm is the one of alpha, so the lines of ARM are @r:.
++#
++!IF "$(TARGET_DIRECTORY)" == "arm"
++PLATSWITCH=r
++!ELSE
++PLATSWITCH=$(TARGET_DIRECTORY)
++!ENDIF
+=1 13 58
++    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
+=1 72 14
++    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
+=1 87 6
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 11
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 106 5
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 112 21
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 134 18
++    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
+=1 153 55
++    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
+=1 209 8
++    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
+=1 218 14
++    prodfilt txtsetup.tmp1 txtsetup.tmp2 +$(PLATSWITCH)
+=1 233 18
++    prodfilt dosnet.tmp1 dosnet.tmp2 +$(PLATSWITCH)
+=1 252 9

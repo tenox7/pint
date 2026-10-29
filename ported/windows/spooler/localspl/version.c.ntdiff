@@ -1,0 +1,13 @@
+#ntdiff private/windows/spooler/localspl/version.c
+=1 1 26
++#define     ARM_ENVIRONMENT             L"Windows NT ARM"
+=1 27 143
++                     _wcsicmp(pszEnvironment, ARM_ENVIRONMENT)    &&
+=1 170 18
++            case IMAGE_FILE_MACHINE_ARMNT:
++                bRet = !_wcsicmp(pszEnvironment, ARM_ENVIRONMENT);
++                break;
++
+=1 188 13
++                       _wcsicmp(pszEnvironment, ARM_ENVIRONMENT)    &&
+=1 201 15

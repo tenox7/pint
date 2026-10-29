@@ -1,0 +1,311 @@
+#ntdiff private/ntos/nthals/halfxs/mips/jxhalp.h private/ntos/nthals/hal0jens/alpha/jxhalp.h private/ntos/nthals/halfxs/mips/halp.h private/ntos/nthals/halalpha/halp.h
+=1 1 2
+=3 3 9
++    interfaces for the Raspberry Pi (BCM2836, BCM2837 and BCM2711): the analog
++    of the Jazz HAL's halp.h and jxhalp.h.
++
++    The peripherals are the BCM2835 set, at physical 0x3F000000 on the BCM2836
++    and BCM2837 (Pi 2, Pi 3) and at 0xFE000000 on the BCM2711 (Pi 4), which the
++    kernel maps at PERIPHERAL_VIRTUAL, and the per-core controller, at
++    0x40000000 or 0xFF800000, which it maps at LOCAL_PERIPHERAL_VIRTUAL. The
++    BCM2711 replaces the BCM2835 interrupt controller with the GIC-400 of its
++    per-core block. The buses are the on-chip Internal bus and, on a BCM2711
++    whose firmware brought up its PCI Express link, the PCI bus behind the
++    root complex (pcisup.c, pcibus.c); there is no ISA or EISA.
+=4 32 7
++#include "arc.h"
+=4 39 2
++
++//
++// Peripheral registers are 32-bit, device memory.
++//
++
++#define HAL_REG(a)              (*(volatile ULONG *)(ULONG)(a))
++#define HAL_REG8(a)             (*(volatile UCHAR *)(ULONG)(a))
++
++//
++// The system on a chip: the BCM2711 (Raspberry Pi 4), whose cores are
++// Cortex-A72s, or the BCM2836 or BCM2837.
++//
++
++#define HAL_CORTEX_A72          0xD08u
++
++extern BOOLEAN HalpBcm2711;
++
++//
++// Legacy BCM2835 interrupt controller (armctrl). Its enable and disable
++// registers hold independent write-1-to-act bits, never read-modify-written.
++//
++
++#define HAL_ARMCTRL_BASE        (PERIPHERAL_VIRTUAL + 0xB200u)
++#define HAL_IRQ_BASIC_PEND      (HAL_ARMCTRL_BASE + 0x00u)
++#define HAL_IRQ_PEND1           (HAL_ARMCTRL_BASE + 0x04u)
++#define HAL_IRQ_PEND2           (HAL_ARMCTRL_BASE + 0x08u)
++#define HAL_FIQ_CONTROL         (HAL_ARMCTRL_BASE + 0x0Cu)
++#define HAL_IRQ_ENABLE1         (HAL_ARMCTRL_BASE + 0x10u)
++#define HAL_IRQ_ENABLE2         (HAL_ARMCTRL_BASE + 0x14u)
++#define HAL_IRQ_ENABLE_BASIC    (HAL_ARMCTRL_BASE + 0x18u)
++#define HAL_IRQ_DISABLE1        (HAL_ARMCTRL_BASE + 0x1Cu)
++#define HAL_IRQ_DISABLE2        (HAL_ARMCTRL_BASE + 0x20u)
++#define HAL_IRQ_DISABLE_BASIC   (HAL_ARMCTRL_BASE + 0x24u)
++
++//
++// BCM2836 per-core controller.
++//
++
++#define HAL_CORE_TIMER_CTL(c)   (LOCAL_PERIPHERAL_VIRTUAL + 0x40u + 4u * (c))
++#define HAL_CORE_MBOX_CTL(c)    (LOCAL_PERIPHERAL_VIRTUAL + 0x50u + 4u * (c))
++#define HAL_GPU_INT_ROUTING     (LOCAL_PERIPHERAL_VIRTUAL + 0x0Cu)
++#define HAL_CORE_IRQ_SRC(c)     (LOCAL_PERIPHERAL_VIRTUAL + 0x60u + 4u * (c))
++#define HAL_CORE_MBOX_SET(c, m) (LOCAL_PERIPHERAL_VIRTUAL + 0x80u + 0x10u * (c) + 4u * (m))
++#define HAL_CORE_MBOX_CLR(c, m) (LOCAL_PERIPHERAL_VIRTUAL + 0xC0u + 0x10u * (c) + 4u * (m))
++
++//
++// The per-core interrupts of the BCM2836 and BCM2837: each core has an IRQ
++// source register, the timer and mailbox enables of its own, and four
++// mailboxes another core sets bits of; the interrupts of the VideoCore and
++// the BCM2835 peripherals reach the one core GPU_INT_ROUTING names, core 0. A
++// processor is interrupted by another through its mailbox 0 (the IPI) and
++// keeps its run time by its generic virtual timer.
++//
++
++#define HAL_IRQ_SRC_CNTV        0x008u
++#define HAL_IRQ_SRC_MAILBOX0    0x010u
++#define HAL_IRQ_SRC_GPU         0x100u
++#define HAL_TIMER_CTL_CNTV_IRQ  0x008u
++#define HAL_MBOX_CTL_MAILBOX0_IRQ 0x001u
++
++//
++// The interrupts of a processor itself, by the levels they interrupt at, and
++// those of them masked because they arrived at or below the current IRQL, in
++// the HAL part of its PCR.
++//
++
++#define HAL_LOCAL_IPI           0x1u
++#define HAL_LOCAL_CLOCK         0x2u
++#define HalpLocalMasked         (PCR->HalReserved[0])
++
++//
++// The GIC-400 of the BCM2711: its distributor and CPU interface are in the
++// per-core block. The ARM generic timers are private peripheral interrupts
++// (the virtual timer is ID 27), and VideoCore interrupt n is ID 96 + n.
++//
++
++#define HAL_GICD_BASE           (LOCAL_PERIPHERAL_VIRTUAL + 0x41000u)
++#define HAL_GICD_CTLR           (HAL_GICD_BASE + 0x000u)
++#define HAL_GICD_ISENABLER(n)   (HAL_GICD_BASE + 0x100u + 4u * (n))
++#define HAL_GICD_ICENABLER(n)   (HAL_GICD_BASE + 0x180u + 4u * (n))
++#define HAL_GICD_IPRIORITYR(i)  (HAL_GICD_BASE + 0x400u + (i))
++#define HAL_GICD_ITARGETSR(i)   (HAL_GICD_BASE + 0x800u + (i))
++#define HAL_GICD_ICFGR(n)       (HAL_GICD_BASE + 0xC00u + 4u * (n))
++#define HAL_GICD_SGIR           (HAL_GICD_BASE + 0xF00u)
++#define HAL_GICD_SGIR_SELF      (2u << 24)
++
++#define HAL_GICC_BASE           (LOCAL_PERIPHERAL_VIRTUAL + 0x42000u)
++#define HAL_GICC_CTLR           (HAL_GICC_BASE + 0x00u)
++#define HAL_GICC_PMR            (HAL_GICC_BASE + 0x04u)
++#define HAL_GICC_BPR            (HAL_GICC_BASE + 0x08u)
++#define HAL_GICC_IAR            (HAL_GICC_BASE + 0x0Cu)
++#define HAL_GICC_EOIR           (HAL_GICC_BASE + 0x10u)
++
++#define HAL_GIC_SPURIOUS        1020u
++#define HAL_GIC_FIRST_SPI       32u
++#define HAL_VIRTUAL_TIMER_ID    27u
++#define HAL_IPI_SGI             0u
++#define HAL_VIDEOCORE_ID(n)     (96u + (n))
++
++//
++// A system interrupt vector is DEVICE_VECTORS + an interrupt number: the legacy
++// controller's IRQ number, 0-63 (bank 1 holds IRQs 0-31, bank 2 IRQs 32-63),
++// or the GIC-400's interrupt ID, 0-223. The HAL keeps the sources in 32-bit
++// banks.
++//
++
++#define HAL_MAXIMUM_BCM_VECTOR  63u
++#define HAL_MAXIMUM_GIC_VECTOR  223u
++#define HAL_VECTOR_BANKS        7u
++#define HAL_VECTOR_BANK(v)      ((v) < 32u ? 1u : 2u)
++#define HAL_VECTOR_BIT(v)       ((v) & 31u)
++
++//
++// Define the interrupt levels of the Raspberry Pi 2 devices.
++//
++
++#define DEVICE_LEVEL            3       // device interrupt level
++#define CLOCK_LEVEL             6       // interval clock level
++#define CLOCK2_LEVEL            CLOCK_LEVEL
++
++//
++// The second-level dispatch slots of the device vectors in the PCR interrupt
++// routine table: the IRQ number offset by DEVICE_VECTORS, above the vectors
++// indexed by IRQL (as on Jazz).
++//
++
++#define DEVICE_VECTORS          16u
++
++//
++// BCM2835 system timer (1 MHz free-running counter, four compare channels).
++// Channel 1 is the profile clock and channel 3 the interval clock; the
++// interval clock of the BCM2711 is the ARM generic virtual timer, whose
++// interrupt reaches the GIC-400 of every board (the system timer's does not
++// in QEMU's raspi4b).
++//
++
++#define HAL_SYSTIMER_BASE       (PERIPHERAL_VIRTUAL + 0x3000u)
++#define HAL_ST_CS               (HAL_SYSTIMER_BASE + 0x00u)
++#define HAL_ST_CLO              (HAL_SYSTIMER_BASE + 0x04u)
++#define HAL_ST_CHI              (HAL_SYSTIMER_BASE + 0x08u)
++#define HAL_ST_C1               (HAL_SYSTIMER_BASE + 0x10u)
++#define HAL_ST_C3               (HAL_SYSTIMER_BASE + 0x18u)
++
++#define HAL_PROFILE_CHANNEL     1u
++#define HAL_CLOCK_CHANNEL       3u
++
++//
++// The interval clock rate (the Jazz values), in 100-ns units: a 10 ms tick
++// with 1 ms granularity.
++//
++
++#define MAXIMUM_INCREMENT       100000u
++#define MINIMUM_INCREMENT       10000u
++
++//
++// PL011 UART0, the debug and serial console port.
++//
++
++#define HAL_UART_BASE           (PERIPHERAL_VIRTUAL + 0x201000u)
++
++//
++// Power management (the watchdog resets the system).
++//
++
++#define HAL_PM_BASE             (PERIPHERAL_VIRTUAL + 0x100000u)
++#define HAL_PM_RSTC             (HAL_PM_BASE + 0x1Cu)
++#define HAL_PM_WDOG             (HAL_PM_BASE + 0x24u)
++#define HAL_PM_PASSWORD         0x5A000000u
++#define HAL_PM_RSTC_FULL_RESET  0x00000020u
++
++//
++// GPIO function select, and the BSC1 I2C controller of the expansion header
++// (GPIO 2 and 3), the bus of the realtime clock. The divider makes 100 kHz of
++// the core clock: 250 MHz, the default of a Pi 2, which enable_uart=1 sets on a
++// Pi 3 too (its primary UART, the mini UART, runs on the core clock), and
++// 500 MHz, the core clock of a Pi 4.
++//
++
++#define HAL_GPFSEL0             (PERIPHERAL_VIRTUAL + 0x200000u)
++
++#define HAL_BSC1_BASE           (PERIPHERAL_VIRTUAL + 0x804000u)
++#define HAL_BSC1_C              (HAL_BSC1_BASE + 0x00u)
++#define HAL_BSC1_S              (HAL_BSC1_BASE + 0x04u)
++#define HAL_BSC1_DLEN           (HAL_BSC1_BASE + 0x08u)
++#define HAL_BSC1_A              (HAL_BSC1_BASE + 0x0Cu)
++#define HAL_BSC1_FIFO           (HAL_BSC1_BASE + 0x10u)
++#define HAL_BSC1_DIV            (HAL_BSC1_BASE + 0x14u)
++
++#define HAL_BSC_C_I2CEN         0x8000u
++#define HAL_BSC_C_ST            0x0080u
++#define HAL_BSC_C_CLEAR         0x0010u
++#define HAL_BSC_C_READ          0x0001u
++#define HAL_BSC_S_CLKT          0x0200u
++#define HAL_BSC_S_ERR           0x0100u
++#define HAL_BSC_S_RXD           0x0020u
++#define HAL_BSC_S_TXD           0x0010u
++#define HAL_BSC_S_DONE          0x0002u
++#define HAL_BSC_DIVIDER         (HalpBcm2711 ? 5000u : 2500u)
++
++//
++// The PCI Express root complex of the BCM2711 (pcibus.c): its registers, and
++// the memory of the bus, the outbound window of the root complex from bus
++// address HAL_PCI_MEMORY_BUS, whose first 16 MB the kernel maps at
++// HAL_PCI_MEMORY_VIRTUAL (KE\ARM\TBARM.C). The bus has no I/O space.
++//
++
++#define HAL_PCIE_PHYSICAL       0xFD500000u
++#define HAL_PCIE_LENGTH         0x9310u
++#define HAL_PCI_MEMORY_BUS      0xF8000000u
++#define HAL_PCI_MEMORY_LENGTH   0x01000000u
++#define HAL_PCI_MEMORY_VIRTUAL  0xFD000000u
++
++extern BOOLEAN HalpPCIPresent;
++
++//
++// Define adapter object structure: BusMemoryBase is the bus address of
++// physical memory zero for the bus masters of its bus.
+=1 38 5
+=1 44 1
+=1 46 4
+=2 76 1
+=2 78 1
++    ULONG BusMemoryBase;
+=1 60 6
+=4 260 2
++    IN PVOID Routine,
+=2 122 4
++HalpInitializeClock (
+=4 196 4
++HalpInitializeEnvironment (
+=3 114 4
+=3 113 15
++HalpInitializePCIExpress (
+=2 181 3
+=4 529 29
+=4 690 33
+=4 559 2
++    IN OUT PIO_RESOURCE_REQUIREMENTS_LIST *pResourceList,
++    IN LARGE_INTEGER MaximumPortAddress,
++    IN LARGE_INTEGER MaximumMemoryAddress,
++    IN ULONG MaximumInterruptVector,
++    IN ULONG MaximumDmaChannel
+=1 69 3
++HalpGenericClockInterrupt (
++    IN PVOID Routine,
+=2 122 4
++HalpGicInterruptDispatch (
++    IN PVOID Routine,
+=2 122 4
++HalpInterruptDispatch (
++    IN PVOID Routine,
+=2 122 4
+=3 143 1
++    IN PVOID Routine,
+=2 122 4
++HalpUnmaskInterrupts (
++    IN PVOID Routine,
+=2 122 4
++HalpStartClock (
+=1 78 4
++HalpStartProcessorClock (
+=1 78 4
++HalpProcessorClockInterrupt (
++    IN PVOID Routine,
+=2 122 4
++HalpIpiInterrupt (
++    IN PVOID Routine,
+=2 122 4
++HalSweepDcacheRange (
++    IN PVOID BaseAddress,
+=4 813 4
++HalFlushDcachePage (
++    IN PVOID Color,
++    IN ULONG PageFrame,
+=4 813 4
++HalPurgeDcachePage (
++    IN PVOID Color,
++    IN ULONG PageFrame,
+=4 813 4
++HalPurgeIcachePage (
++    IN PVOID Color,
++    IN ULONG PageFrame,
+=4 673 3
+=3 176 4
+=3 182 1
++
++//
++// The spin locks of the HAL: the interrupt controller state, the display.
++//
++
+=3 190 1
+=3 183 1
++extern BOOLEAN HalpDisplaySerial;
+=4 1085 11

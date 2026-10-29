@@ -1,0 +1,13 @@
+#ntdiff private/net/ui/common/src/dll3/makefile.inc
+=1 1 76
++!ELSEIF $(ARM)
++
++DLL_ARM_SRCLIBS=$(DLL_SOURCELIBS:*=arm)
++$(TARGET_DEF): $(DLL_SOURCELIBS:*=arm)
++        -del $(TARGET_DEF)
+=1 50 1
++	link32 -dump -decorate -symbols $(**) | uixport -h:$(SOURCE_DEF) -o:$(TARGET_DEF) $(EXCLUDE_OPT)
+=1 76 3
++!ERROR Must have one of (MIPS, 386, Alpha, PPC, ARM)
++
++!ENDIF

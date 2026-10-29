@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/convert/wcstombs.c
+=1 1 293
++        return count;
+=1 293 32

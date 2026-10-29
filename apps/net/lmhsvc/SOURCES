@@ -1,0 +1,15 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=lmhsvc
+
+TARGETNAME=lmhsvc
+TARGETPATH=obj
+TARGETTYPE=DYNLINK
+
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib \
+           $(BASEDIR)\public\sdk\lib\*\advapi32.lib \
+           $(BASEDIR)\public\sdk\lib\*\kernel32.lib
+
+INCLUDES=$(BASEDIR)\private\inc
+
+SOURCES=lmhsvc.c \
+        lmhsvc.rc

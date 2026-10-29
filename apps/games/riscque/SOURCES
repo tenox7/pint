@@ -1,0 +1,14 @@
+MAJORCOMP=games
+MINORCOMP=riscque
+
+TARGETNAME=riscque
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+INCLUDES=..
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\winmm.lib
+
+SOURCES=riscque.c riscque.rc
+
+UMTYPE=windows
+UMENTRY=winmain

@@ -1,0 +1,83 @@
+#ntdiff private/ntos/rtl/mips/context.c private/ntos/rtl/alpha/context.c
+=1 1 10
++    This module implements user-mode callable context manipulation routines
++    (the ARM port of RTL\MIPS\CONTEXT.C).
+=1 22 4
++
+=1 27 30
++           aligned: a Thumb address has the Thumb state bit set, an ARM one
++           is word aligned.
+=1 58 5
++    ULONG Index;
+=1 62 8
++
++    if ((((ULONG)InitialPc & 0x1) == 0) && (((ULONG)InitialPc & 0x3) != 0)) {
+=1 71 7
++    Context->R0 = 0;
++    Context->R1 = 1;
++    Context->R2 = 2;
++    Context->R3 = 3;
++    Context->R4 = 4;
++    Context->R5 = 5;
++    Context->R6 = 6;
++    Context->R7 = 7;
++    Context->R8 = 8;
++    Context->R9 = 9;
++    Context->R10 = 10;
++    Context->R11 = 11;
++    Context->R12 = 12;
++
++    //
++    // Initialize the floating point registers to contain the integer value of
++    // their register number.
++    //
++
++    for (Index = 0; Index < 32; Index += 1) {
++        Context->u.D[Index] = Index;
++    }
++
++    Context->Fpscr = 0;
+=1 146 4
++
++    Context->Sp = (ULONG)InitialSp;
++    Context->Lr = 1;
++    Context->Pc = (ULONG)InitialPc & ~1;
++    Context->Cpsr = (((ULONG)InitialPc & 0x1) != 0) ? 0x30 : 0x10;
+=1 158 6
++    Context->R0 = (ULONG)Parameter;
++}
++
+=1 168 15
++    This function calls a procedure in another thread/process, by using
+=1 184 1
++    procedure via the nonvolatile registers (r4 - r11).
+=1 186 17
++        is to be passed that points to a context record.
+=1 205 33
+=2 263 9
++
+=2 272 4
++        Context.R0 = STATUS_ALERTED;
+=1 253 4
++    // r4 - r11. The context record is passed on the stack of the target thread.
++    //
++
++    NewSp = Context.Sp - sizeof(CONTEXT);
+=2 285 6
++
+=2 291 3
++    Context.Sp = NewSp;
++    if (PassContext) {
++        Context.R4 = NewSp;
++        RtlMoveMemory(&Context.R5, Arguments, ArgumentCount * sizeof(ULONG));
++
++    } else {
++        RtlMoveMemory(&Context.R4, Arguments, ArgumentCount * sizeof(ULONG));
+=1 72 3
++    // Set the address of the target code into PC and set the thread context
+=1 286 3
++    Context.Pc = (ULONG)CallSite & ~1;
++    Context.Cpsr = ((ULONG)CallSite & 0x1) != 0 ? Context.Cpsr | 0x20 : Context.Cpsr & ~0x20;
+=1 290 5
++    return(Status);
++}

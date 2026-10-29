@@ -1,0 +1,39 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/h/trnsctrl.h
+=1 1 240
++#elif defined(_M_ARM)
++//
++// A catch block is a funclet called on the stack of the frame handler that
++// found it, with the nonvolatile registers of its function, by _CallSettingFrame,
++// which leaves the frame info of the catch at the establisher frame of the
++// funclet.  The state of a function is that of its address, unless the state
++// of the frame holds a state other than -2: the function has a catch in
++// progress or it has been unwound.  The state of the frame of the function is
++// at the displacement 'dispUnwindHelp' of its frame, that of the frame of a
++// catch funclet in its frame info.
++//
+=1 47 1
++    PULONG pEstablisherFrame;           // Frame of the function of the catch
++    PRUNTIME_FUNCTION pFunctionEntry;   // Function entry of the frame that caught
++    CONTEXT *pExitContext;              // Context of the frame that caught
++    PNONVOLATILE_REGISTERS pNonVolatileRegisters; // Registers of the frame that caught
++    __ehstate_t *pState;                // State of the frame that caught
++    TryBlockMapEntry *pEntry;           // Try block of the catch
++    int CatchDepth;                     // Catch blocks the catch is nested in, itself too
++    __ehstate_t state;                  // State of the frame of the catch funclet
+=1 212 3
++#define EH_STATE_FROM_PC	-2			// State of a frame: that of its address
++
++extern "C" PVOID _CallSettingFrame(PVOID, PVOID, PNONVOLATILE_REGISTERS, ULONG);
+=1 219 2
++extern "C" CONTEXT *_SaveUnwindContext(CONTEXT *);
++extern "C" CONTEXT *_GetUnwindContext(VOID);
++extern EHRegistrationNode *_GetEstablisherFrame(EHRegistrationNode *, DispatcherContext *, FuncInfo *, FRAMEINFO **);
++extern __ehstate_t *_GetStateOfFrame(EHRegistrationNode *, DispatcherContext *, FuncInfo *);
++extern FRAMEINFO *_CreateFrameInfo(FRAMEINFO *, DispatcherContext *, PULONG, CONTEXT *, __ehstate_t *, TryBlockMapEntry *, int);
+=1 221 1
++extern VOID _UnlinkFrame(FRAMEINFO *);
+=1 223 1
++extern VOID __FrameUnwindToTargetState(EHRegistrationNode *, DispatcherContext *, FuncInfo *);
++extern __ehstate_t _StateFromControlPc(FuncInfo *, DispatcherContext *, ULONG);
+=1 225 12
+=1 241 8

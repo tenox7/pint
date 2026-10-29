@@ -1,0 +1,4 @@
+#ntdiff private/rpc/ndr20/auxilary.c
+=1 1 256
++    return S_OK;
+=1 257 1383

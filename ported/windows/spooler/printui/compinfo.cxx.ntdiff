@@ -1,0 +1,18 @@
+#ntdiff private/windows/spooler/printui/compinfo.cxx
+=1 1 51
++        case PROCESSOR_ARCHITECTURE_ARM:
++        {
++            return PROCESSOR_ARCHITECTURE_NAME_ARM;
+=1 51 30
++        case PROCESSOR_ARCHITECTURE_ARM:
++        {
++            return TEXT("arm");
+=1 80 38
++        case PROCESSOR_ARCHITECTURE_ARM:
++        {
++            return ENVIRONMENT_ARM;
+=1 117 140
++            else if(!_tcsnicmp(pCPUName, TEXT("ARM-"), 4))
++            {
++                ProcessorArchitecture = PROCESSOR_ARCHITECTURE_ARM;
+=1 256 259

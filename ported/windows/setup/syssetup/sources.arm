@@ -1,0 +1,2 @@
+# SETUP\SYSSETUP ARM_SOURCES (the platform.c of MIPS and Alpha: nothing machine specific to set up)
+/work/private/windows/setup/syssetup/mips/platform.c

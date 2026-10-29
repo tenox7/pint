@@ -1,0 +1,176 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/eh/ppc/trnsctrl.cpp
+=1 1 39
++#define FunctionImageBase	(_getptd()->_ImageBase)
++#define ThrowImageBase	(_getptd()->_ThrowImageBase)
+=1 40 4
++static ULONG FunctionImageBase;		// Image of the function examined
++static ULONG ThrowImageBase;		// Image of the type of the object thrown
+=1 44 4
++
++// The image bases the offsets of the function information and of the
++// information of the object thrown are from.
++
++extern "C" ULONG __cdecl _GetImageBase(
++    void
++) {
++    return FunctionImageBase;
++}
++
++extern "C" void __cdecl _SetImageBase(
++    ULONG ImageBase
++) {
++    FunctionImageBase = ImageBase;
++}
++
++extern "C" ULONG __cdecl _GetThrowImageBase(
++    void
++) {
++    return ThrowImageBase;
++}
++
++extern "C" void __cdecl _SetThrowImageBase(
++    ULONG ImageBase
++) {
++    ThrowImageBase = ImageBase;
+=1 57 3
++// Save the unwind context; return the one it replaces.
++
++extern "C" CONTEXT *_SaveUnwindContext(
++    CONTEXT * pContext
++) {
++    CONTEXT *pPrevious = pUnwindContext;
++
+=1 56 1
++    return pPrevious;
+=1 57 12
++// Return the frame info of the catch if the frame is that of a catch funclet;
++// otherwise, NULL is returned.  _CallSettingFrame leaves the frame info at the
++// establisher frame of the funclet.
++
++static FRAMEINFO *_CatchFrameInfo(
+=1 195 4
++    ULONG BeginAddress = pDC->FunctionEntry->BeginAddress & ~1;
+=1 176 1
++    HandlerType *pCatch;
++    unsigned index;
++    int catches;
++
++    for (index = 0; index < FUNC_NTRYBLOCKS(*pFuncInfo); index++) {
++	pEntry = FUNC_PTRYBLOCK(*pFuncInfo, index);
++	pCatch = TBME_PLIST(*pEntry);
++	for (catches = TBME_NCATCHES(*pEntry); catches > 0; catches--, pCatch++) {
++	    if (((ULONG)pCatch->addressOfHandler & ~1) == BeginAddress) {
++		return *(FRAMEINFO **)pRN;
++	    }
+=1 87 11
++// for the frame that corresponds to the continuation point.  The state of that
++// frame is again that of its address.
+=1 99 5
++    ULONG ImageBase;
++    PRUNTIME_FUNCTION pFunctionEntry =
++      RtlLookupFunctionEntry((ULONG)pContinuation & ~1, &ImageBase);
+=1 108 2
++    for (; pFrameInfo != NULL; pFrameInfo = pFrameInfo->pNext) {
++	if (pFunctionEntry == pFrameInfo->pFunctionEntry) {
++	    *pFrameInfo->pState = EH_STATE_FROM_PC;
++	    pFrameInfoChain = pFrameInfo->pNext;
++	    return pFrameInfo->pExitContext;
+=1 87 3
+=1 104 1
+=1 90 4
+=1 115 3
++FRAMEINFO * _CreateFrameInfo(
+=1 119 4
++    __ehstate_t *pState,
++    TryBlockMapEntry *pEntry,
++    int CatchDepth
++) {
+=1 127 1
+=1 125 1
+=1 128 1
++    pFrameInfo->pNonVolatileRegisters = pDC->NonVolatileRegisters;
++    pFrameInfo->pState = pState;
++    pFrameInfo->pEntry = pEntry;
++    pFrameInfo->CatchDepth = CatchDepth;
++    pFrameInfo->state = EH_STATE_FROM_PC;
+=1 130 7
++// Remove the frame information of a catch that is left.
++
++VOID _UnlinkFrame(
+=1 74 2
+=1 110 1
+=1 134 35
++// This function unwinds to the empty state; the frame of a catch funclet only
++// to the state of its catch, from which the frame of its function unwinds.
++// The frame stays in the empty state: an exception raised later walks the
++// frames again and must find nothing to unwind or catch in it.
+=1 193 6
++    FRAMEINFO *pFrameInfo = _CatchFrameInfo(pRN, pDC, pFuncInfo);
++
++    __FrameUnwindToState(pRN, pDC, pFuncInfo, pFrameInfo == NULL ?
++      EH_EMPTY_STATE : TBME_HIGH(*pFrameInfo->pEntry) + 1);
++    SetState(pRN, pDC, pFuncInfo, EH_EMPTY_STATE);
+=1 57 3
++// This function unwinds the target frame of an unwind (a long jump) to the
++// state of the address it continues at.
++
++VOID __FrameUnwindToTargetState(
+=1 195 4
++    __FrameUnwindToState(pRN, pDC, pFuncInfo,
++      _StateFromControlPc(pFuncInfo, pDC, pDC->TargetPc & ~1));
++    SetState(pRN, pDC, pFuncInfo, EH_STATE_FROM_PC);
+=1 57 3
++// This function finds the establisher frame of the function of the frame:
++// that of its parent function if the frame is that of a catch funclet, whose
++// frame info it returns too (NULL for the frame of the function itself).
+=1 214 2
+=1 195 2
++    FuncInfo *pFuncInfo,
++    FRAMEINFO **ppFrameInfo
++) {
++    FRAMEINFO *pFrameInfo = _CatchFrameInfo(pRN, pDC, pFuncInfo);
++
++    *ppFrameInfo = pFrameInfo;
++    if (pFrameInfo != NULL) {
++	return (EHRegistrationNode *)pFrameInfo->pEstablisherFrame;
++    }
++
++    return pRN;
+=1 57 3
++// This function returns the state of the frame: that in the frame info of a
++// catch funclet, else that at the displacement 'dispUnwindHelp' of the frame
++// of the function.
++
++__ehstate_t *_GetStateOfFrame(
+=1 195 4
++    FRAMEINFO *pFrameInfo = _CatchFrameInfo(pRN, pDC, pFuncInfo);
++
++    if (pFrameInfo != NULL) {
++	return &pFrameInfo->state;
++    }
++
++    return (__ehstate_t *)OffsetToAddress(FUNC_DISPUNWINDHELP(*pFuncInfo), pRN);
+=1 241 8
+=1 142 1
++    DispatcherContext *pDC,		// More dynamic info for this frame
+=1 251 17
++    FRAMEINFO *pFrameInfo;
+=1 269 2
++    // The handler data is the offset of the function information in the image
++    // of the function; the frame of a catch funclet is as deep in catch blocks
++    // as its catch.
++
++    _SetImageBase(pDC->ImageBase);
++    pFuncInfo = (FuncInfo *)_RVA_TO_PTR(pDC->ImageBase, *(PULONG)pDC->HandlerData);
++    _GetEstablisherFrame(pFrame, pDC, pFuncInfo, &pFrameInfo);
+=1 273 1
++      pFuncInfo, pFrameInfo == NULL ? 0 : pFrameInfo->CatchDepth, NULL, FALSE);
++    return result;
+=1 57 3
++// __CxxFrameHandler3 - The frame handler the compiler names in the function
++// tables of its functions
++
++extern "C" _CRTIMP EXCEPTION_DISPOSITION __CxxFrameHandler3(
+=1 262 5
++    return __CxxFrameHandler(pExcept, pFrame, pContext, pDC);
++}

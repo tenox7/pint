@@ -1,0 +1,20 @@
+#ntdiff private/windows/setup/bom/general/general.c
+=1 1 9
++#define PLATFORM_COUNT  5
+=1 11 2
++PSTR GenericSubstitutions[PLATFORM_COUNT] = { "alpha","mips","i386","ppc","arm" };
++PSTR PlatformSubstitutions[PLATFORM_COUNT] = { "alpha","mips","x86","ppc","arm" };
++PSTR AclpathSubstitutions[PLATFORM_COUNT] = { "w32alpha","w32mips","w32x86","w32ppc","w32arm" };
+=1 16 382
++          && _stricmp(entry->source,"armbins")       // exclude armbins files
+=1 398 2
++          && _stricmp(entry->path,"\\arm")           // exclude arm path files
+=1 400 4
++          && _stricmp(entry->source,"armdbg")        // exclude armdbg files
+=1 404 13
++          && _stricmp(entry->source,"armbins")
+=1 417 2
++          && _stricmp(entry->path,"\\arm")
+=1 419 4
++          && _stricmp(entry->source,"armdbg")
+=1 423 48

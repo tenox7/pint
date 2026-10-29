@@ -1,0 +1,33 @@
+#ntdiff private/sdktools/vctools/crt/fpw32/tran/mips/filter.c private/sdktools/vctools/crt/fpw32/tran/i386/filter.c
+=1 1 7
++*       (FPW32\TRAN\MIPS\FILTER.C for ARM).
+=1 11 8
++//
++// Define floating status register bit masks: the exception trap enables.
++//
++
++#define _FPSCR_E 0x1f00
++
++
++extern unsigned int _get_fpscr();
++extern void _set_fpscr(unsigned int);
+=1 64 21
+=2 420 1
+=1 87 5
+=1 98 7
+=1 106 9
+=1 117 1
+=1 120 3
++    _set_fpscr(_get_fpscr() & ~_FPSCR_E);
++
++    /*
+=1 127 1
++     * or contains a pointer to an _FPIEEE_RECORD for s/w exceptions.
++     * The VFP of the Cortex-A7 traps no exception, so every IEEE
++     * exception is a software one (fpexcept.c).
++     */
++
++    if (pexc->ExceptionInformation[0] == 0) {
+=1 112 3
++    return handler((_FPIEEE_RECORD *)(pexc->ExceptionInformation[0]));
++}

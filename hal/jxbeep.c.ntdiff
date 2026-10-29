@@ -1,0 +1,30 @@
+#ntdiff private/ntos/nthals/halfxs/mips/jxbeep.c private/ntos/nthals/halfxs/mips/x86bios.c
+=1 1 10
++    This module implements the HAL speaker and x86 BIOS routines for the
++    Raspberry Pi 2 (the Jazz HAL's jxbeep.c and x86bios.c). The Pi has no
++    speaker timer and no x86 option ROM bus.
+=1 16 5
+=1 23 3
++
+=1 28 20
++    FALSE: the system has no speaker.
+=1 51 4
++    UNREFERENCED_PARAMETER(Frequency);
++
+=2 80 3 -4
+=2 36 20
++Return Value:
++
++    FALSE: there is no x86 ROM BIOS on this system.
+=1 51 4
++    UNREFERENCED_PARAMETER(BiosCommand);
++    UNREFERENCED_PARAMETER(Eax);
++    UNREFERENCED_PARAMETER(Ebx);
++    UNREFERENCED_PARAMETER(Ecx);
++    UNREFERENCED_PARAMETER(Edx);
++    UNREFERENCED_PARAMETER(Esi);
++    UNREFERENCED_PARAMETER(Edi);
++    UNREFERENCED_PARAMETER(Ebp);
++
++    return FALSE;
++}

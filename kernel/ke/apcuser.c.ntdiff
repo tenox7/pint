@@ -1,0 +1,25 @@
+#ntdiff private/ntos/ke/mips/apcuser.c private/ntos/ke/alpha/apcuser.c
+=1 1 11
++    a user mode APC (the ARM port of KE\MIPS\APCUSER.C).
+=1 17 5
+=1 24 3
++
+=2 32 65
++        UserStack = (ContextRecord.Sp & (~15)) - Length;
+=1 94 10
++        // Set the address of the user APC routine, the APC parameters, and
++        // the new stack pointer in the current trap frame. Set the
++        // continuation address so control will be transfered to the user APC
++        // dispatcher.
++        //
++
++        TrapFrame->Sp = UserStack;
++        TrapFrame->R0 = (ULONG)NormalContext;
++        TrapFrame->R1 = (ULONG)SystemArgument1;
++        TrapFrame->R2 = (ULONG)SystemArgument2;
++        TrapFrame->R3 = (ULONG)NormalRoutine;
++        TrapFrame->Pc = KeUserApcDispatcher & ~1;
++        TrapFrame->Cpsr = (TrapFrame->Cpsr & ~CPSR_IT_MASK) | PSR_THUMB;
+=1 117 14
++        ExceptionRecord.ExceptionAddress = (PVOID)(TrapFrame->Pc);
+=1 132 9

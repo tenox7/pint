@@ -1,0 +1,301 @@
+#ntdiff private/ntos/nthals/halfxs/mips/jxhwsup.c private/ntos/nthals/hal0jens/alpha/jxhwsup.c
+=1 1 10
++    This module contains the HalpXxx routines for the NT I/O system that are
++    hardware dependent: the adapter objects and the bus address translation
++    of the Raspberry Pi 2 (the Jazz HAL's jxhwsup.c).
++
++    The buses are the Internal bus and, on a BCM2711 whose firmware brought up
++    its PCI Express link, the PCI buses (pcisup.c, pcibus.c), each with its bus
++    handler (busdata.c): the bus data and slot resources are those of the PCI
++    buses, and a PCI bus translates addresses as the Internal bus, its parent,
++    whose translation is here. Bus master devices
++    of the Internal bus reach memory through the VideoCore bus, which sees
++    SDRAM at BUS_MEMORY_BASE plus the physical address, but for the GENET of a
++    BCM2711, which is on its system bus and sees SDRAM at the physical address:
++    the firmware gives it the DMA channel SYSTEM_BUS_CHANNEL. Those of the PCI
++    bus reach it at the physical address (the inbound window of the root
++    complex). There is no I/O map, so a transfer maps directly and needs no map
++    registers. The PCI
++    memory is the HAL's window, which drivers use without mapping it, as the
++    QVAs of the Alpha HALs. There is no system (slave) DMA controller in the NT
++    sense.
+=1 18 3
++    Kernel mode
+=1 25 4
++
++//
++// The VideoCore bus address of physical address zero: the uncached alias of
++// SDRAM, which devices use for DMA.
++//
++
++#define BUS_MEMORY_BASE 0xC0000000
++
++//
++// The DMA channel of the bus masters of the Internal bus that reach memory
++// through the system bus of a BCM2711, at the physical address.
++//
++
++#define SYSTEM_BUS_CHANNEL 1
++
++//
++// The highest physical address a bus master can reach.
++//
++
++#define BUS_MEMORY_LIMIT 0x3FFFFFFF
++
+=1 743 11
++    in the device description structure.
+=1 756 16
+=1 1048 1
++
++    if ((DeviceDescription->InterfaceType != Internal &&
++         (DeviceDescription->InterfaceType != PCIBus || !HalpPCIPresent)) ||
++        !DeviceDescription->Master) {
+=1 558 3
++    AdapterObject = ExAllocatePool(NonPagedPool, sizeof(ADAPTER_OBJECT));
+=1 1929 1
+=1 558 3
++    RtlZeroMemory(AdapterObject, sizeof(ADAPTER_OBJECT));
+=1 1160 1 -8
++    AdapterObject->Size = sizeof(ADAPTER_OBJECT);
++    AdapterObject->MasterDevice = TRUE;
++    AdapterObject->ScatterGather = DeviceDescription->ScatterGather;
++    AdapterObject->MapRegistersPerChannel = BYTES_TO_PAGES(DeviceDescription->MaximumLength) + 1;
++    AdapterObject->MapRegisterBase = AdapterObject;
++    AdapterObject->BusMemoryBase = DeviceDescription->InterfaceType == PCIBus ||
++                                   (HalpBcm2711 && DeviceDescription->DmaChannel == SYSTEM_BUS_CHANNEL) ?
++                                   0 : BUS_MEMORY_BASE;
++    KeInitializeDeviceQueue(&AdapterObject->ChannelWaitQueue);
++
++    *NumberOfMapRegisters = AdapterObject->MapRegistersPerChannel;
+=1 1280 1
++}
++
+=1 109 7
+=1 748 5
++    This routine allocates the adapter channel specified by the adapter
++    object. If the channel is busy the request is queued; otherwise the
++    driver's execution routine is called at once.
+=1 135 7
++
++    NumberOfMapRegisters - The number of map registers that are to be
++        allocated from the channel, if any.
+=1 146 9
++    N.B.  The caller is at DISPATCH_LEVEL.
+=1 158 4
+=1 164 1
++
+=2 381 1 -8
++        return STATUS_INSUFFICIENT_RESOURCES;
++    }
+=1 184 4
++    if (KeInsertDeviceQueue(&AdapterObject->ChannelWaitQueue, &Wcb->WaitQueueEntry)) {
+=1 2275 2 4
++
+=1 207 1 -4
++    Action = ExecutionRoutine(Wcb->DeviceObject,
+=1 286 2 -9
++                              Wcb->DeviceContext);
++
++    if (Action == DeallocateObject || Action == DeallocateObjectKeepRegisters) {
+=1 213 1 -8
++    }
+=1 2274 3
++
+=1 1491 9
++    This routine is invoked to deallocate the specified adapter object. The
++    next request waiting for the channel, if any, is started.
+=2 2284 14
+=1 164 1
++
++    while ((Packet = KeRemoveDeviceQueue(&AdapterObject->ChannelWaitQueue)) != NULL) {
++        Wcb = CONTAINING_RECORD(Packet, WAIT_CONTEXT_BLOCK, WaitQueueEntry);
+=1 207 1
++        Action = Wcb->DeviceRoutine(Wcb->DeviceObject,
+=1 286 2 -3
++                                    Wcb->DeviceContext);
++
+=1 1674 1 -4
++            return;
+=1 310 3
++    AdapterObject->CurrentWcb = NULL;
++}
++
+=1 1285 2
+=1 111 1
+=1 96 1
+=1 513 2
+=1 748 5
++    This routine deallocates the map registers for the adapter. A bus master
++    on the Pi maps memory directly, so no map registers are held.
+=2 766 5
++    UNREFERENCED_PARAMETER(MapRegisterBase);
++    UNREFERENCED_PARAMETER(NumberOfMapRegisters);
++}
++
+=1 1766 15
++    to allow a transfer to or from a device. On the Pi the transfer maps to
++    the bus addresses of the pages directly, so a call maps the physically
++    contiguous run of pages at CurrentVa.
+=1 1782 15
++    Length - Supplies the length of the transfer. This determines the
+=1 1798 8
++    Returns the logical address that should be used bus master controllers.
+=1 158 4
++    PHYSICAL_ADDRESS LogicalAddress;
++    PULONG PageFrame;
++    PULONG Next;
++    ULONG Offset;
++    ULONG Mapped;
++
++    UNREFERENCED_PARAMETER(MapRegisterBase);
++    UNREFERENCED_PARAMETER(WriteToDevice);
++
++    Offset = BYTE_OFFSET(CurrentVa);
++    PageFrame = (PULONG)(Mdl + 1) +
++                (((ULONG)CurrentVa - (ULONG)PAGE_ALIGN(Mdl->StartVa)) >> PAGE_SHIFT);
++
++    Mapped = PAGE_SIZE - Offset;
++    for (Next = PageFrame; Mapped < *Length && Next[1] == Next[0] + 1; Next += 1) {
++        Mapped += PAGE_SIZE;
++    }
++
++    if (Mapped < *Length) {
++        *Length = Mapped;
++    }
++
++    LogicalAddress.HighPart = 0;
++    LogicalAddress.LowPart = AdapterObject->BusMemoryBase | ((PageFrame[0] << PAGE_SHIFT) + Offset);
++    return LogicalAddress;
++}
++
+=1 1880 14
++    This routine flushes the DMA adapter object buffers. A bus master
++    transfers to memory directly, so nothing is buffered.
+=1 150 3
++    TRUE - No errors are detected so the transfer must succeed.
+=2 766 5
++    UNREFERENCED_PARAMETER(Mdl);
++    UNREFERENCED_PARAMETER(MapRegisterBase);
++    UNREFERENCED_PARAMETER(CurrentVa);
+=2 771 1
++    UNREFERENCED_PARAMETER(WriteToDevice);
+=2 3416 3
++
+=1 2589 4
+=1 748 5
++    This function reads the DMA counter of a system DMA channel and returns
++    the number of bytes left to be transfered. There are no system DMA
++    channels.
+=2 766 5
++
++    return 0;
++}
++
+=1 317 7
+=1 748 5
++    This function allocates the memory for a common buffer and maps it so
++    that it can be accessed by a master device and the CPU. The buffer is
++    physically contiguous memory below the bus master limit; an uncached
++    buffer is mapped uncached.
+=1 330 14
++    Returns the virtual address of the common buffer.  If the buffer cannot
++    be allocated then NULL is returned.
+=1 158 4
++    PHYSICAL_ADDRESS Limit;
++    PHYSICAL_ADDRESS Physical;
++    PVOID VirtualAddress;
++    PVOID Uncached;
++
++    Limit.HighPart = 0;
++    Limit.LowPart = BUS_MEMORY_LIMIT;
++    VirtualAddress = MmAllocateContiguousMemory(Length, Limit);
++    if (VirtualAddress == NULL) {
+=1 558 3
++    Physical = MmGetPhysicalAddress(VirtualAddress);
++    if (!CacheEnabled) {
++        HalSweepDcacheRange(VirtualAddress, Length);
++        Uncached = MmMapIoSpace(Physical, Length, FALSE);
++        if (Uncached == NULL) {
+=2 775 1 8
+=1 558 3 4
++        VirtualAddress = Uncached;
++    }
++
++    LogicalAddress->HighPart = 0;
++    LogicalAddress->LowPart = AdapterObject->BusMemoryBase | Physical.LowPart;
++    return VirtualAddress;
++}
++
+=1 666 8
+=1 748 5
+=1 678 7
++    Length - Supplies the length of the common buffer.
++
++    LogicalAddress - Supplies the logical address of the common buffer.
++
++    VirtualAddress - Supplies the virtual address of the common buffer.
+=1 693 10
++    PHYSICAL_ADDRESS Physical;
++
++    if (!CacheEnabled) {
++        MmUnmapIoSpace(VirtualAddress, Length);
++        Physical.HighPart = 0;
++        Physical.LowPart = LogicalAddress.LowPart & ~AdapterObject->BusMemoryBase;
++        VirtualAddress = (PVOID)(KSEG0_BASE | Physical.LowPart);
++    }
+=2 774 2
++}
++
+=1 625 7
+=1 748 5
+=1 636 2
++    buffer. There are no adapter buffers.
+=1 150 3
++    TRUE.
+=2 766 7
+=2 727 2
++    return TRUE;
++}
++
+=1 510 5
+=1 748 5
+=1 519 1
++    to allocate a number map registers permanently. A bus master needs none,
++    so the adapter's map register base is returned.
+=1 135 6
++    NumberOfMapRegisters - Number of map registers required.
+=1 528 8
++    UNREFERENCED_PARAMETER(NumberOfMapRegisters);
+=1 621 3
++
+=2 1360 15
++    MmMapIoSpace. The Internal bus addresses are system physical addresses.
++    The memory of the PCI bus translates to the virtual address of the HAL's
++    window, with the address space returned as I/O space (1), so that the
++    caller uses it as it is and does not call MmMapIoSpace.
+=1 135 3
++    BusHandler - Supplies the handler of the bus: the Internal bus, or a PCI
++        bus, whose handler has the translation of its parent.
++
++    RootHandler - Supplies the handler of the bus of the request.
+=1 908 20
++    UNREFERENCED_PARAMETER(RootHandler);
++
+=1 928 1
++    if (BusHandler->InterfaceType == Internal) {
++        *AddressSpace = 0;
+=1 940 1
++        return TRUE;
++    }
++
++    if (BusHandler->InterfaceType == PCIBus && *AddressSpace == 0 && BusAddress.HighPart == 0 &&
++        BusAddress.LowPart - HAL_PCI_MEMORY_BUS < HAL_PCI_MEMORY_LENGTH) {
++        *AddressSpace = 1;
++        TranslatedAddress->LowPart = HAL_PCI_MEMORY_VIRTUAL + (BusAddress.LowPart - HAL_PCI_MEMORY_BUS);
++        return TRUE;
++    }
++
+=1 950 2 -4
++    return FALSE;
++}

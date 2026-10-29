@@ -1,0 +1,5 @@
+#ntdiff private/net/access/user.c
+=1 1 999
++    BufferDescriptor.EndOfVariableData = NULL;
++    BufferDescriptor.FixedDataEnd = NULL;
+=1 1000 3766

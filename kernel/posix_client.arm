@@ -1,0 +1,2 @@
+# POSIX\CLIENT ARM_SOURCES (MIPS and PPC: the psxthunk of their directory)
+posix/psxthunk.asm

@@ -1,0 +1,52 @@
+#ntdiff private/ntos/w32/kmode/mips/table.stb
+#crlf
+=1 1 7
++//    systable.asm
+=1 9 3
++//    The system service dispatch table of win32k.sys, the number of its
++//    services and the table of the bytes of arguments in memory of each
++//    service.
+=1 13 20
++#include "kxarm.h"
++
++#define TABLE_BEGIN1( t )
++#define TABLE_BEGIN2( t )
++#define TABLE_BEGIN3( t )
++#define TABLE_BEGIN4( t )
+=1 37 5
++#define TABLE_ENTRY( l,bias,numargs ) TENTRY Nt##l
++
++#define TABLE_END( n ) TEND n
++
++#define ARGTBL_BEGIN ABEGIN
++
++#define ARGTBL_ENTRY( e0,e1,e2,e3,e4,e5,e6,e7 ) DCB e0,e1,e2,e3,e4,e5,e6,e7
++
++#define ARGTBL_END END
++
++        MACRO
++        TENTRY $Name
++        IMPORT  $Name
++        DCD     $Name
++        MEND
++
++        MACRO
++        TEND $Last
++        AREA    |.data|, DATA, READWRITE, ALIGN=2
++        EXPORT  W32pServiceLimit
++W32pServiceLimit
++        DCD     $Last + 1
++        MEND
++
++        MACRO
++        ABEGIN
++        AREA    |.rdata|, DATA, READONLY, ALIGN=2
++        EXPORT  W32pArgumentTable
++W32pArgumentTable
++        MEND
++
++        AREA    |.rdata|, DATA, READONLY, ALIGN=2
++        EXPORT  W32pServiceTable
++W32pServiceTable
+=1 52 9
++

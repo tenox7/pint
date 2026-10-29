@@ -1,0 +1,44 @@
+# Windows NT 3.5 ARC loader (ARM32) on a real Raspberry Pi 2, 3 or 4 - HDMI console.
+#
+# The GPU firmware (bootcode.bin -> start.elf) reads this file, then loads the
+# kernel image into RAM and runs it. Our loader is a raw ARM binary linked at the
+# firmware's native 32-bit load address (0x8000), so no kernel_address override is
+# needed - it is loaded exactly where it expects to run.
+
+arm_64bit=0
+kernel=arcfw.bin
+
+# Pin the device tree well clear of the loader. The loader image + stack span
+# ~0x8000-0x21800; default DTB placement varies by firmware version and can land in
+# that range, which our stack would then clobber (a silent crash in C - the loader
+# never reads the DTB, so moving it to 32 MB is purely defensive and free).
+device_tree_address=0x2000000
+
+# Keep the serial console (PL011 / GPIO14-15) alive. enable_uart=1 also pins the
+# core clock at 250 MHz on a Pi 3, the clock of the I2C bus of the realtime clock.
+enable_uart=1
+
+# Force HDMI on even if the monitor is not detected at boot, and use the full
+# HDMI signal (not DVI) so audio-capable displays still show video.
+hdmi_force_hotplug=1
+hdmi_drive=2
+
+# If the screen stays blank on a particular monitor, uncomment this conservative
+# mode and re-copy the file (it forces a safe 640x480-ish HDMI mode):
+# hdmi_safe=1
+
+# The resolution of NT (firmware, blue screen and Windows): the size of the frame
+# buffer. Without these lines it is the display's mode (hdmi_group/hdmi_mode).
+framebuffer_width=1920
+framebuffer_height=1080
+
+# Show the frame buffer on the whole screen. Without this line the GPU firmware takes an HD
+# display for a TV that hides its edges (overscan) and shrinks the picture into a black
+# border, 48 pixels a side. On a TV that does hide them, delete this line.
+disable_overscan=1
+
+# Raspberry Pi 4: its GPU firmware is start4.elf (the boot EEPROM reads this card)
+# and the HAL drives its GIC-400, which the firmware sets up for a 32-bit kernel.
+[pi4]
+enable_gic=1
+[all]

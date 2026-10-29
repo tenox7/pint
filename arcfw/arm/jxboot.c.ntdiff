@@ -1,0 +1,195 @@
+#ntdiff private/ntos/fw/mips/jxboot.c private/ntos/fw/alpha/jxboot.c private/ntos/fw/alpha/jnsetcom.c private/ntos/fw/mips/jzcommon.c
+=1 1 10
++    This module implements the ARC firmware boot manager for the Raspberry
++    Pi 2 (the ARM FW\MIPS\JXBOOT.C FwBootSystem): it offers the boot
++    selections of the environment, running a program, and the ARC DOS shell,
++    which takes the place of the Jazz setup program, and executes the chosen
++    one.
++
++    A boot selection is a segment of each of the SYSTEMPARTITION, OSLOADER,
++    OSLOADPARTITION, OSLOADFILENAME, OSLOADOPTIONS and LOADIDENTIFIER
++    variables, separated by semicolons. Its program, the OS loader, is given
++    those variables as arguments and the environment.
+=2 28 4
++#include "string.h"
++#include "stdlib.h"
++#include "ctype.h"
+=1 32 2
+=1 35 2
++int ArcDosMain(void);
+=3 691 11
+=4 655 12
+=3 715 8
+=3 725 2
++    ULONG Index = 0;
++    ULONG Count;
+=3 731 5
++    VariableValue = FwGetEnvironmentVariable(Segment);
+=3 742 2
+=3 749 1
+=3 647 3 4
++    while ((TempPointer = strchr(VariableValue, ';')) != NULL) {
+=3 761 1
+=3 763 7
++        Index += 1;
++    }
++
++    strcpy(Segment, VariableValue);
+=3 647 3
+=4 171 14
++    found, StringLength is reached, or ESC is pushed (the FW\MIPS\JZCOMMON.C
++    FwGetString).
+=4 186 60
++        FwSetPosition(CurrentRow, CurrentColumn);
++        FwPrint(String);
++        FwPrint("\x9bK");
+=3 326 5
++        FwSetScreenAttributes(TRUE,FALSE,TRUE);
++        FwSetPosition(CurrentRow, (Cursor - String) + CurrentColumn);
++        if (Cursor >= Buffer) {
++            FwPrint(" ");
++        } else {
++            FwWrite(ARC_CONSOLE_OUTPUT,Cursor,1,&Count);
++        }
++        FwSetScreenAttributes(TRUE,FALSE,FALSE);
++
++        while (FwGetReadStatus(ARC_CONSOLE_INPUT) != ESUCCESS) {
++        }
++        Status = FwRead(ARC_CONSOLE_INPUT,&c,1,&Count);
+=4 269 20
++            FwStallExecution(10000);
++
+=1 327 1
++                FwRead(ARC_CONSOLE_INPUT, &c, 1, &Count);
+=3 373 11
++            FwRead(ARC_CONSOLE_INPUT, &c, 1, &Count);
+=4 305 54
++        case ASCII_DEL:
+=4 359 31
+=4 391 7
++    FwSetPosition(CurrentRow, (Cursor - String) + CurrentColumn);
++    if (Cursor >= Buffer) {
++        FwPrint(" ");
++    } else {
++        FwWrite(ARC_CONSOLE_OUTPUT,Cursor,1,&Count);
+=4 403 3
++        FwWrite(ARC_CONSOLE_OUTPUT,FW_CRLF_MSG,2,&Count);
+=3 498 13
+=2 146 9
++    This routine is the main ARC firmware code. It displays the boot menu and
++    executes the selected commands.
+=1 147 16
++    PCHAR LoadArgv[MAX_NUMBER_OF_ENVIRONMENT_VARIABLES];
+=1 164 19
++    ULONG PreviousTime = 0;
+=1 184 6
+=2 1279 1
+=1 199 5
++    FwInitialize();
+=1 211 4
+=1 221 3
++        strcpy(SystemPartition, "SYSTEMPARTITION");
++        strcpy(Osloader, "OSLOADER");
++        strcpy(OsloadPartition, "OSLOADPARTITION");
++        strcpy(OsloadFilename, "OSLOADFILENAME");
++        strcpy(OsloadOptions, "OSLOADOPTIONS");
++        strcpy(LoadIdentifier, "LOADIDENTIFIER");
+=1 230 30
++
+=1 260 5
++
+=1 265 2
++        Choices[NumberOfBootChoices + 1] = FW_RUN_ARCDOS_MSG;
++
++        if (DefaultChoice >= (LONG)NumberOfMenuChoices) {
+=1 270 10
++
++        //
++        // The firmware, and the board and its processor from the configuration
++        // tree.
++        //
++
++        FwSetPosition( 0, 0);
++        FwPrint(" %s", FW_TITLE_MSG);
++        Component = ArcGetChild(NULL);
++        FwSetPosition( 1, 0);
++        FwPrint(" %s", Component->Identifier);
++        Component = ArcGetChild(Component);
++        if ((Component != NULL) && (Component->Type == CentralProcessor)) {
++            FwPrint(", %s", Component->Identifier);
++        }
++
+=1 280 3
++        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
+=1 284 14
++        FwSetPosition(NumberOfMenuChoices + 13, 0);
++        UsbPrintDevices();
+=1 306 18
+=1 325 27
++                        if (DefaultChoice == (LONG)NumberOfMenuChoices) {
+=1 353 15
+=1 398 17
++            // Each second, update the timeout value if active, and the USB
++            // devices.
++            //
++
+=1 419 3 -4
++                if (Timeout) {
+=1 422 4
++
++                FwSetPosition(NumberOfMenuChoices + 13, 0);
++                UsbPrintDevices();
+=1 426 8
++        for (Index = 0; Index < (LONG)NumberOfMenuChoices ; Index++ ) {
+=1 435 8
++        if (DefaultChoice < (LONG)NumberOfBootChoices) {
+=1 444 13
+=1 458 4
++        } else if (DefaultChoice == (LONG)NumberOfBootChoices) {
+=1 463 8
++                Action = FwGetString( TempName,
+=2 546 3 1
++                                      5 + strlen(FW_PROGRAM_TO_RUN_MSG));
+=1 472 41
++
++                    if (EnvironmentValue == NULL) {
+=1 530 6
++                    }
++
+=1 516 1 -4
+=1 537 1 -4
+=1 539 35
+=1 575 7
++        // Run the ARC DOS shell.
+=1 583 5
++            ArcDosMain();
+=1 589 22
++            // the next envp value to point there.
++            //
++
++            while (*LoadEnvp[Index] && (Index < MAX_NUMBER_OF_ENVIRONMENT_VARIABLES - 1)) {
+=1 616 16
++        if (DefaultChoice < (LONG)NumberOfBootChoices) {
+=1 661 4
+=2 938 23
++            ArgCount = 8;
+=1 584 3
+=1 662 14
++                    if ((Index == 0) || (TempArgs[Index - 1] == 0)) {
+=1 677 21
+=1 704 8
+=1 713 1
++            ((EnvironmentValue = FwGetEnvironmentVariable("ConsoleIn")) == NULL)) {
++            EnvironmentValue = "multi(0)serial(0)";
++        }
++
++        FwOpen(EnvironmentValue, ArcOpenReadOnly, &Count);
+=1 719 2
++            ((EnvironmentValue = FwGetEnvironmentVariable("ConsoleOut")) == NULL)) {
++            EnvironmentValue = "multi(0)serial(0)";
++        }
++
++        FwOpen(EnvironmentValue, ArcOpenWriteOnly, &Count);
+=1 726 8
++            if (DefaultChoice < (LONG)NumberOfBootChoices) {
+=1 735 20

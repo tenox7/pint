@@ -1,0 +1,120 @@
+#ntdiff private/ntos/nthals/halfxs/mips/jxport.c
++/*++
+=1 4 7
++    The kernel debugger serial port of the Raspberry Pi 2 HAL (the Jazz HAL
++    jxport.c analog): the PL011 UART0 on GPIO 14/15, clocked at 48 MHz. While
++    the kernel debugger owns the port, the display is not echoed to it.
+=1 18 3
++    Kernel mode.
+=1 24 4
++
++#define UART                HAL_UART_BASE
++#define UART_DR             (*(volatile ULONG *)(UART + 0x00))
++#define UART_RSR            (*(volatile ULONG *)(UART + 0x04))
++#define UART_FR             (*(volatile ULONG *)(UART + 0x18))
++#define UART_IBRD           (*(volatile ULONG *)(UART + 0x24))
++#define UART_FBRD           (*(volatile ULONG *)(UART + 0x28))
++#define UART_LCRH           (*(volatile ULONG *)(UART + 0x2C))
++#define UART_CR             (*(volatile ULONG *)(UART + 0x30))
++#define UART_IMSC           (*(volatile ULONG *)(UART + 0x38))
++#define UART_ICR            (*(volatile ULONG *)(UART + 0x44))
++
++#define FR_TXFF             0x20
++#define FR_RXFE             0x10
++#define DR_ERROR            0xF00
++#define LCRH_FEN            0x10
++#define LCRH_WLEN8          0x60
++#define CR_UARTEN           0x001
++#define CR_TXE              0x100
++#define CR_RXE              0x200
++
++#define UART_CLOCK          48000000
++#define DEFAULT_BAUD_RATE   19200
++
++//
++// The number of polls of the receive FIFO before a get byte times out.
++//
++
++#define GET_BYTE_TIMEOUT    (1000 * 1000)
++
++
++static ULONG HalpSavedInterruptMask;
++
++//
++// The address of the port the kernel debugger uses, for the serial driver to
++// leave alone.
+=1 53 3
++
++static ULONG
++HalpGetByte (
++    OUT PUCHAR Input,
++    IN BOOLEAN Wait
++    )
++{
++    ULONG Count = Wait ? GET_BYTE_TIMEOUT : 1;
++    ULONG Data;
++
++    while (Count--) {
++        if ((UART_FR & FR_RXFE) == 0) {
++            Data = UART_DR;
++            if ((Data & DR_ERROR) != 0) {
++                UART_RSR = 0;
+=1 169 3 4
++            *Input = (UCHAR)Data;
+=1 172 1 4
+=1 257 3
+=1 175 2
++
+=1 178 32
++    ULONG BaudRate;
++    ULONG Divisor;
++
++    UNREFERENCED_PARAMETER(LoaderBlock);
+=1 269 5
+=1 238 1 -4
++    if (BaudRate == 0) {
++        BaudRate = DEFAULT_BAUD_RATE;
+=1 241 3
++    // The divisor is UART_CLOCK / (16 * BaudRate) in 16.6 fixed point.
++    //
++
++    Divisor = (UART_CLOCK * 4 + BaudRate / 2) / BaudRate;
++    UART_CR = 0;
++    UART_ICR = 0x7FF;
++    UART_IBRD = Divisor >> 6;
++    UART_FBRD = Divisor & 0x3F;
++    UART_LCRH = LCRH_WLEN8 | LCRH_FEN;
++    UART_IMSC = 0;
++    UART_CR = CR_UARTEN | CR_TXE | CR_RXE;
++    KdComPortInUse = (PUCHAR)UART;
++    HalpDisplaySerial = FALSE;
+=1 271 3 -4
+=1 376 16
+=1 107 12
+=1 410 2
++
+=1 413 12
+=1 434 12
++    ULONG Status;
+=1 454 6
++
+=1 461 11
+=1 116 3
++    while ((UART_FR & FR_TXFF) != 0) {
++    }
++
++    UART_DR = Output;
++}
++
+=1 530 10
++    debugger has been active: its interrupt mask.
+=1 115 4
++    UART_IMSC = HalpSavedInterruptMask;
++}
++
+=1 569 10
++    for use by the kernel debugger: its interrupts are masked.
+=1 115 4
++    HalpSavedInterruptMask = UART_IMSC;
++    UART_IMSC = 0;
++}

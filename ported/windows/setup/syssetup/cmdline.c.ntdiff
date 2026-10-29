@@ -1,0 +1,19 @@
+#ntdiff private/windows/setup/syssetup/cmdline.c
+=1 1 694
++
++    case PROCESSOR_ARCHITECTURE_ARM:
+=1 647 1
++        case 0xd03:
++            ProcessorName = L"Cortex_A53";
++            break;
++        case 0xd08:
++            ProcessorName = L"Cortex_A72";
++            break;
++        case 0xc07:
++        default:
++            ProcessorName = L"Cortex_A7";
++            break;
++        }
++        PlatformName = L"Arm";
++        PrinterPlatform = L"w32arm";
+=1 694 860

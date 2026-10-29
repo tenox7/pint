@@ -1,0 +1,39 @@
+#ntdiff ../nt35/PRIVATE/NET/RAS/SRC/AUTH/COMMON/CRYPT/ECB.C
++/*
++** The ECB routines of the LSA crypt engine, whose source is not in the tree:
++** those of its RAS copy (NET\RAS\SRC\AUTH\COMMON\CRYPT\ECB.C) as the engine
++** objects define them, with an 8 byte key (DES_ECB) and a 7 byte LAN Manager
++** key (DES_ECB_LM).
++*/
++
+=1 2 1
++#include "engine.h"
++
++
++unsigned DES_ECB(unsigned Option, const char *Key, unsigned char *Src, unsigned char *Dst)
+=1 6 3
++      return CRYPT_ERR;
+=1 10 3
++      return CRYPT_ERR;
++
++
++   InitNormalKey(Key);
+=1 17 8
++         return CRYPT_ERR;
++   }
++   return CRYPT_OK;
++}
++
++unsigned DES_ECB_LM(unsigned Option, const char *Key, unsigned char *Src, unsigned char *Dst)
+=1 6 3
++      return CRYPT_ERR;
+=1 10 3
++      return CRYPT_ERR;
++
++
++   InitLanManKey(Key);
+=1 17 8
++         return CRYPT_ERR;
++   }
++   return CRYPT_OK;
++}

@@ -1,0 +1,18 @@
+#ntdiff private/sdktools/vctools/crt/crtw32/eh/throw.cpp
+=1 1 112
++#if defined(_M_ARM)
++        //
++        // The throw info holds offsets from the base of its image.
++        //
+=1 53 1
++        RtlPcToFileHeader( (PVOID)pThrowInfo, &ThisException.params.pThrowImageBase );
++# else
++        if ( pThrowInfo != NULL ) {
++            MEMORY_BASIC_INFORMATION Region;
++
++            VirtualQuery( (LPCVOID)pThrowInfo, &Region, sizeof(Region) );
++            ThisException.params.pThrowImageBase = Region.AllocationBase;
++            }
++# endif
++#endif
+=1 113 23

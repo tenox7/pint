@@ -1,0 +1,4 @@
+# Build output directory. Keep the directory in git (the Makefile writes here and
+# does not mkdir it), but never commit any build artifacts (*.o/*.elf/*.bin/*.img/...).
+*
+!.gitignore

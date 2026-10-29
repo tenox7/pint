@@ -1,0 +1,20 @@
+#ntdiff private/ntos/w32/kmode/win32k.src
+=1 1 290
++
++#if defined(_ARM_)
++
+=1 282 1
++    memmove                 = NTOSKRNL.memmove
+=1 283 1
+=1 242 2
++
++    __rt_sdiv               = NTOSKRNL.__rt_sdiv
++    __rt_udiv               = NTOSKRNL.__rt_udiv
++    __rt_sdiv64             = NTOSKRNL.__rt_sdiv64
++    __rt_udiv64             = NTOSKRNL.__rt_udiv64
++    __rt_srsh               = NTOSKRNL.__rt_srsh
++    __rt_ursh               = NTOSKRNL.__rt_ursh
++    __chkstk                = NTOSKRNL.__chkstk
+=1 224 6
++
++#endif

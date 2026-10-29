@@ -1,0 +1,4 @@
+#ntdiff private/windows/base/server/srvini.c
+=1 1 218
++    return STATUS_SUCCESS;
+=1 219 680

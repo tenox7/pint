@@ -1,0 +1,11 @@
+#ntdiff private/windows/base/advapi/daytona/sources
+#crlf
+=1 1 44
++           ..\..\..\screg\winreg\lib\obj\*\wrlib.lib
++
++#
++# Without the Cryptography APIs: the tree has not the source of their module
++# (..\cryptapi.c) nor of its library (rsa32.lib).
++#
+=1 47 36
+=1 84 4

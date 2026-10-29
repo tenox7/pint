@@ -1,0 +1,79 @@
+#ntdiff private/ntos/ke/i386/trap.asm
++;++
+=1 5 3
++;    miscs.asm
+=1 9 3
++;    Miscellaneous system services: the ARM port of KE\MIPS\XXMISCS.S.
++;
++;    NtContinue and NtRaiseException are called by the system service
++;    dispatcher (trap.asm) with the arguments area at sp, the exception frame
++;    of the system service above it, which holds the nonvolatile state of the
++;    caller, and its trap frame above that. Each transfers a context to the
++;    frames and exits the system through KiExceptionExit.
+=1 225 3
++#include "ksarm.h"
++#include "kxarm.h"
++
++        IMPORT  KiContinue
++        IMPORT  KiRaiseException
++        IMPORT  KeTestAlertThread
++        IMPORT  KiExceptionExit
++
++        TEXTAREA
+=1 221 3
+=1 5264 14
+=1 5291 8
++        NESTED_ENTRY NtContinue
++        PROLOG_PUSH {r4-r6, lr}
++        mov     r5, r1                          ; test alert
++        add     r4, sp, #16 + TrapFrameArguments ; exception frame
++        mov     r1, r4
++        add     r2, r4, #ExceptionFrameLength   ; trap frame
++        bl      KiContinue                      ; transfer the context to the kernel frames
++        cbnz    r0, %F20
++
++;
++; Restore the previous mode of the thread from the trap frame, test alert if
++; requested, and exit the system.
++;
++
++        CP_READ r3, 15, 0, 13, 0, 3             ; current thread
++        add     r2, r4, #ExceptionFrameLength
++        ldr     r1, [r2, #TrPreviousMode]
++        ldrb    r0, [r3, #ThPreviousMode]       ; previous mode
++        strb    r1, [r3, #ThPreviousMode]       ; restore the previous mode of the thread
++        cbz     r5, %F10
++        bl      KeTestAlertThread               ; test alert for the previous mode
++10      mov     sp, r4
++        b       KiExceptionExit
++
++;
++; The context record is misaligned or not accessible.
++;
++
++20      EPILOG_POP {r4-r6, pc}
++        NESTED_END NtContinue
+=1 221 3
+=1 5354 9
++;    This routine is called as a system service to raise an exception. The
++;    exception can be raised as a first or second chance exception.
+=1 5290 4
++;    context record or exception record is misaligned or is not accessible,
++;    then the appropriate status code is returned.
+=1 225 3
++        NESTED_ENTRY NtRaiseException
++        PROLOG_PUSH {r4, lr}
++        PROLOG_STACK_ALLOC 8                    ; argument
++        add     r4, sp, #16 + TrapFrameArguments ; exception frame
++        str     r2, [sp]                        ; first chance
++        mov     r2, r4
++        add     r3, r4, #ExceptionFrameLength   ; trap frame
++        bl      KiRaiseException                ; marshall the arguments and dispatch
++        cbnz    r0, %F10
++        mov     sp, r4
++        b       KiExceptionExit
++10      EPILOG_STACK_FREE 8
++        EPILOG_POP {r4, pc}
++        NESTED_END NtRaiseException
++
++        END

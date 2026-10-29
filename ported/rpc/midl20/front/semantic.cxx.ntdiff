@@ -1,0 +1,66 @@
+#ntdiff private/rpc/midl20/front/semantic.cxx
+=1 1 738
++// ARM: a structure of 1 to 4 floats or of 1 to 4 doubles passed by value
++// travels in the floating point registers, where the interpreter can not
++// find it.  ArmFloatLeafKind returns NODE_FLOAT or NODE_DOUBLE when every
++// leaf of the type is that one kind, NODE_ILLEGAL otherwise.
++static NODE_T
++ArmFloatLeafKind( node_skl * pType )
++{
++    NODE_T          Kind;
++    NODE_T          MemberKind;
++    named_node *    pMember;
++
++    if ( !pType )
++        return NODE_ILLEGAL;
+=1 1599 3
++        case NODE_FLOAT:
++        case NODE_DOUBLE:
++            return pType->NodeKind();
++
++        case NODE_DEF:
++        case NODE_FIELD:
++        case NODE_FORWARD:
++        case NODE_HREF:
++        case NODE_ARRAY:
++            return ArmFloatLeafKind( pType->GetChild() );
++
+=1 2340 2 -4
++            {
++            MEM_ITER MemIter( (node_su_base *) pType );
++
++            Kind = NODE_ILLEGAL;
++            while ( pMember = MemIter.GetNext() )
++                {
++                MemberKind = ArmFloatLeafKind( pMember );
++                if ( ( MemberKind == NODE_ILLEGAL ) ||
++                        ( ( Kind != NODE_ILLEGAL ) && ( MemberKind != Kind ) ) )
++                    return NODE_ILLEGAL;
++                Kind = MemberKind;
++                }
++            return Kind;
++            }
++
++        default:
++            return NODE_ILLEGAL;
++        }
++}
++
++static BOOL
++IsArmFloatAggregate( node_skl * pType )
++{
++    NODE_T          Kind = ArmFloatLeafKind( pType );
++    unsigned long   Count;
++
++    if ( Kind == NODE_ILLEGAL )
++        return FALSE;
++
++    Count = pType->GetSize( 0 ) /
++                ( ( Kind == NODE_FLOAT ) ? sizeof( float ) : sizeof( double ) );
++
++    return ( Count >= 1 ) && ( Count <= 4 );
++}
+=1 738 592
++        else if ( ( BasicChildKind == NODE_STRUCT ) &&
++                IsArmFloatAggregate( pN->GetBasicType() ) )
+=1 1326 3488

@@ -1,0 +1,85 @@
+#ntdiff private/sdktools/imagehlp/debug.c
+=1 1 39
++//
++// The function table entry of an ARM image: the image relative address of
++// the function, with the Thumb state bit set, and its unwind data, which
++// gives the length of the function and of its prologue (walkarm.c).
++//
++
++typedef struct _ARM_FUNCTION_ENTRY {
++    ULONG BeginAddress;
++    ULONG UnwindData;
++} ARM_FUNCTION_ENTRY, *PARM_FUNCTION_ENTRY;
++
++BOOL
++ArmFunctionExtent(
++    DWORD   UnwindData,
++    LPDWORD Record,
++    LPDWORD FunctionLength,
++    LPDWORD PrologueLength
++    );
++
++static VOID
++ArmFunctionEntry(
++    PIMAGE_NT_HEADERS       NtHeaders,
++    PVOID                   MappedBase,
++    PARM_FUNCTION_ENTRY     RuntimeFunction,
++    ULONG                   Base,
++    PIMAGE_FUNCTION_ENTRY   FunctionEntry
++    )
++
++/*++
++
++Routine Description:
++
++    This function makes the debug function table entry of a function of an
++    ARM image mapped as a file, at Base.
+=1 19 3
++{
++    DWORD FunctionLength = 0;
++    DWORD PrologueLength = 0;
++    LPDWORD Record = NULL;
++
++    if ((RuntimeFunction->UnwindData & 3) == 0) {
++        Record = (LPDWORD) ImageRvaToVa( NtHeaders, MappedBase, RuntimeFunction->UnwindData, NULL );
++    }
++
++    ArmFunctionExtent( RuntimeFunction->UnwindData, Record, &FunctionLength, &PrologueLength );
++    FunctionEntry->StartingAddress = Base + (RuntimeFunction->BeginAddress & ~1);
++    FunctionEntry->EndingAddress = FunctionEntry->StartingAddress + FunctionLength;
++    FunctionEntry->EndOfPrologue = FunctionEntry->StartingAddress + PrologueLength;
+=1 800 3
+=1 41 455
++        if (NtHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_ARMNT) {
++            NumberOfFunctionTableEntries = RuntimeFunctionTableSize / sizeof( ARM_FUNCTION_ENTRY );
++        } else {
+=1 496 1 4
++        }
+=1 497 9
++            if (NtHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_ARMNT) {
++                ArmFunctionEntry( NtHeaders, ImageBase, (PARM_FUNCTION_ENTRY)RuntimeFunctionTable + i, 0, pDst );
++                pDst += 1;
++                continue;
++            }
+=1 506 655
++                    if (NtHeaders->FileHeader.Machine == IMAGE_FILE_MACHINE_ARMNT) {
++                        NumberOfFunctionTableEntries = Size / sizeof( ARM_FUNCTION_ENTRY );
++                    } else {
+=1 1161 1 4
++                    }
+=1 1162 174
++                        if (DebugInfo->Machine == IMAGE_FILE_MACHINE_ARMNT) {
++                            ArmFunctionEntry( NtHeaders,
++                                              MappedBase,
++                                              (PARM_FUNCTION_ENTRY)RuntimeFunctionTable + i,
++                                              DebugInfo->ImageBase + BaseOffset,
++                                              FunctionTable );
++                        } else {
+=1 1336 1 4
+=1 1341 1 4
+=1 1346 2 4
++                        }
++
+=1 1337 4
+=1 1342 4
+=1 1348 990

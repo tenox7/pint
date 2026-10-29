@@ -1,0 +1,40 @@
+#ntdiff private/ntos/ke/mips/intobj.c private/ntos/ke/alpha/intobj.c
+=1 1 13
++    ARM port of KE\MIPS\INTOBJ.C: the dispatch code of an interrupt object
++    is Thumb code, so its address as an interrupt routine has the Thumb state
++    bit set; the template it is copied from is addressed without the bit.
+=1 13 15
++
++//
++// Define the interrupt routine of an interrupt object, its dispatch code in
++// Thumb state, and the interrupt object of an interrupt routine.
++//
++
++#define DISPATCH_ROUTINE(Interrupt) \
++    ((PKINTERRUPT_ROUTINE)((ULONG)(&(Interrupt)->DispatchCode) | 1))
++
++#define DISPATCH_OBJECT(Routine) \
++    CONTAINING_RECORD((ULONG)(Routine) & ~1, KINTERRUPT, DispatchCode[0])
+=1 28 111
++        Interrupt->DispatchCode[Index] = ((PULONG)((ULONG)KiInterruptTemplate & ~1))[Index];
+=2 141 48
+=1 187 24
+=2 212 26
+=1 235 1
++                DISPATCH_ROUTINE(&KxUnexpectedInterrupt)) {
+=1 237 17
++                            DISPATCH_ROUTINE(Interrupt);
+=1 255 4
++                Interruptx = DISPATCH_OBJECT(PCR->InterruptRoutine[Vector]);
+=1 262 25
+=2 287 47
+=1 187 4
+=2 337 31
++        Interruptx = DISPATCH_OBJECT(PCR->InterruptRoutine[Vector]);
+=1 370 8
++                                DISPATCH_ROUTINE(Interruptx);
+=1 379 23
++                               DISPATCH_ROUTINE(Interrupty);
+=1 403 7
++                    DISPATCH_ROUTINE(&KxUnexpectedInterrupt);
+=2 412 24
