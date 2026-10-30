@@ -1,0 +1,7 @@
+#ntdiff private/windows/setup/inf/beta/oemnxptc.inf
+#crlf
+=1 1 266
++    ifstr(i) $(!STF_PLATFORM) != $(!PlatformID_Arm)        ; (ARM has none of them)
+=1 267 3 4
+=1 834 3
+=1 272 1552

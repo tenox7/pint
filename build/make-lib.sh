@@ -34,12 +34,12 @@ cw=$(bash srcmacro.sh $D/sources "*" | grep "^COMPILER_WARNINGS=") && COMPILER_W
 # others, of user mode, go to obj/um. Of W32, those of win32k.sys (USER and GDI of kernel mode, the font drivers,
 # the math and halftone libraries) and of the display drivers and the printer drivers (their km
 # libraries) are of kernel mode, without _NTSYSTEM_; the rest (the clients, the servers of csrss)
-# is of user mode.
+# is of user mode. So are those of the drivers of RAS (net\ras\src\nt: rascomp and coherent of asyncmac.sys).
 case $ROOT/$COMP in
 /work/private/ntos/rtl/user|/work/private/ntos/diskreg) MODE=""; OUT=/work/RASPI/obj/um ;;
 /work/private/ntos/w32/ntuser/kernel*|/work/private/ntos/w32/ntuser/rtl/kernel*|/work/private/ntos/w32/ntgdi/gre*|/work/private/ntos/w32/ntgdi/fondrv/*|\
 /work/private/ntos/w32/ntgdi/math*|/work/private/ntos/w32/ntgdi/halftone/ht*|/work/private/ntos/w32/ntgdi/displays/*|/work/private/ntos/w32/kmode*|\
-/work/private/ntos/w32/ntgdi/printers/*/km)
+/work/private/ntos/w32/ntgdi/printers/*/km|/work/private/net/ras/src/nt/*)
   MODE="-kernel"; OUT=/work/RASPI/obj ;;
 /work/private/ntos/w32/*) MODE=""; OUT=/work/RASPI/obj/um ;;
 /work/private/ntos/*) MODE="-kernel"; OUT=/work/RASPI/obj ;;
@@ -52,19 +52,24 @@ rm -f /tmp/nttarget.placed
 bash nttarget.sh $D pre $OUT || exit 1
 # (a component of pass 0 alone, PASS0ONLY, compiles nothing: ntuser\kbd\us_kbd)
 [ -z "$(macro PASS0ONLY)" ] || { echo ">> $COMP: pass 0 done"; exit 0; }
-# (a \" of the C_DEFINES is a quote, as the command line of NT gave it to cl: -DX=\"0\")
-DEFS="$(ntdefines $D) $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g; s/\\\\\"/\"/g") $(macro NET_C_DEFINES)"
-INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+# (a \" of the C_DEFINES is a quote, as the command line of NT gave it to cl: -DX=\"0\"); RC
+# gets the defines alone, as makefile.def gives it the CDEFINES: not the MFC_FLAGS of the compiler
+CDEFS="$(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g; s/\\\\\"/\"/g") $(macro NET_C_DEFINES)"
+DEFS="$(ntdefines $D) $CDEFS"
+RCDEFS="$(ntdefines $D rc) $CDEFS"
+CXXC=$(ntcxx $D)
+INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro MFC_INCLUDES);$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 
 echo ">> compiling $COMP ($NAME.lib)"
 srcs=$(macro SOURCES | tr " " "\n" | grep -iE "\.(c|cxx|cpp)$" | tr "\\\\" / | while read -r s; do
-  d=$(cd $D && cd $(dirname $s) && pwd); b=$(basename $s | tr A-Z a-z); p=$(bash portdir.sh $d)/$b
-  { [ -f $p ] && echo $p; } || { n=$(ls $d | grep -ix $b) && echo $d/$n; } ||
+  # (of a component of the port alone, which the tree has no directory for: srcmacro.sh)
+  d=$(cd $D 2>/dev/null && cd $(dirname $s) && pwd || realpath -m $D/$(dirname $s)); b=$(basename $s | tr A-Z a-z); p=$(bash portdir.sh $d)/$b
+  { [ -f $p ] && echo $p; } || { n=$(ls $d 2>/dev/null | grep -ix $b) && echo $d/$n; } ||
   { n=$(ls $d/.. | grep -ix $b) && echo $d/../$n; } || echo /tmp/f/gen/${d#/work/private/}/$b; done)
 # the farmed directory of a source of the tree (..\x.c, or the port version of one), where
 # its quoted includes are found first, ahead of the include directories of the port: those
 # of the component too (the arc.h of glu\nurbs\core, not the ARC arc.h of the port)
-srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
+srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; /work/RASPI/apps/*) s=/work/private/${s#/work/RASPI/apps/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
 # and the subdirectories of include directories the sources name in angle brackets, after the include
 # directories of the SOURCES (relinc.sh -a), and the directories of their relative includes, last
 # (RELINC: both, which rc.sh can leave out)
@@ -81,7 +86,7 @@ one() {
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
   *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) ntsrc $f $DIR/src/$b.cxx && ntyu $D cxx $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $MODE $DEFS $(srcinc $f) $INCS ;;
-  *) ntsrc $f $DIR/src/$b.c && ntyu $D c $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $MODE $DEFS $(srcinc $f) $INCS ;;
+  *) ntsrc $f $DIR/src/$b.c && ntyu $D c $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $CXXC $MODE $DEFS $(srcinc $f) $INCS ;;
   esac
 }
 # the ARM sources of its list: beside the list, else among the files the component made
@@ -106,7 +111,7 @@ for r in $(macro SOURCES | tr " " "\n" | grep -iE "\.rc$" | tr "\\\\" /); do
   # (else one the build made: the rtmsg.rc of mc in utils\ntlib\src)
   [ -f $p ] || p=$s/$(ls $s 2>/dev/null | grep -ix "$b") || { p=/tmp/f/gen/${s#/work/private/}/$b; [ -f $p ]; } ||
   { p=/tmp/f/mc/$(echo ${s#/work/private/} | tr A-Z a-z)/$b; [ -f $p ]; } || { echo "   no $r"; fail=$((fail+1)); continue; }
-  res=$(bash rc.sh $D $p $DEFS $INCS) && mkdir -p $OUT/dir/${D#/work/} && cp $res $OUT/dir/${D#/work/}/ && nr=$((nr+1)) || fail=$((fail+1))
+  res=$(bash rc.sh $D $p $RCDEFS $INCS) && mkdir -p $OUT/dir/${D#/work/} && cp $res $OUT/dir/${D#/work/}/ && nr=$((nr+1)) || fail=$((fail+1))
 done
 echo "   $((n+nr)) compiled, $fail failed"
 [ $fail -eq 0 ] || exit 1

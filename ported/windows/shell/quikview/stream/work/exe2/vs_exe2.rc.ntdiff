@@ -1,0 +1,5 @@
+#ntdiff private/windows/shell/quikview/stream/work/exe2/vs_exe2.rc
+#crlf
+=1 1 151
++    EXE_ARMNT,              "ARM Thumb-2"
+=1 152 118

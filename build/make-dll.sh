@@ -39,13 +39,15 @@ cw=$(bash srcmacro.sh $D/sources "*" | grep "^COMPILER_WARNINGS=") && COMPILER_W
 DEFPATH=$(macro DLLDEF | tr -d " " | tr "\\\\" / | sed "s/\$(TARGET_DIRECTORY)/arm/g"); DEF=$(basename "${DEFPATH:-$NAME.def}")
 NODEF=; [ -n "$DEFPATH" ] || ! bash srcmacro.sh $D/sources "*" | grep -qx "DLLDEF=" || NODEF=1
 # The .def file: for one under obj\, the one the component made (NTTARGETFILE0, nttarget.sh);
-# else the version of the port, else that of the tree, else one the component made
+# else, in its directory (that of the component, or another: ..\riched32.def of a component of
+# the port alone), the version of the port, else that of the tree; else one the component made
 # beside its sources (netui0.def).
 deffile() {
-  local l=$(echo $DEF | tr A-Z a-z) p=$(bash portdir.sh $D) g=/tmp/f/gen/${D#/work/private/} f
+  local l=$(echo $DEF | tr A-Z a-z) d=$(realpath -m $D/$(dirname "${DEFPATH:-$DEF}")) g=/tmp/f/gen/${D#/work/private/} f p
   case $DEFPATH in [Oo][Bb][Jj]/*) [ -f $g/$l ] && echo $g/$l; return ;; esac
+  p=$(bash portdir.sh $d)
   [ -f $p/$l ] && { echo $p/$l; return; }
-  f=$(ls $D | grep -ix "$DEF") && { echo $D/$f; return; }
+  f=$(ls $d 2>/dev/null | grep -ix "$DEF") && { echo $d/$f; return; }
   [ -f $g/$l ] && echo $g/$l
 }
 bash mcinc.sh $D
@@ -59,9 +61,13 @@ DEF1=; case " $(macro NTTARGETFILE1 | tr A-Z a-z) " in *" $(echo $DEF | tr A-Z a
 EXT=$(macro TARGETEXT | tr -d " " | tr A-Z a-z); EXT=${EXT:-dll}
 [ "$(macro TARGETTYPE | tr -d " ")" = DYNLINK ] || { echo "$COMP: not a DYNLINK"; exit 1; }
 # (a \" of the C_DEFINES is a quote, as the command line of NT gave it to cl: the
-# -D__GLS_RELEASE=\"0\" of glmf32)
-DEFS="$(ntdefines $D) $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g; s/\\\\\"/\"/g") $(macro NET_C_DEFINES)"
-INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
+# -D__GLS_RELEASE=\"0\" of glmf32); RC gets the defines alone, as makefile.def gives it the
+# CDEFINES: not the MFC_FLAGS and USER_C_FLAGS of the compiler
+CDEFS="$(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g; s/\\\\\"/\"/g") $(macro NET_C_DEFINES)"
+DEFS="$(ntdefines $D) $CDEFS"
+RCDEFS="$(ntdefines $D rc) $CDEFS"
+CXXC=$(ntcxx $D)
+INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro MFC_INCLUDES);$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
 
 if [ $NAME = ntdll ]; then
   bash gensrv.sh /tmp/gen > /dev/null || exit 1
@@ -75,11 +81,14 @@ elif f=$(deffile); then
 else
   # obj\*\<name>.def, which makefile.def makes from the <name>.def or <name>.src of the
   # directory (else of its parent) with the C preprocessor; the version of the port first
-  f=$(ls $D | grep -ix "$DEF\|${DEF%.*}.src" | head -1)
+  f=$(ls $D 2>/dev/null | grep -ix "$DEF\|${DEF%.*}.src" | head -1)
   [ -n "$f" ] && f=$D/$f || f=$D/../$(ls $D/.. | grep -ix "${DEF%.*}.src\|$DEF" | head -1)
+  # (with the include directories, as makefile.def runs the C preprocessor, the directory of the
+  # file first: oleaut32.def includes switches.hxx)
+  t=$(dirname $f)
   p=$(bash portdir.sh $(realpath -m $(dirname $f)))/$(basename $f | tr A-Z a-z); [ ! -f $p ] || f=$p
   ntsrc $f $DIR/$NAME.src
-  cl -nologo -EP -D_ARM_ -DDEVL=1 -DNT_UP=1 $DEFS $DIR/$NAME.src 2>/dev/null | sed -f deffix.sed > $DIR/$NAME.def
+  cl -nologo -EP -D_ARM_ -DDEVL=1 -DNT_UP=1 $DEFS -I$t $INCS $DIR/$NAME.src 2>/dev/null | sed -f deffix.sed > $DIR/$NAME.def
 fi
 # The import library, of the public TARGETPATHLIB (else TARGETPATH, as makefile.def takes
 # it) in obj/um, else that of its directory (libpath.sh), as build.exe left it. It leaves
@@ -96,13 +105,15 @@ mkdir -p $I
 privlib() {
   grep -q PRIVATE $DIR/$NAME.def || return 0
   sed "s/[[:space:]]PRIVATE//" $DIR/$NAME.def > $DIR/${NAME}p.def
-  lib -nologo -machine:arm -def:$DIR/${NAME}p.def -name:$NAME.$EXT -out:$DIR/${NAME}p.lib "$@" > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  lib -nologo -machine:arm -nodefaultlib -def:$DIR/${NAME}p.def -name:$NAME.$EXT -out:$DIR/${NAME}p.lib "$@" > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
   { cat $DIR/${NAME}p.def; MSVC_ENV=0 link -dump -exports $DIR/${NAME}p.lib | grep -v "^Dump of file"; } > $DIR/${NAME}p.key
   ntimplib $DIR/${NAME}p.key $DIR/${NAME}p.lib $I/${NAME}p.lib
 }
 implib() {
   local d=-def; [ -n "$NODEF" ] || d=-def:$DIR/$NAME.def
-  lib -nologo -machine:arm $d -name:$NAME.$EXT -out:$DIR/$NAME.lib "$@" > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  # (-nodefaultlib of the LIBRARIAN_FLAGS: the libraries the objects ask for, uuid3.lib of the
+  # docobj.h of MFC, are not opened)
+  lib -nologo -machine:arm -nodefaultlib $d -name:$NAME.$EXT -out:$DIR/$NAME.lib "$@" > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
   { [ -n "$NODEF" ] || cat $DIR/$NAME.def; MSVC_ENV=0 link -dump -exports $DIR/$NAME.lib | grep -v "^Dump of file"; } > $DIR/$NAME.key
   ntimplib $DIR/$NAME.key $DIR/$NAME.lib $I/$NAME.lib
   [ -n "$NODEF" ] || privlib "$@"
@@ -118,7 +129,7 @@ n=0; fail=0
 # the farmed directory of a source of the tree (..\x.c, or the port version of one), where
 # its quoted includes are found first, ahead of the include directories of the port: those
 # of the component too (make-lib.sh)
-srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
+srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; /work/RASPI/apps/*) s=/work/private/${s#/work/RASPI/apps/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
 srcs=$(bash srclist.sh $COMP $ROOT "(c|cxx|cpp)" 2> $DIR/srclist.err)
 # (a source not found stops the build: a DLL without it is not that DLL)
 [ ! -s $DIR/srclist.err ] || { cat $DIR/srclist.err; exit 1; }
@@ -136,7 +147,7 @@ one() {
   case $f in
   *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I$O/gen $INCS ;;
   *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) ntsrc $f $DIR/src/$b.cxx && ntyu $D cxx $DIR/src/$b.cxx && ntcc $DIR/obj/$b.obj $DIR/src/$b.cxx $DEFS $(srcinc $f) $INCS ;;
-  *) ntsrc $f $DIR/src/$b.c && ntyu $D c $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $DEFS $(srcinc $f) $INCS ;;
+  *) ntsrc $f $DIR/src/$b.c && ntyu $D c $DIR/src/$b.c && ntcc $DIR/obj/$b.obj $DIR/src/$b.c $CXXC $DEFS $(srcinc $f) $INCS ;;
   esac
 }
 # (and the object of the precompiled include, ntpchobj)
@@ -155,41 +166,49 @@ for o in $DIR/obj/*_asm.obj; do [ -f "$o" ] && [ ! -f ${o%_asm.obj}.obj ] && cp 
 ntcc $DIR/newarray.obj /work/RASPI/crt/cxx/newarray.cxx && ntlib $DIR/newarray.lib $DIR/newarray.obj || exit 1
 
 # In the order of makefile.def: LINKLIBS, the TARGETLIB of a DLL, TARGETLIBS. TARGETLIB is the
-# C run-time (libcpsx.lib for UMTYPE posix, whatever the rest says; LIBC_LIB: msvcrt.lib with
-# USE_CRTDLL, USE_MSVCRT, USE_MSVCRT20 or USE_MSVCRT40, all
-# USE_MSVCRT on a RISC machine; libcmt.lib with USE_LIBCMT, libcntpr.lib with USE_LIBCNTPR, none
-# with USE_NTDLL, USE_SYSDLL or USE_NOLIBS, else libc.lib) and ntdll.lib, but ntdll.lib alone
-# with USE_NTDLL or USE_SYSDLL, the run-time alone with NO_NTDLL (USE_NOLIBS), none for ntdll.
-# (Its msvcirt.lib, the iostreams of msvcrt, is not built: no DLL so far uses them.) A library
-# is the one make-lib.sh made for the directory named, else that of its name: a library or an
-# import library.
+# C run-time (libcpsx.lib for UMTYPE posix, whatever the rest says; LIBC_LIB: msvcrt.lib and
+# msvcirt.lib, the iostreams of msvcrt40.dll, with USE_CRTDLL, USE_MSVCRT, USE_MSVCRT20 or
+# USE_MSVCRT40, all USE_MSVCRT on a RISC machine; libcmt.lib with USE_LIBCMT, libcntpr.lib with
+# USE_LIBCNTPR, none with USE_NTDLL, USE_SYSDLL or USE_NOLIBS, else libc.lib) and ntdll.lib, but
+# ntdll.lib alone with USE_NTDLL or USE_SYSDLL, the run-time alone with NO_NTDLL (USE_NOLIBS),
+# none for ntdll. A library is the one make-lib.sh made for the directory named, else that of
+# its name: a library or an import library.
 NONT=$(macro NO_NTDLL)
 if [ "$(macro UMTYPE | tr -d " ")" = posix ]; then CRT=libcpsx.lib; NONT=
-elif [ -n "$(macro USE_CRTDLL)$(macro USE_MSVCRT)$(macro USE_MSVCRT20)$(macro USE_MSVCRT40)" ]; then CRT=msvcrt.lib
+elif [ -n "$(macro USE_CRTDLL)$(macro USE_MSVCRT)$(macro USE_MSVCRT20)$(macro USE_MSVCRT40)" ]; then CRT="msvcrt.lib msvcirt.lib"
 elif [ -n "$(macro USE_LIBCMT)" ]; then CRT=libcmt.lib
 elif [ -n "$(macro USE_LIBCNTPR)" ]; then CRT=libcntpr.lib
 elif [ -n "$(macro USE_NTDLL)$(macro USE_SYSDLL)" ]; then CRT=
 elif [ -n "$(macro USE_NOLIBS)" ]; then CRT=; NONT=1
 else CRT=libc.lib; fi
+# (with the libraries of MFC ahead of it: LIBC_LIB = $(MFC_LIBS) $(LIBC_LIB))
+case $CRT in ""|libcpsx.lib) ;; *) CRT="$(macro MFC_LIBS) $CRT" ;; esac
 if [ $NAME = ntdll ]; then TL=
 elif [ -n "$(macro USE_NTDLL)$(macro USE_SYSDLL)" ]; then TL=ntdll.lib
 elif [ -n "$NONT" ]; then TL=$CRT
 else TL="$CRT ntdll.lib"; fi
 LIBS=""; seen=""; RESLIBS=""; LL=""
+# a list of libraries with those of makefile.def it names by macro (olecnv32): WIN32_LIBS,
+# the C run-time (LIBC_LIB), advapi32 and kernel32, and GUI32_LIBS, gdi32 and user32
+libs() { local v=$(macro $1); v=${v//\$(WIN32_LIBS)/$CRT advapi32.lib kernel32.lib}; echo "${v//\$(GUI32_LIBS)/gdi32.lib user32.lib}"; }
 set -f
-# the LINKLIBS of the import library
-for l in $(macro LINKLIBS); do
+# the LINKLIBS of the import library, after the static library of MFC (LIBRARY_OBJS)
+for l in $(macro MFC_STATIC_LIB) $(libs LINKLIBS); do
   case $l in *.[Rr][Ee][Ss]) continue ;; esac
   a=$(bash libpath.sh $D "$l"); [ -n "$a" ] || a=$U/$(basename "$(echo "$l" | tr "\\\\" /)" | tr A-Z a-z)
   [ -f $a ] && LL="$LL $a"
 done
 [ "$IMPLIB" = 1 ] && { implib $OBJS $LL; echo "   wrote ${I#/work/RASPI/}/$NAME.lib (the import library of its objects)"; exit 0; }
-for l in $(macro LINKLIBS) $TL $(macro TARGETLIBS); do
+for l in $(libs LINKLIBS) $TL $(libs TARGETLIBS); do
   case $l in *.[Rr][Ee][Ss]) RESLIBS="$RESLIBS $l"; continue ;; esac
   b=$(basename "$(echo "$l" | tr "\\\\" /)" | tr A-Z a-z); b=${b%.lib}
   a=$(bash libpath.sh $D "$l"); [ -n "$a" ] || a=$U/$b.lib
   # (else one of kernel mode, which the client links too: efloat.lib of gdi32 and win32k.sys)
   [ -f $a ] || [ ! -f $O/$b.lib ] || a=$O/$b.lib
+  # (uiadmin.lib of the NET UI admin tools has no source in the tree, its adminapp, colwidth and
+  # setfocus are empty: an image that lists it and uses none of it, rassapi, links the same without
+  # it; one that uses it fails to link)
+  [ -f $a ] || [ $b != uiadmin ] || { echo "   left out $b.lib (no source in the tree)"; continue; }
   [ -f $a ] || { echo "   missing library $b (build it first)"; exit 1; }
   # (each once: two of one name are two libraries, the util.lib of OLE com and of ole232)
   case " $seen " in *" $a "*) continue ;; esac; seen="$seen $a"
@@ -197,7 +216,7 @@ for l in $(macro LINKLIBS) $TL $(macro TARGETLIBS); do
 done
 # The objects the makefile.inc adds (OBJECTS = $(OBJECTS) ...\obj\$(TARGET_DIRECTORY)\x.obj):
 # those make-lib.sh made for that directory.
-MKI=$(ls $D | grep -ix makefile.inc) && \
+MKI=$(ls $D 2>/dev/null | grep -ix makefile.inc) && \
 for l in $(tr -d "\r" < $D/$MKI | grep -iE "^[[:space:]]*OBJECTS[[:space:]]*=[[:space:]]*\\\$\(OBJECTS\)" | sed -E "s/^[^)]*\)//; s/\\\$\(TARGET_DIRECTORY\)/*/g"); do
   a=$(bash libpath.sh $D "$l")
   [ -n "$a" ] || { echo "   missing object $l (build it first)"; exit 1; }
@@ -217,7 +236,7 @@ E=-noentry; [ -z "$ENTRY" ] || E=-entry:$ENTRY
 # (that of ole32, com\class compobj.obj), which then never ran.
 [ "$ENTRY" != _DllMainCRTStartup ] || E="$E -include:DllMain"
 RC=$(bash srclist.sh $COMP $ROOT rc 2>/dev/null | head -1)
-RES=""; [ -z "$RC" ] || RES=$(bash rc.sh $D $RC $DEFS $INCS) || exit 1
+RES=""; [ -z "$RC" ] || RES=$(bash rc.sh $D $RC $RCDEFS $INCS) || exit 1
 # The resource files the libraries name: one another component made (..\xlate\obj\*\x.res,
 # make-lib.sh) as it is, one of the component (obj\*\x.res) from its x.rc.
 set -f
@@ -225,8 +244,8 @@ for l in $RESLIBS; do
   a=$(bash libpath.sh $D "$l")
   case $a in "") ;; */dir/${D#/work/}/*) ;; *) RES="$RES $a"; continue ;; esac
   r=$(basename "$(echo "$l" | tr "\\\\" /)")
-  n=$(ls $D | grep -ix "${r%.*}.rc") || { echo "   no ${r%.*}.rc for $l"; exit 1; }
-  [ "$D/$n" = "$RC" ] || RES="$RES $(bash rc.sh $D $D/$n $DEFS $INCS)" || exit 1
+  n=$(ls $D 2>/dev/null | grep -ix "${r%.*}.rc") || { echo "   no ${r%.*}.rc for $l"; exit 1; }
+  [ "$D/$n" = "$RC" ] || RES="$RES $(bash rc.sh $D $D/$n $RCDEFS $INCS)" || exit 1
 done
 set +f
 # The import library, then NTTARGETFILE1, which makefile.def makes between it and the image
@@ -236,8 +255,9 @@ implib $OBJS $LL
 NTTARGET_SKIP=$DEF1 bash nttarget.sh $D file1 $U || exit 1
 F=$(echo $NAME.$EXT | tr a-z A-Z)
 # (the .pdb and .map are made beside the image, which names the obj/<name>.pdb they then are:
-# two images of a name, msacm32.dll and msacm32.drv, may link at once)
-link -nologo -machine:arm -release -force:multiple -dll $E -base:$BASE -subsystem:console -nodefaultlib $LINKVER $(ntlinkflags $D) \
+# two images of a name, msacm32.dll and msacm32.drv, may link at once; -opt:ref as makefile.def
+# links, which -debug would turn off, and noicf: the link of 1996 folds no functions)
+link -nologo -machine:arm -release -opt:ref,noicf -force:multiple -dll $E -base:$BASE -subsystem:console -nodefaultlib $LINKVER $(ntlinkflags $D) \
      -debug -pdb:$DIR/$NAME.pdb -pdbaltpath:"Z:$(echo $O/$NAME.pdb | tr / "\\\\")" -map:$DIR/$NAME.map \
      $([ -n "$NODEF" ] || echo -def:$DIR/$NAME.def) -implib:$DIR/$NAME.lib -out:$DIR/$F $OBJS $LIBS $DIR/newarray.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }

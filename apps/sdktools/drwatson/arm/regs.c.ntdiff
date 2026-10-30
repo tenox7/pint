@@ -1,0 +1,99 @@
+#ntdiff private/sdktools/drwatson/mips/regs.c
+=1 1 41
++ULONG   cbBrkptLength = 2;
++ULONG   trapInstr = 0xdefe;       //  udf 0xfe (__debugbreak) for brkpts
+=1 44 3
++// Define stack register and frame pointer register numbers.
++//
++
++#define SP 13                           // integer register 13
++#define FP 11                           // integer register 11
++
++
++UCHAR   szR0[]  = "r0";
++UCHAR   szR1[]  = "r1";
++UCHAR   szR2[]  = "r2";
++UCHAR   szR3[]  = "r3";
++UCHAR   szR4[]  = "r4";
++UCHAR   szR5[]  = "r5";
++UCHAR   szR6[]  = "r6";
++UCHAR   szR7[]  = "r7";
++UCHAR   szR8[]  = "r8";
++UCHAR   szR9[]  = "r9";
++UCHAR   szR10[] = "r10";
++UCHAR   szR11[] = "r11";
++UCHAR   szR12[] = "r12";
++UCHAR   szSp[]  = "sp";
++UCHAR   szLr[]  = "lr";
++UCHAR   szPc[]  = "pc";
++
++UCHAR   szCpsr[]  = "cpsr";
++UCHAR   szFpscr[] = "fpscr";
++
++UCHAR   szFlagN[] = "n";
++UCHAR   szFlagZ[] = "z";
++UCHAR   szFlagC[] = "c";
++UCHAR   szFlagV[] = "v";
++UCHAR   szFlagQ[] = "q";
++UCHAR   szFlagGe[] = "ge";
++UCHAR   szFlagE[] = "e";
++UCHAR   szFlagA[] = "a";
++UCHAR   szFlagI[] = "i";
++UCHAR   szFlagF[] = "f";
++UCHAR   szFlagT[] = "t";
++UCHAR   szFlagMode[] = "mode";
+=1 181 17
+=1 203 1
++    szR8,  szR9,  szR10, szR11, szR12, szSp,  szLr,  szPc,
++
++    szCpsr, szFpscr,
++
++    szFlagN, szFlagZ, szFlagC, szFlagV, szFlagQ, szFlagGe,
++    szFlagE, szFlagA, szFlagI, szFlagF, szFlagT, szFlagMode,
+=1 220 20
++    { REGCPSR,  31,    1 },             //  N - negative
++    { REGCPSR,  30,    1 },             //  Z - zero
++    { REGCPSR,  29,    1 },             //  C - carry
++    { REGCPSR,  28,    1 },             //  V - overflow
++    { REGCPSR,  27,    1 },             //  Q - saturation
++    { REGCPSR,  16,  0xf },             //  GE - greater than or equal
++    { REGCPSR,  9,     1 },             //  E - big endian data
++    { REGCPSR,  8,     1 },             //  A - asynchronous abort disable
++    { REGCPSR,  7,     1 },             //  I - interrupt disable
++    { REGCPSR,  6,     1 },             //  F - fast interrupt disable
++    { REGCPSR,  5,     1 },             //  T - Thumb state
++    { REGCPSR,  0,  0x1f }              //  MODE - processor mode
+=1 272 70
++    if (regnum == REGFPSCR) {
++        return dp->tctx->context.Fpscr;
++    } else {
++        return *(&dp->tctx->context.R0 + regnum - REGBASE);
+=1 346 18
++    *Address = GetRegValue(dp,REGPC);
+=1 365 8
++    addrFP = GetRegValue(dp,REGBASE + FP);
+=1 374 3
+=1 391 25
++
++    for (regindex = 0; regindex <= REGFPSCR - REGBASE; regindex++) {
++        lprintfs("%3s=%08lx", pszReg[regindex + REGBASE],
++                              (ULONG)GetRegValue(dp, regindex + REGBASE));
++        if (regindex % 6 == 5) {
+=1 426 5 -4
++
++    lprintfs("n=%1lx z=%1lx c=%1lx v=%1lx q=%1lx ge=%1lx ",
++                (ULONG)GetRegFlagValue(dp, FLAGN),
++                (ULONG)GetRegFlagValue(dp, FLAGZ),
++                (ULONG)GetRegFlagValue(dp, FLAGC),
++                (ULONG)GetRegFlagValue(dp, FLAGV),
++                (ULONG)GetRegFlagValue(dp, FLAGQ),
++                (ULONG)GetRegFlagValue(dp, FLAGGE));
++    lprintfs("e=%1lx a=%1lx i=%1lx f=%1lx t=%1lx mode=%02lx\r\n",
++                (ULONG)GetRegFlagValue(dp, FLAGE),
++                (ULONG)GetRegFlagValue(dp, FLAGA),
++                (ULONG)GetRegFlagValue(dp, FLAGI),
++                (ULONG)GetRegFlagValue(dp, FLAGF),
++                (ULONG)GetRegFlagValue(dp, FLAGT),
++                (ULONG)GetRegFlagValue(dp, FLAGMODE));
+=1 477 29
+=1 510 10

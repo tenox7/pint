@@ -25,6 +25,7 @@ Abstract:
 #include <ipexport.h>
 #include <icmpapi.h>
 #include <ntddip.h>
+#include <icmpif.h>
 #include <icmp.h>
 #include <errno.h>
 

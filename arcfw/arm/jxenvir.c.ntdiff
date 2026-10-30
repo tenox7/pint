@@ -18,9 +18,14 @@
 +static CHAR VolatileEnvironment[LENGTH_OF_ENVIRONMENT];
 +static CHAR OutputString[MAXIMUM_ENVIRONMENT_VALUE];
 +
++//
++// The boot selection of a new install on the first partition: the loader and the HAL in
++// \os\winnt40, where NT 4.0 Setup puts them, and the system in \WINNT.
++//
++
 +static PCHAR DefaultEnvironment[] = {
 +    "SYSTEMPARTITION=scsi(0)disk(0)rdisk(0)partition(1)",
-+    "OSLOADER=scsi(0)disk(0)rdisk(0)partition(1)\\os\\nt\\osloader.exe",
++    "OSLOADER=scsi(0)disk(0)rdisk(0)partition(1)\\os\\winnt40\\osloader.exe",
 +    "OSLOADPARTITION=scsi(0)disk(0)rdisk(0)partition(1)",
 +    "OSLOADFILENAME=\\WINNT",
 +    "OSLOADOPTIONS=SOS",

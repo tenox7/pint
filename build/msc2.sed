@@ -90,10 +90,29 @@ s/^const static token_t (\*action\[\])(void) = {$/static token_t (*action[])(voi
 # the read (C4700). No key: NULL.
 /^static void regUserValsFini( LPJOYDATA pjd )$/,/^}/s/^    HKEY\thkey;$/    HKEY\thkey = NULL;/
 
+# A local passed before it is set (ras\rasman\rasman32\dll\init.c): InitializePortControlBlocks
+# asks each media DLL for the size of its port list, with a size of 0 and the buffer it allocates
+# only after; with that size PortEnum does not touch the buffer. The compiler of today rejects the
+# read (C4700). None yet: NULL.
+/^InitializePortControlBlocks ()$/,/^}$/s/^    PBYTE     buffer;$/    PBYTE     buffer = NULL;/
+
+# A local read before it is set (ras\ui\setup\digi\isdn\registry.c): DeleteRegKey closes the key
+# of the parent, which it opens only later, when it cannot open the key it deletes; the RegCloseKey
+# of the 1996 compilers took what the stack held. The compiler of today rejects the read (C4700).
+# No key: NULL.
+/^DeleteRegKey (CHAR\* Path, CHAR\* KeyName)$/,/^}$/s/^\tHKEY\thKey, hNewKey;$/\tHKEY\thKey = NULL, hNewKey;/
+
 # A local read before it is set (sfm\atalk\driver\zip.c): atalkZipHandleQuery keeps the zone
 # count of the network before as it counts the next one, also before the first, whose count it
 # then takes for both; the compiler of today rejects the read (C4700). None yet: 0.
 /^atalkZipHandleQuery($/,/^}$/s/^\tULONG\t\t\ti, CurrNumZones, PrevNumZones, TotalNetCnt;$/\tULONG\t\t\ti, CurrNumZones = 0, PrevNumZones, TotalNetCnt;/
+
+# A local passed before it is set (richedit\src\util.cpp): OleGetObjectDescriptorDataFromOleObject
+# hands its extents szl to AllocObjectDescriptor, which stores them in the object descriptor, and
+# never sets them: they are those of the caller, pszl (optional, as AllocObjectDescriptor describes
+# it; {0, 0} from dxfrobj.cpp, the one caller). The compiler of today rejects the read (C4700).
+# Those of the caller, else none.
+/^HGLOBAL OleGetObjectDescriptorDataFromOleObject($/,/^}$/s/^    SIZEL           szl;$/    SIZEL           szl = pszl ? *pszl : SIZEL();/
 
 # A constructor declared again by its bare name at file scope, far to the right
 # (shell\control\devapps\pcmcia\pcminfo\winrange.cpp): the 1996 compiler accepted it and made
@@ -155,6 +174,11 @@ s/^    lstrcpyn( szAtom, lpStr, n+1 );$/    lstrcpyn( szAtom, (LPCTSTR) lpStr, n
 # of today rejects the read (C4700). None yet: NULL.
 /^BOOL MarkShare($/,/^}/s/^PSECURITY_DESCRIPTOR pSDShare;$/PSECURITY_DESCRIPTOR pSDShare = NULL;/
 
+# A local read before it is set (quikview\stream\work\drw\vs_drw.c): GetSymbol sets only the
+# style of the last pen (-1, no style) and compares the new pen with it; the style differs, so
+# its width and color are never read. The compiler of today rejects the read (C4700). Zeros.
+/^VW_LOCALSC BOOL VW_LOCALMOD  GetSymbol (Len, hFile, hProc)$/,/^}$/s/^\tSOLOGPEN\t\tTempPen;$/\tSOLOGPEN\t\tTempPen = { 0 };/
+
 # A stray + at the end of a case label (logonsrv\server\ssiapi.c, NlPackSingleDelta): the
 # statement after it, Status = ..., became +Status = ...; the 1996 compilers took the unary plus
 # of a variable for the variable, the compiler of today refuses the assignment (C2106). None.
@@ -199,6 +223,11 @@ s/^template <int index>\nULONG TCResourceCounted<index>::/template <char * name>
 # template declared the friend there.
 s/^\([[:space:]]*\)friend class \(TC\(Safe\|Guarded\)\(Link\|Skip\)ListIterator\)<Data>;$/\1template <class> friend class \2;/
 
+# A friend that is a private member function of its class (richedit\src\_dispml.h: CTxtEdit::
+# OnDisplayBand, of CDisplayML): the 1996 compiler did not check the access to the member it named
+# (tested with Visual C++ 4.2), the compiler of today refuses it (C2248). Its class the friend.
+s/^\([[:space:]]*\)friend BOOL CTxtEdit::OnDisplayBand(const RECT \*prc, BOOL fPrintFromDraw);$/\1friend class CTxtEdit;/
+
 # The headers of class templates that use the classes of a header they do not include
 # (rpc\locator\newservr\data\linklist.hxx and skiplist.hxx: the critical sections of mutex.hxx,
 # which "must be included before the template can be instantiated"): the 1996 compiler read a
@@ -238,14 +267,51 @@ s|^\([[:space:]]*/\* MFT_BITMAP_INITIAL_SIZE/ClusterSize \*/\), 0);$|\1 0);|
 # A member function named without a call (windows\win4help\ftsrch\tokenc.cpp: m_clsf.Initial;): the 1996
 # compiler made nothing of it (tested with Visual C++ 4.2), the compiler of today refuses it (C3867). None.
 s/^\([[:space:]]*\)m_clsf\.Initial;$/\1;/
+# (shell\accesory\wordpad\doctype.cpp: file.Close; before the converter of Write opens the file, which
+# stays open, tested with Visual C++ 4.2)
+s/^\([[:space:]]*\)file\.Close;$/\1;/
 
 # A member function named without a call in a condition (windows\spooler\printui\setup.hxx: return
 # MGenericProp::bValid && _PortsLV.bValid();): the 1996 compiler took its address, never null (tested
 # with Visual C++ 4.2), the compiler of today refuses it (C3867). Its address.
 s/^\([[:space:]]*return \)MGenericProp::bValid && _PortsLV\.bValid();$/\1\&MGenericProp::bValid \&\& _PortsLV.bValid();/
 
+# A member function named as a pointer to a member function (richedit\src\tomsel.cpp: Homer(...,
+# End) and Homer(..., Home)): the 1996 compiler took its address (tested with Visual C++ 4.2), the
+# compiler of today refuses it (C3867). Its address.
+s/^\([[:space:]]*return Homer(Unit, Extend, pDelta, \)\(End\|Home\));$/\1\&CTxtSelection::\2);/
+
+# A destructor defined and not declared in its class (ole32\oleui\datapkt.cpp: CDataPacket): the 1996
+# compiler made the function and called it nowhere, not even for delete (tested with Visual C++ 4.2), so
+# the CArray of the packets, which copies them, never freed their strings; the compiler of today
+# refuses the definition (C2600). None.
+/^CDataPacket::~CDataPacket()$/,/^}$/{
+s/^CDataPacket::~CDataPacket()$/#if 0/
+s/^}$/#endif/
+}
+
 # A function pointer of no parameters called with arguments (windows\win4help\winhelp\binding.c, the
 # macros of the DLLs a help file binds: VOIDPROC called with up to 16): the 1996 compiler passed them (its
 # warning C4087 turned off there), the compiler of today refuses the call (C2197). Declared without a
 # parameter list, as the calls take it.
 s/^typedef LONG (STDCALL \*VOIDPROC)(VOID);$/typedef LONG (STDCALL *VOIDPROC)();/
+
+# An explicit specialization of a class template without its template <> (mfc42\afxcom_.h: class
+# CIP<IUnknown, &IID_IUnknown>, the smart pointer of IUnknown): the 1996 compiler took it, the
+# compiler of today refuses it (C2906). With its template <>.
+s/^class CIP<IUnknown, &IID_IUnknown> : public _CIP<IUnknown, &IID_IUnknown>$/template <> &/
+
+# The return type of a member function of a class template, a type of the template, without its
+# typename (mfc42\afxtempl.h: CList's CNode* and CMap's CAssoc*): the 1996 compiler took it as a type,
+# the compiler of today refuses it (C2061). With its typename.
+s/^\(CList<TYPE, ARG_TYPE>::CNode\*\|CMap<KEY, ARG_KEY, VALUE, ARG_VALUE>::CAssoc\*\)$/typename \1/
+
+# A pointer passed for a reference to a pointer to const (mfc42\tooltip.cpp: LookupKey(ti.lpszText,
+# ti.lpszText), whose second parameter is an LPCTSTR&): the 1996 compiler bound the reference to the
+# pointer, the compiler of today refuses it (C2664). The pointer as an LPCTSTR, which LookupKey sets.
+s/VERIFY(m_mapString\.LookupKey(ti\.lpszText, ti\.lpszText));/VERIFY(m_mapString.LookupKey(ti.lpszText, (LPCTSTR\&)ti.lpszText));/
+
+# A parameter of a member function of a class template whose type is a type of the template's base,
+# without its typename (mfc42\afxtempl.h: CTypedPtrMap's BASE_CLASS::BASE_ARG_KEY): the 1996 compiler
+# took it as a type, the compiler of today refuses it (C2061). With its typename.
+s/(BASE_CLASS::BASE_ARG_KEY key/(typename BASE_CLASS::BASE_ARG_KEY key/

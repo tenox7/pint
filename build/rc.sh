@@ -66,6 +66,9 @@ n=$(echo "$inc" | sed 's/^-I//' | tr '\n' ';' | wc -c)
 n=$(echo "$inc" | sed 's/^-I//' | tr '\n' ';' | wc -c)
 [ $n -lt 520 ] || { echo "rc.sh: the include path of $(basename $rc) is $n bytes, RC keeps 520:" $inc >&2; exit 1; }
 flags=$(for a in "$@"; do case $a in -D*) echo "$a" ;; esac; done)
+# and the defines of the RCOPTIONS of its SOURCES (the _AFX_MONOLITHIC and RELEASE of the MFC 4.2
+# DLLs, which their C++ has not)
+flags="$flags $(for a in $(bash "$(dirname "${BASH_SOURCE[0]}")/srcmacro.sh" $d/sources RCOPTIONS); do case $a in [-/][Dd]?*) echo "-D${a#??}" ;; esac; done)"
 (cd $w && bash /work/RASPI/tools/host.sh rc -l 409 -r -fo $(dos $res) -x $inc $flags $(dos $copy)) > /tmp/rc/out 2>&1 ||
     { grep -v "^Microsoft\|^Copyright\|^$" /tmp/rc/out >&2; exit 1; }
 echo $res

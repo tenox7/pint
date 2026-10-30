@@ -1,0 +1,10 @@
+#ntdiff private/sdktools/vctools/ntmfc/src42/dispimpl.h
+=1 1 62
++#ifdef _ARM_
+=1 15 5
++#define _VFP_SINGLES    16      // s0-s15 (d0-d7), ahead of the arguments
++#define _CORE_REGS      4       // r0-r3
+=1 32 1
++#define _STACK_OFFSET   (_VFP_SINGLES*4)
++#define _STACK_MIN      (_VFP_SINGLES*4+_CORE_REGS*4) // 16 VFP singles, 4 32-bit registers
+=1 61 25

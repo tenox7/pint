@@ -1,0 +1,9 @@
+#ntdiff private/sdktools/vctools/ntmfc/src40/uuid2/sources
+=1 1 26
++# (dbdaoid.h, the GUIDs of DAO, is among the headers of MFC; those of the data binding of
++# OLE controls among the sources of MFC 4.2, whose UUID2.LIB has them too)
++INCLUDES=$(BASEDIR)\public\sdk\inc\mfc40;..\..\src42
++
++SOURCES=uuid2.c \
++        dbdaouid.c \
++        ocdbuid.cpp

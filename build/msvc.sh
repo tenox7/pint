@@ -42,6 +42,14 @@ ntdefines() {
     elif echo "$m" | grep -q "^DEBUG_CRTS="; then d="$d -D_DEBUG"
     else d="$d -DNDEBUG"
     fi
+    # the C++ exceptions and run-time type information of USE_NATIVE_EH (EH_FLAGS /GX /GR of
+    # mipsmk.inc), which makefile.def sets for MFC 4 (srcmacro.sh), the MFC_FLAGS of MFC, the
+    # USER_C_FLAGS and the flags of the machine, ARM_FLAGS (MIPS_FLAGS of mipsmk.inc): flags of
+    # the compiler, which makefile.def does not give RC (ntdefines D rc)
+    if [ "${2:-}" != rc ]; then
+        echo "$m" | grep -q "^USE_NATIVE_EH=" && d="$d -GX -GR"
+        d="$d $(echo "$m" | sed -n "s/^MFC_FLAGS=//p") $(echo "$m" | sed -n "s/^USER_C_FLAGS=//p") $(echo "$m" | sed -n "s/^ARM_FLAGS=//p")"
+    fi
     t=$(echo "$m" | sed -n "s/^TARGETTYPE=//p" | tr -d " ")
     if echo "$m" | grep -qE "^USE_(CRTDLL|MSVCRT|MSVCRT20|MSVCRT40)="; then d="$d -D_DLL=1 -D_MT=1"
     elif echo "$m" | grep -q "^USE_LIBCMT="; then d="$d -D_MT=1"
@@ -109,6 +117,9 @@ ntcc() {
     cl $CLOPTS $st $COMPILER_WARNINGS "${a[@]}" -Fo$o "$s" > $o.err 2>&1 || { echo "   CC FAIL $(basename $s): $(grep -m1 -E "error|fatal" $o.err)"; return 1; }
     grep -h C4715 $o.err >> /work/RASPI/obj/c4715.log || true
 }
+# ntcxx DIR: -TP for a component whose SOURCES compile its C sources as C++ (USECXX_FLAG=/Tp,
+# which makefile.def's rules put before each .c source)
+ntcxx() { [ -z "$(bash $B/srcmacro.sh $1/sources USECXX_FLAG | tr -d ' ')" ] || echo -TP; }
 
 # ntas OBJ SOURCE OPTION...: assemble an armasm source (Thumb-2), after the C
 # preprocessor for its includes and defines (as NT's .s sources were), with the
@@ -159,10 +170,11 @@ ntimplib() {
 # SUBSYSTEM_VERSION of the SOURCES. The linker for ARM writes subsystem version 6.02
 # whatever it is given (LNK4010): ntver IMAGE [VERSION] sets it in the linked image
 # (tools/pe2img). The kernel reports its own as the version of NT (init.c), and
-# CreateProcess runs no image of a later one.
+# CreateProcess runs no image of a later one. It also gives the image the misc debug
+# record binplace left in every image of NT, the name IMAGEHLP gives its module.
 LINKVER="-version:4.00 -osversion:4.00"
 ntver() {
-    bash /work/RASPI/tools/host.sh pe2img -version ${2:-4.00} $1
+    bash /work/RASPI/tools/host.sh pe2img -version ${2:-4.00} -misc $1
 }
 
 # ntlinkflags D: the options of the LINKER_FLAGS of the SOURCES of component D that make its
@@ -186,7 +198,7 @@ ntpch() {
     case $t in */obj/*) t=$(bash $B/srcmacro.sh --resolve $1 "${t%%/obj/*}") || return 0 ;; *) return 0 ;; esac
     [ "$(realpath $t)" != "$(realpath $1)" ] || return 0
     m="bash $B/srcmacro.sh $t/sources"
-    bash $B/incdirs.sh $t "$($m USER_INCLUDES);$($m INCLUDES)"
+    bash $B/incdirs.sh $t "$($m MFC_INCLUDES);$($m USER_INCLUDES);$($m INCLUDES)"
 }
 
 # ntpchobj D OUT: in directory OUT, the source of the object of the PRECOMPILED_INCLUDE of
@@ -215,15 +227,30 @@ ntpchobj() {
 # or an include .hxx, .cxx or .cpp; the /Yu of a PRECOMPILED_OPTION): the compiler took all it
 # had before the include of that header from the header, and read none of the text there
 # (shell32's grepstrs.c declares functions there by types the header defines). Those lines
-# are left blank.
+# are left blank. With a /Yu of no header and a PRECOMPILED_SOURCEFILE instead of a header,
+# the precompiled state is that of the source file (/Yc), which a source takes in place of
+# all its text up to its #pragma hdrstop: the type library of OLE Automation (tlibpch.cxx,
+# #pragma hdrstop(RTPCHNAME)); the source file itself is compiled as it is.
 ntyu() {
-    local m="bash $B/srcmacro.sh $1/sources" p x=c o
+    local m="bash $B/srcmacro.sh $1/sources" p x=c o s
     o=$($m PRECOMPILED_OPTION)
     if [ -n "$(echo $o)" ]; then
         p=$(echo "$o" | sed -nE 's#.*[-/][Yy]u([^ ]+).*#\1#p')
         # (a /Yu of no header: to the #pragma hdrstop, which follows the include of the
         # PRECOMPILED_INCLUDE: wstart.cpp of netsetup includes registry.hxx before it)
         [ -n "$p" ] || p=$($m PRECOMPILED_INCLUDE | tr -d " ")
+        s=$($m PRECOMPILED_SOURCEFILE | tr -d " ")
+        if [ -z "$p" ] && [ -n "$s" ]; then
+            s=$(basename "$(echo "$s" | tr "\\\\" /)" | tr A-Z a-z)
+            case $s in *.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) x=cxx ;; esac
+            case $2 in c) [ $x = c ] ;; *) [ $x = cxx ] ;; esac || return 0
+            [ "$(basename "$3")" != "${s%.*}.$2" ] || return 0
+            awk -v h="$s" '
+            NR > 1 && !f && /^[ \t]*#[ \t]*pragma[ \t]+hdrstop/ { f = NR }
+            { l[NR] = $0 }
+            END { for (i = 1; i <= NR; i++) print (i == f) ? "#include \"" h "\"" : (f && i > 1 && i < f) ? "" : l[i] }' "$3" > "$3.yu" && mv "$3.yu" "$3"
+            return 0
+        fi
     else
         p=$($m PRECOMPILED_INCLUDE | tr -d " ")
         case $p in *.[Hh][Xx][Xx]|*.[Cc][Xx][Xx]|*.[Cc][Pp][Pp]) x=cxx ;; esac

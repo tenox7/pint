@@ -1,0 +1,2 @@
+# MFC 4.2 OLEASM: the ARM _AfxDispatchCall (that of Alpha and PowerPC: alpha\olecall_.s, ppc\olecall_.s)
+../arm/olecall_.asm

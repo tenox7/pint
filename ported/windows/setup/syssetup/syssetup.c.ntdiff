@@ -1,0 +1,8 @@
+#ntdiff private/windows/setup/syssetup/syssetup.c
+=1 1 567
++#ifndef _ARM_
+=1 568 2
++    // (ARM has no Microsoft Base Cryptographic Provider to install.)
+=1 570 4
++#endif // ndef _ARM_
+=1 574 1393

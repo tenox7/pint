@@ -1,0 +1,50 @@
+#ntdiff private/windows/setup/inf/win4/inf/usa/txtsetup.txt
+#crlf
+=1 1 17
++@r:@w:FreeDiskSpace = 157248
++@r:@s:FreeDiskSpace = 168128
+=1 18 8
++@r:@w:UpgradeFreeDiskSpace = 56992
++@r:@s:UpgradeFreeDiskSpace = 60768
+=1 26 45
++@a:floppy = "Standard Floppy Disk"
++@i:floppy = "Standard Floppy Disk"
++@m:floppy = "Standard Floppy Disk"
++@p:floppy = "Standard Floppy Disk"
+=1 72 85
++@a:atdisk   = "ESDI/IDE Hard Disk"
++@i:atdisk   = "ESDI/IDE Hard Disk"
++@m:atdisk   = "ESDI/IDE Hard Disk"
++@p:atdisk   = "ESDI/IDE Hard Disk"
+=1 158 68
++@r:raspi_mp    = "Raspberry Pi 2, 3 or 4 (ARM Multiprocessor)",files.none
+=1 226 23
++@r:bcmvideo = "Raspberry Pi VideoCore Frame Buffer",files.video
+=1 249 16
++@r:bcmusb = "USB Mouse",files.bcmusb,bcmusb
++
++[Keyboard]
++@a:STANDARD = "XT, AT, or Enhanced Keyboard (83-104 keys)",files.i8042,i8042prt
++@i:STANDARD = "XT, AT, or Enhanced Keyboard (83-104 keys)",files.i8042,i8042prt
++@m:STANDARD = "XT, AT, or Enhanced Keyboard (83-104 keys)",files.i8042,i8042prt
++@p:STANDARD = "XT, AT, or Enhanced Keyboard (83-104 keys)",files.i8042,i8042prt
++@r:bcmusb = "USB Keyboard",files.bcmusb,bcmusb
+=1 268 11
++@a:aic78xx  = "Adaptec AHA-294X/AHA-394X/AIC-78XX SCSI Controller"
++@i:aic78xx  = "Adaptec AHA-294X/AHA-394X/AIC-78XX SCSI Controller"
++@m:aic78xx  = "Adaptec AHA-294X/AHA-394X/AIC-78XX SCSI Controller"
++@p:aic78xx  = "Adaptec AHA-294X/AHA-394X/AIC-78XX SCSI Controller"
+=1 280 33
++@a:symc810  = "Symbios Logic C810 PCI SCSI Host Adapter"
++@i:symc810  = "Symbios Logic C810 PCI SCSI Host Adapter"
++@m:symc810  = "Symbios Logic C810 PCI SCSI Host Adapter"
++@p:symc810  = "Symbios Logic C810 PCI SCSI Host Adapter"
+=1 314 9
++@r:bcmemmc  = "Raspberry Pi SD Card Controller"
++
++[Extenders]
++@a:pcmcia = "PCMCIA Support"
++@i:pcmcia = "PCMCIA Support"
++@m:pcmcia = "PCMCIA Support"
++@p:pcmcia = "PCMCIA Support"
+=1 326 8

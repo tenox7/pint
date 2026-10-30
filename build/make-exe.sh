@@ -35,14 +35,21 @@ macro() { bash srcmacro.sh $D/sources $1; }
 cw=$(bash srcmacro.sh $D/sources "*" | grep "^COMPILER_WARNINGS=") && COMPILER_WARNINGS=${cw#COMPILER_WARNINGS=}
 # The MIPS SOURCES of the component (its mips\sources), the template of the ARM build.
 amacro() { local m=$(ls -d $D/[Mm][Ii][Pp][Ss] 2>/dev/null); [ -f "$m/sources" ] && bash srcmacro.sh $m/sources $1; }
-# the C run-time of makefile.def: msvcrt (USE_CRTDLL, USE_MSVCRT, USE_MSVCRT20, USE_MSVCRT40:
-# all USE_MSVCRT on a RISC machine), else libcmt (USE_LIBCMT), else libc
+# the C run-time of makefile.def: msvcrt and msvcirt, the iostreams of msvcrt40.dll (USE_CRTDLL,
+# USE_MSVCRT, USE_MSVCRT20, USE_MSVCRT40: all USE_MSVCRT on a RISC machine), else libcmt
+# (USE_LIBCMT), else libc
 CRT=libc
 [ -z "$(macro USE_LIBCMT)" ] || CRT=libcmt
-[ -z "$(macro USE_CRTDLL)$(macro USE_MSVCRT)$(macro USE_MSVCRT20)$(macro USE_MSVCRT40)" ] || CRT=msvcrt
-# (a \" of the C_DEFINES is a quote, as the command line of NT gave it to cl: -DX=\"0\")
-DEFS="$(ntdefines $D) $(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g; s/\\\\\"/\"/g") $(macro NET_C_DEFINES)"
-INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
+[ -z "$(macro USE_CRTDLL)$(macro USE_MSVCRT)$(macro USE_MSVCRT20)$(macro USE_MSVCRT40)" ] || CRT="msvcrt msvcirt"
+# (with the libraries of MFC ahead of it: LIBC_LIB = $(MFC_LIBS) $(LIBC_LIB))
+CRT="$(macro MFC_LIBS) $CRT"
+# (a \" of the C_DEFINES is a quote, as the command line of NT gave it to cl: -DX=\"0\"); RC
+# gets the defines alone, as makefile.def gives it the CDEFINES: not the MFC_FLAGS of the compiler
+CDEFS="$(macro C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g; s/\\\\\"/\"/g") $(macro NET_C_DEFINES)"
+DEFS="$(ntdefines $D) $CDEFS"
+RCDEFS="$(ntdefines $D rc) $CDEFS"
+CXXC=$(ntcxx $D)
+INCS="-I$K/inc -I/tmp/f/ovr $(bash incdirs.sh $D "$(macro MFC_INCLUDES);$(macro USER_INCLUDES);$(macro INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/csr -I/tmp/f/crt"
 UMTYPE=$(macro UMTYPE | tr -d " ")
 # the entry of makefile.def: that of UMENTRY winmain, wwinmain or wmain, else the UMENTRYABS,
 # else mainCRTStartup
@@ -93,10 +100,10 @@ RELINC=$(bash relinc.sh $INCS $prog $srcs); INCS="$INCS $RELINC"; export RELINC=
 INCS="$INCS $(ntpch $D /tmp/f/pch)"
 # the farmed directory of a source of the tree (..\x.c, or the port version of one), where
 # its quoted includes are found first (make-lib.sh): ss3dfo.h beside ..\ss3dfo.c
-srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
+srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; /work/RASPI/apps/*) s=/work/private/${s#/work/RASPI/apps/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
 comp() {
   local b=$(basename "${2%.*}" | tr A-Z a-z) x=$(echo ${2##*.} | tr A-Z a-z)
-  ntsrc $2 $DIR/src/$b.$x && ntyu $D $x $DIR/src/$b.$x && ntcc $1/$b.obj $DIR/src/$b.$x $DEFS $(srcinc $2) $INCS
+  ntsrc $2 $DIR/src/$b.$x && ntyu $D $x $DIR/src/$b.$x && ntcc $1/$b.obj $DIR/src/$b.$x $([ $x != c ] || echo $CXXC) $DEFS $(srcinc $2) $INCS
 }
 o=$DIR/lobj; [ "$TTYPE" = PROGRAM ] && o=$DIR/obj
 # (and the object of the precompiled include, ntpchobj, which the program links)
@@ -160,15 +167,16 @@ incl() {
   done
   return 1
 }
-for rc in $RCS; do incl $rc || RES="$RES $(bash rc.sh $D $rc $DEFS $INCS)" || exit 1; done
+for rc in $RCS; do incl $rc || RES="$RES $(bash rc.sh $D $rc $RCDEFS $INCS)" || exit 1; done
 # NTTARGETFILE1 before the link, the rest of NTTARGETFILES after it, as makefile.def
 bash nttarget.sh $D file1 $U || exit 1
 # the program file, .exe or its UMAPPLEXT (.com with _DOT_COM_FILE: chcp, keyb); its .pdb and
 # .map made beside it, which names the obj/<program>.pdb they then are (a DLL of its name,
-# winmsd.dll, may link at once)
+# winmsd.dll, may link at once); -opt:ref as makefile.def links, which -debug would turn off, and
+# noicf: the link of 1996 folds no functions
 X=$(macro UMAPPLEXT | tr -d " "); [ -n "$X" ] || [ -z "$(macro _DOT_COM_FILE)" ] || X=.com
 F=$(echo $PROG${X:-.exe} | tr a-z A-Z)
-link -nologo -machine:arm -release -force:multiple -subsystem:$SUB -entry:$ENTRY -base:$BASE ${STACK:+-stack:$STACK} ${STUB:+-stub:$STUB} -nodefaultlib $LINKVER $(ntlinkflags $D) \
+link -nologo -machine:arm -release -opt:ref,noicf -force:multiple -subsystem:$SUB -entry:$ENTRY -base:$BASE ${STACK:+-stack:$STACK} ${STUB:+-stub:$STUB} -nodefaultlib $LINKVER $(ntlinkflags $D) \
      -debug -pdb:$DIR/$PROG.pdb -pdbaltpath:"Z:$(echo $O/$PROG.pdb | tr / "\\\\")" -map:$DIR/$PROG.map -out:$DIR/$F $DIR/obj/*.obj $LIBS $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }
 cp $DIR/$PROG.pdb $DIR/$PROG.map $O/

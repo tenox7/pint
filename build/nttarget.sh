@@ -60,12 +60,16 @@ inlib() { local l; l=$(bash $B/libpath.sh $D "$(echo "$1" | sed -E 's#(^|/)arm/(
 # a library of libraries and objects, given to lib in reverse order as ntlib (msvc.sh) does: the
 # library of the directory it names (obj\arm\uimisc.lib: the component's, ..\lib\arm\x.lib;
 # libpath.sh -d), one of the public libraries <out>/<name>.lib, one of kernel mode both; an object
-# is the one the build of its directory made (obj\arm\shguid.obj of shell32)
+# is the one the build of its directory made (obj\arm\shguid.obj of shell32); an import library of a
+# .def the recipe made or the tree has (-def:user32p.def: user32p.lib, the private exports too). With
+# @-, the arguments of an inline response file (lib @<<) are its input.
 nmk_lib() {
-    local a o p= d l= x
-    for a in "$@"; do
+    local a o p= d l= x f= r=
+    for a; do [ "$a" != @- ] || r=$(cat); done
+    for a in "$@" $r; do
         case $a in
         [-/][Oo][Uu][Tt]:*) p=${a#*:} ;;
+        [-/][Dd][Ee][Ff]:*) f=$(out "${a#*:}"); [ -f "$f" ] || f=$(locate "${a#*:}") || { echo "nttarget: no ${a#*:}" >&2; return 1; } ;;
         *.lib) l="$(inlib "$a") $l" ;;
         *.obj) x=$(bash $B/libpath.sh $D "$(echo "$a" | sed -E 's#(^|/)obj/arm/#\1obj/*/#')")
                [ -n "$x" ] || { echo "nttarget: no $a" >&2; return 1; }; l="$x $l" ;;
@@ -75,7 +79,7 @@ nmk_lib() {
     d=$(bash $B/libpath.sh -d $D "$(echo "$d" | sed 's/^BASEDIR/$(BASEDIR)/')")
     case $d in /work/public/*) o=$(outlib "$p") ;; *) o=$OUT/dir/${d#/work/}/$(basename "$p" | tr A-Z a-z) ;; esac
     mkdir -p $(dirname $o) && rm -f $o
-    MSVC_ENV=0 WINEDEBUG=-all lib -nologo -out:$o $l > /tmp/nttarget.err 2>&1 || { cat /tmp/nttarget.err >&2; return 1; }
+    MSVC_ENV=0 WINEDEBUG=-all lib -nologo ${f:+-machine:arm -def:$f} -out:$o $l > /tmp/nttarget.err 2>&1 || { cat /tmp/nttarget.err >&2; return 1; }
     [ $OUT != /work/RASPI/obj ] || [ $o = $(outlib "$p") ] || cp $o $OUT/
 }
 # link32 -dump -symbols: the symbol tables of libraries, by the linker of Microsoft C
@@ -85,20 +89,23 @@ nmk_link32() {
     MSVC_ENV=0 WINEDEBUG=-all link -dump -symbols $l
 }
 # mapmsg, the message file of the message definitions of a header (netmsg.mc of
-# NET\MESSAGES): mapmsg [-p] [-a file] system base header [> file]
+# NET\MESSAGES): mapmsg [-p] [-a file] system base header [> file | >> file] (rasmsg.mc of
+# RAS, of two headers)
 nmk_mapmsg() {
-    local o= args=() n
+    local o= a= args=() n
     while [ $# -gt 0 ]; do
         case $1 in
         -a) args+=(-a "$(out "$2")"); shift 2 ;;
         ">") o=$(out "$2"); shift 2 ;;
+        ">>") o=$(out "$2"); a=1; shift 2 ;;
         *) args+=("$1"); shift ;;
         esac
     done
     n=${#args[@]}
     args[$((n-1))]=$(locate "${args[$((n-1))]}") || { echo "nttarget: no ${args[$((n-1))]}" >&2; return 1; }
-    if [ -n "$o" ]; then bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" > "$o" 2> /tmp/mapmsg.log
-    else bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" 2> /tmp/mapmsg.log; fi || { cat /tmp/mapmsg.log >&2; return 1; }
+    if [ -n "$a" ]; then bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" >> "$o" 2> /tmp/mapmsg.log
+    elif [ -n "$o" ]; then bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" > "$o" 2> /tmp/mapmsg.log
+    else bash /work/RASPI/tools/host.sh mapmsg "${args[@]}" 2> /tmp/mapmsg.log; fi < /dev/null || { cat /tmp/mapmsg.log >&2; return 1; }
 }
 # listmung list template > file: the template written out for the names of the list
 # (the callback and server call tables of ntuser\inc, client and kernel)
@@ -132,6 +139,21 @@ nmk_cpp() {
     done
     tr -d '\032\r' < "$s" > /tmp/nmkcpp.src
     cl -nologo -I"$(dirname "$s")" "${args[@]}" -D_ARM_ $t/tmp/nmkcpp.src > "$o" 2> /tmp/nmkcpp.log || { cat /tmp/nmkcpp.log >&2; return 1; }
+}
+# riscdef [-x string]... [-r from to]... def > file: the module definition file of a RISC machine
+# from that of the Intel machine (tools/riscdef.pl: the MFC 4.2 DLLs, whose RISC .def files the
+# tree has not)
+nmk_riscdef() {
+    local o= s= x=()
+    while [ $# -gt 0 ]; do
+        case $1 in
+        ">") o=$(out "$2"); shift 2 ;;
+        -x) x+=(-x "$2"); shift 2 ;;
+        -r) x+=(-r "$2" "$3"); shift 3 ;;
+        *) s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; shift ;;
+        esac
+    done
+    perl /work/RASPI/tools/riscdef.pl "$s" "${x[@]}" > "$o" 2> /tmp/riscdef.log || { cat /tmp/riscdef.log >&2; return 1; }
 }
 # uixport, the export list of a NET UI DLL from the symbols of its libraries
 nmk_uixport() {
@@ -229,7 +251,7 @@ nmk_nmake() {
         m() { bash $B/srcmacro.sh $D/sources $1; }
         defs="$(ntdefines $D) $(m C_DEFINES | sed "s/\$([A-Za-z_0-9]*)//g")"
         for x; do case $x in USE_CRTDLL=1) defs="$defs -D_DLL=1 -D_MT=1" ;; USE_LIBCMT=1) defs="$defs -D_MT=1" ;; esac; done
-        incs="-I$K/inc -I/tmp/f/ovr $(bash $B/incdirs.sh $D "$(m USER_INCLUDES);$(m INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
+        incs="-I$K/inc -I/tmp/f/ovr $(bash $B/incdirs.sh $D "$(m MFC_INCLUDES);$(m USER_INCLUDES);$(m INCLUDES)") -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
         rm -rf /tmp/nmkgen && mkdir -p /tmp/nmkgen && ntsrc $s /tmp/nmkgen/$b.${s##*.} &&
         ntcc /tmp/nmkgen/$b.obj /tmp/nmkgen/$b.${s##*.} $defs $incs -FA -Fa/tmp/nmkgen/$b.lst
     ) || { cat /tmp/nmkgen/$b.obj.err >&2 2>/dev/null; return 1; }
@@ -390,8 +412,9 @@ nmk_rcpp() {
     done
     bash /work/RASPI/tools/host.sh rcpp "${a[@]}" > /dev/null
 }
-# (that of a component the build made: the keyboard layouts of ntuser\kbd\tmp)
-m=$(resolve makefile.inc) || { m=$(gen $D)/makefile.inc; [ -f $m ] || exit 0; }
+# (that of a component the build made: the keyboard layouts of ntuser\kbd\tmp; that of a
+# component of the port alone: the MFC 4.2 DLLs)
+m=$(resolve makefile.inc) || { m=$(bash $B/portdir.sh $D)/makefile.inc; [ -f $m ] || m=$(gen $D)/makefile.inc; [ -f $m ] || exit 0; }
 # the makefile.inc with the files it includes (the port's versions of them first); an include
 # from the component's directory, where nmake ran, else from that of the file that includes it
 # (dll3\dll1\makefile.inc of NET UI, included by its daytona, includes ..\..\makefile.inc: the

@@ -1,0 +1,29 @@
+#ntdiff private/windows/setup/legacy/dll/detect1.c
+=1 1 32
++#define PROCESSOR_CORTEX_A7  "Cortex_A7"
++#define PROCESSOR_CORTEX_A53 "Cortex_A53"
++#define PROCESSOR_CORTEX_A72 "Cortex_A72"
+=1 33 6
++#define PLATFORM_ARM     "Arm"
+=1 39 266
++        case PROCESSOR_ARCHITECTURE_ARM:
++            if (SystemInfo.wProcessorLevel == 0xd03) {
++                szProcessor = PROCESSOR_CORTEX_A53;
++            } else
++            if (SystemInfo.wProcessorLevel == 0xd08) {
++                szProcessor = PROCESSOR_CORTEX_A72;
++            } else {
++                szProcessor = PROCESSOR_CORTEX_A7;
+=1 302 42
++#ifdef _ARM_
++            //
++            // Just call it a Cortex-A7, the lowest common denominator.
++            //
++            szProcessor = PROCESSOR_CORTEX_A7;
+=1 342 44
++        case PROCESSOR_ARCHITECTURE_ARM:
++            szPlatform = PLATFORM_ARM;
+=1 384 29
++#ifdef _ARM_
++            szPlatform = PLATFORM_ARM;
+=1 411 717

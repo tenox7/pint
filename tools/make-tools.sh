@@ -55,6 +55,8 @@ tool listmung $S/listmung
 tool mc $S/vctools/mc
 # (the keyboard layouts, ntuser\kbd: the sources of each from its kbd*.txt)
 tool kbdtool $S/kbdtool
+# (the alias objects of oldnames.lib of the C run-time, crt/make-crt.sh OLDNAMES)
+tool aliasobj $S/vctools/crt/libw32/tools/source
 mkdir -p /tmp/src && cp -p /work/RASPI/tools/pe2img.c /work/RASPI/tools/midl/midlcpp.c /work/RASPI/tools/msvcexe.c /tmp/src/
 tool pe2img /tmp/src
 tool midlcpp /tmp/src

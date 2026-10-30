@@ -1,0 +1,21 @@
+#ntdiff private/ntos/boot/setup/setup.c
+=1 1 33
++//
++// The keyboard port driver. The keyboard of an ARM machine is on its USB host
++// controller, whose driver is the keyboard and pointer port.
++//
++#if defined(_ARM_)
++#define KEYBOARD_DRIVER_FILENAME "bcmusb.sys"
++#else
++#define KEYBOARD_DRIVER_FILENAME "i8042prt.sys"
++#endif
+=1 33 15
++#elif defined(_ARM_)
++PCHAR PlatformExtension = ".arm";
+=1 48 1224
++    SetupBlock->KeyboardDevice.BaseDllName = SlCopyString(KEYBOARD_DRIVER_FILENAME);
+=1 1273 2
++                          KEYBOARD_DRIVER_FILENAME,
+=1 1276 6
++             KEYBOARD_DRIVER_FILENAME,
+=1 1283 1244

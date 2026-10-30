@@ -115,28 +115,41 @@ export NTNLS='Z:\work\private\windows\winnls\data'
 G=$W/RASPI/obj/gen/hives
 dump() { host hivedmp -f $1 | tr -d "\r"; }
 # RETAIL: the hives of mkhives RETAIL; ARM: those of the Pi, from the .INI files of the
-# port where it has them (ported/oak, made from their edit scripts)
+# port where it has them (ported/oak, made from their edit scripts); SETUP: the retail hives
+# with the services of the Pi's drivers, those of its setup source (text setup turns on the
+# ones it detects)
 for V in $VARIANTS; do
     case $V in
     RETAIL) OPT="-D_GENERAL_PURPOSE_ -D_RETAIL_SETUP_";;
     ARM)    OPT="-D_GENERAL_PURPOSE_ -D_RETAIL_SETUP_ -D_RASPI_";;
+    SETUP)  OPT="-D_GENERAL_PURPOSE_ -D_RETAIL_SETUP_ -DBCMEMMC -DBCMUSB -DBCMVIDEO";;
     VALIDATE) continue;;
     *) echo "unknown variant $V"; exit 1;;
     esac
     echo ">> $V hives ($OPT)"
     D=$G/$V; rm -rf $D; mkdir -p $D
-    if [ $V = ARM ]; then rm -f $G/SYSTEM $G/SOFTWARE $G/DEFAULT $G/USERDIFF; fi
+    if [ $V = ARM ]; then rm -f $G/SYSTEM $G/SOFTWARE $G/DEFAULT $G/USERDIFF $G/SETUPREG.HIV; fi
     for h in "SYSTEM System system" "SOFTWARE Software software" "DEFAULT .Default default" "USERDIFF Userdiff userdiff"; do
         set -- $h
         I=$W/public/oak/bin/$3.ini
-        if [ $V = ARM ] && [ -f $W/RASPI/ported/oak/$3.ini ]; then I=$W/RASPI/ported/oak/$3.ini; fi
+        if [ $V != RETAIL ] && [ -f $W/RASPI/ported/oak/$3.ini ]; then I=$W/RASPI/ported/oak/$3.ini; fi
         (cd $D && host rcpp -R -P -I $W/public/oak/bin -f $I $OPT -g $1.PP > /dev/null) || echo "   rcpp $1 rc=$?"
         (cd $D && rc=0 && { host regini -h $1 $2 $1.PP > $1.OUT 2>&1 || rc=$?; } && tr -d "\r" < $1.OUT > $1.REG && rm $1.OUT &&
             [ $rc = 0 ]) || echo "   regini $1 failed"
         (cd $D && dump $1 > $1.DMP 2>&1) || echo "   hivedmp $1 rc=$?"
         echo "   $1: $(stat -c %s $D/$1) bytes, $(grep -c "" $D/$1.DMP) dump lines, $(grep -c "^REGINI:\|) : error:" $D/$1.REG) REGINI errors"
     done
-    if [ $V = ARM ]; then cp $D/SYSTEM $D/SOFTWARE $D/DEFAULT $D/USERDIFF $G/; fi
+    if [ $V = ARM ]; then
+        # and the hive of the setup source as mkhives makes SETUP4P.HIV (setupreg.ini with
+        # RESTRICT_CPU=4: 4 processors on the workstation too), named SETUPREG.HIV
+        (cd $D && host rcpp -R -P -I $W/public/oak/bin -f $W/public/oak/bin/setupreg.ini -DRESTRICT_CPU=4 -g SETUPREG.PP > /dev/null) ||
+            echo "   rcpp SETUPREG rc=$?"
+        (cd $D && rc=0 && { host regini -h SETUPREG.HIV System SETUPREG.PP > SETUPREG.OUT 2>&1 || rc=$?; } &&
+            tr -d "\r" < SETUPREG.OUT > SETUPREG.REG && rm SETUPREG.OUT && [ $rc = 0 ]) || echo "   regini SETUPREG failed"
+        (cd $D && dump SETUPREG.HIV > SETUPREG.DMP 2>&1) || echo "   hivedmp SETUPREG rc=$?"
+        echo "   SETUPREG.HIV: $(stat -c %s $D/SETUPREG.HIV) bytes, $(grep -c "" $D/SETUPREG.DMP) dump lines"
+        cp $D/SYSTEM $D/SOFTWARE $D/DEFAULT $D/USERDIFF $D/SETUPREG.HIV $G/
+    fi
 done
 mkdir -p $G/MS
 for h in SYSTEM SOFTWARE DEFAULT; do

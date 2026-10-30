@@ -1,0 +1,3 @@
+UNICODE_MFC=1
+
+!include ..\sources.inc

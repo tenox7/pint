@@ -1,0 +1,31 @@
+#ntdiff private/windows/setup/inf/win4/inf/wordpad.inx
+#crlf
+=1 1 73
++@a:mswd6_32.wpc
++@i:mswd6_32.wpc
++@m:mswd6_32.wpc
++@p:mswd6_32.wpc
++wordpad.exe
++@a:write32.wpc
++@i:write32.wpc
++@m:write32.wpc
++@p:write32.wpc
+=1 77 3
++@a:wordpad.cnt
++@i:wordpad.cnt
++@m:wordpad.cnt
++@p:wordpad.cnt
++@a:wordpad.hlp
++@i:wordpad.hlp
++@m:wordpad.hlp
++@p:wordpad.hlp
+=1 82 94
++@a:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,mswd6_32.wpc,,"mswd6_32.wpc,2"
++@i:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,mswd6_32.wpc,,"mswd6_32.wpc,2"
++@m:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,mswd6_32.wpc,,"mswd6_32.wpc,2"
++@p:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,mswd6_32.wpc,,"mswd6_32.wpc,2"
++@a:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,write32.wpc,,"write32.wpc,2"
++@i:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,write32.wpc,,"write32.wpc,2"
++@m:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,write32.wpc,,"write32.wpc,2"
++@p:HKLM,SOFTWARE\Microsoft\Windows\CurrentVersion\RenameFiles\WordPadAttribSet,write32.wpc,,"write32.wpc,2"
+=1 178 4

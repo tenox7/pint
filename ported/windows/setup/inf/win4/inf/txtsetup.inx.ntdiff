@@ -1,0 +1,120 @@
+#ntdiff private/windows/setup/inf/win4/inf/txtsetup.inx
+#crlf
+=1 1 13
++@r:@@:SetupSourceDevice = \device\harddisk0\partition1
+=1 14 28
++@r:@@:RequiredMemory = 15204352
+=1 42 356
++@a:atdisk   = atdisk.sys
++@i:atdisk   = atdisk.sys
++@m:atdisk   = atdisk.sys
++@p:atdisk   = atdisk.sys
+=1 399 77
++@r:raspi_mp        = *Raspberry
+=1 476 66
++@r:raspi_mp        = hal.dll     , ,hal.dll
+=1 542 66
++@r:raspi_mp        = hal.dll
+=1 608 48
++@r:bcmvideo = "BCM2835 VideoCore"
+=1 656 22
++@r:bcmvideo = bcmvideo.sys
+=1 678 16
++@r:bcmusb   = "USB MOUSE"
+=1 694 17
++@r:bcmusb   = PCAT_ENHANCED
+=1 711 23
++@r:bcmemmc  = *EMMC
+=1 734 44
++@a:symc810  = symc810.sys,4
++@i:symc810  = symc810.sys,4
++@m:symc810  = symc810.sys,4
++@p:symc810  = symc810.sys,4
+=1 779 4
++@a:aic78xx  = aic78xx.sys,4
++@i:aic78xx  = aic78xx.sys,4
++@m:aic78xx  = aic78xx.sys,4
++@p:aic78xx  = aic78xx.sys,4
+=1 784 12
++@r:bcmemmc = bcmemmc.sys,4
+=1 796 5
++@a:pcmcia = pcmcia.sys,4
++@i:pcmcia = pcmcia.sys,4
++@m:pcmcia = pcmcia.sys,4
++@p:pcmcia = pcmcia.sys,4
+=1 802 9
++@a:cirrus.sys,4
++@i:cirrus.sys,4
++@m:cirrus.sys,4
++@p:cirrus.sys,4
+=1 812 8
++@a:mga_mil.sys,4
++@i:mga_mil.sys,4
++@m:mga_mil.sys,4
++@p:mga_mil.sys,4
+=1 821 4
++@a:s3.sys,4
++@i:s3.sys,4
++@m:s3.sys,4
++@p:s3.sys,4
++@a:tga.sys,4
++@i:tga.sys,4
++@m:tga.sys,4
++@p:tga.sys,4
+=1 827 3
++@a:weitekp9.sys,4
++@i:weitekp9.sys,4
++@m:weitekp9.sys,4
++@p:weitekp9.sys,4
+=1 831 5
++@a:cirrus.dll,2
++@i:cirrus.dll,2
++@m:cirrus.dll,2
++@p:cirrus.dll,2
++@m:jzvxl484.dll,2
++@a:mga.dll,2
++@i:mga.dll,2
++@m:mga.dll,2
++@p:mga.dll,2
+=1 839 3
++@a:s3.dll,2
++@i:s3.dll,2
++@m:s3.dll,2
++@p:s3.dll,2
++@a:tga.dll,2
++@i:tga.dll,2
++@m:tga.dll,2
++@p:tga.dll,2
+=1 844 2
++@a:weitekp9.dll,2
++@i:weitekp9.dll,2
++@m:weitekp9.dll,2
++@p:weitekp9.dll,2
++@i:xga.dll,2
++@r:bcmvideo.sys,4
+=1 848 5
++@a:vga.dll,2
++@i:vga.dll,2
++@m:vga.dll,2
++@p:vga.dll,2
++@i:vga256.dll,2
++@a:vga.sys,4
++@i:vga.sys,4
++@m:vga.sys,4
++@p:vga.sys,4
+=1 856 7
++@a:i8042prt.sys,4
++@i:i8042prt.sys,4
++@m:i8042prt.sys,4
++@p:i8042prt.sys,4
++
++@r:[files.bcmusb]
++@r:bcmusb.sys,4
+=1 864 23
++@r:osloader.exe,""
+=1 887 28
++@a:floppy = floppy.sys
++@i:floppy = floppy.sys
++@m:floppy = floppy.sys
++@p:floppy = floppy.sys
+=1 916 876

@@ -5,7 +5,8 @@ TARGETNAME=lmhsvc
 TARGETPATH=obj
 TARGETTYPE=DYNLINK
 
-TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib \
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\ws2_32.lib \
+           $(BASEDIR)\public\sdk\lib\*\icmp.lib \
            $(BASEDIR)\public\sdk\lib\*\advapi32.lib \
            $(BASEDIR)\public\sdk\lib\*\kernel32.lib
 

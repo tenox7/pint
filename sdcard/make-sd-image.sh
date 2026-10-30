@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build the system disk: MBR + one FAT16 partition holding the Pi GPU firmware,
 # config.txt, the ARC firmware (arcfw.bin, the kernel= image) and the NT tree in
-# sdcard/root (\os\nt: OSLOADER and the HAL; \WINNT\...) with the registry hives of
-# obj/gen/hives and the NLS tables and fonts of the NT tree where NT 4.0 Setup puts them
-# (\WINNT\System32, \WINNT\System32\config, \WINNT\Fonts), the hive of the Default User profile,
+# sdcard/root (\os\winnt40: OSLOADER and the HAL; \WINNT\...) with the registry hives of
+# obj/gen/hives and the NLS tables, fonts and other data files of the NT tree where NT 4.0 Setup
+# puts them (\WINNT\System32, \WINNT\System32\config, \WINNT\Fonts), the hive of the Default User profile,
 # and the setup aid of a developer install for the first boot (ported/oak/registry.ini, the
 # program groups in \WINNT\IDW).
 # FAT16 because both the GPU firmware and NT read it.
@@ -66,16 +66,32 @@ N=/nt/private/windows/winnls/data
 cp $N/c_1252.nls $N/c_437.nls $N/c_850.nls $N/c_10000.nls $N/l_intl.nls $N/ctype.nls $N/locale.nls $N/sortkey.nls \
    $N/sorttbls.nls $N/unicode.nls /tmp/sd/WINNT/System32/
 # the fonts: the VGA resolution set (vgaoem.fon is the OEMHAL font OSLOADER loads from \WINNT\Fonts),
-# the TrueType fonts with Lucida Console and Marlett (the window frame glyphs), the DOS window fonts
+# the 8514 one, the TrueType fonts with Lucida Console and Marlett (the window frame glyphs), the DOS
+# window fonts
 F=/nt/private/ntos/w32/ntgdi/fonts
 for f in vgasys vgafix vgaoem vga850 vga860 vga861 vga863 vga865 sserife serife coure smalle smallf symbole symbolf \
          roman script modern app850 dosapp cga40850 cga40woa cga80850 cga80woa ega40850 ega40woa ega80850 ega80woa \
-         8514fix 8514oem 8514sys; do cp $F/$f.fon /tmp/sd/WINNT/Fonts/; done
+         8514fix 8514oem 8514sys sseriff seriff courf; do cp $F/$f.fon /tmp/sd/WINNT/Fonts/; done
 for f in arial arialbd arialbi ariali cour courbd courbi couri times timesbd timesbi timesi symbol wingding lucon marlett \
          l_10646; do cp $F/$f.ttf /tmp/sd/WINNT/Fonts/; done
 # and desktop.ini of layout.inx (fontext bld\desktop.inx, with the CR LF of the CD), whose UICLSID
 # makes Explorer show \WINNT\Fonts as the Fonts folder of fontext.dll
 sed "s/\$/\r/" /nt/private/windows/shell/fontfldr/fontext/bld/desktop.inx > /tmp/sd/WINNT/Fonts/desktop.ini
+# the other data files text setup copies to a new install (layout.inx) and GUI setup to one that does
+# not upgrade Windows 3.1 (syssetup.inx Files.NoWin31.SetupToSysroot): the ini files and the PIF of
+# \WINNT, the Windows NT wallpapers, the notes of setup, the help texts of the net and help commands,
+# the MIDI instrument definitions (\WINNT\Config) and the modem, PAD and switch lists of RAS
+W=/nt/private/windows
+cp /nt/public/oak/bin/_default.pif $W/win.ini $W/winfile.ini /nt/private/mvdm/bin86/system.ini \
+   $W/setup/readme/networkw.wri $W/setup/readme/printer.wri $W/shell/control/bitmaps/winnt.bmp \
+   $W/shell/control/bitmaps/winnt256.bmp /tmp/sd/WINNT/
+cp $W/setup/readme/readme.wri $W/setup/readme/probrep.txt $W/setup/bom/wdl.trm /nt/private/net/netcmd/net.hlp \
+   /nt/private/utils/help/doshelp.hlp /tmp/sd/WINNT/System32/
+mkdir -p /tmp/sd/WINNT/Config /tmp/sd/WINNT/System32/RAS
+cp $W/media/midimap/general.idf $W/media/midimap/hindered.idf $W/media/midimap/msadlib.idf /tmp/sd/WINNT/Config/
+RS=/nt/private/net/ras/src
+cp $RS/common/inc/modem.inf $RS/common/inc/pad.inf $RS/common/inc/switch.inf $RS/ui/setup/ras.ico \
+   $RS/ui/setup/rasread.txt /tmp/sd/WINNT/System32/RAS/
 cp ../obj/gen/hives/SYSTEM ../obj/gen/hives/SOFTWARE ../obj/gen/hives/DEFAULT ../obj/gen/hives/USERDIFF /tmp/sd/WINNT/System32/config/
 # the counter names and explain texts of the performance counters, which the build of perfmon
 # places from sdktools\cntrtext\perfini (perfmon\makefile.inc)

@@ -1,0 +1,26 @@
+#ntdiff private/windows/setup/bom/infsize/infsize.c
+=1 1 22
++char	ArmFlatShare[MFL];
+=1 23 6
++#define idARM   5
+=1 29 38
++    Msg ( "ARM   Flat directory location : %s\n",    argv[7] );
+=1 67 18
++	printf( "[ArmPath]   - ARM flat directory containing product files.\n" );
+=1 85 13
++#define FILE_SECTION_ARM   "[SourceDisksFiles.arm]"
+=1 98 38
++    else
++    if ( strstr ( Line, FILE_SECTION_ARM ) ) {
++
++        dwInsideSection = idARM;
+=1 400 4
+=1 138 167
++            case idARM   :
++
++                sprintf ( szPath, "%s\\%s", ArmFlatShare, szFile );
+=1 302 141
++    if ( argc != 8 ) { 
+=1 444 18
++    strcpy ( ArmFlatShare,  argv[7] );
+=1 462 15

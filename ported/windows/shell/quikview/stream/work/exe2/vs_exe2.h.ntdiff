@@ -1,0 +1,4 @@
+#ntdiff private/windows/shell/quikview/stream/work/exe2/vs_exe2.h
+=1 1 319
++#define EXE_ARMNT               261
+=1 320 321

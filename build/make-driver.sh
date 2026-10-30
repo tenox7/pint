@@ -19,6 +19,7 @@
 # Usage:  cd RASPI/build && ./make-driver.sh FASTFAT                # private/ntos/fastfat
 #         INSTALL=1 ./make-driver.sh DD/SCSIPORT                     # also install
 #         ROOT=/work/RASPI/drivers ./make-driver.sh BCMEMMC          # a component outside private/ntos
+#         IMPLIB=1 ROOT=/work/private/windows/setup/textmode ./make-driver.sh spddlang/sbcs   # its import library
 # Needs obj/ntoskrnl.lib from make-execlink.sh and obj/hal.lib from make-hal.sh.
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,7 +28,7 @@ COMP=${1:?usage: make-driver.sh COMPONENT}
 [ -f "$NT40/RASPI/obj/ntoskrnl.lib" ] || { echo "run make-execlink.sh first"; exit 1; }
 [ -f "$NT40/RASPI/obj/hal.lib" ] || { echo "run make-hal.sh first"; exit 1; }
 
-docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/private/ntos}" -e INSTALL="${INSTALL:-0}" \
+docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/private/ntos}" -e INSTALL="${INSTALL:-0}" -e IMPLIB="${IMPLIB:-0}" \
     -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
@@ -59,7 +60,10 @@ GDI_DRIVER) EXT=dll ENTRY="-dll -entry:DrvEnableDriver" ;;
 HAL) EXT=dll ENTRY="-dll -entry:HalInitSystem" ;;
 *) echo "$COMP: not a driver ($TYPE)"; exit 1 ;;
 esac
-DEFS="$(ntdefines $SRC) $(macro C_DEFINES) $(macro NET_C_DEFINES) $(macro NTCPPFLAGS)"
+CDEFS="$(macro C_DEFINES) $(macro NET_C_DEFINES) $(macro NTCPPFLAGS)"
+DEFS="$(ntdefines $SRC) $CDEFS"
+# (RC: the defines alone, as makefile.def gives it the CDEFINES)
+RCDEFS="$(ntdefines $SRC rc) $CDEFS"
 # (the INCLUDES with their $(BASEDIR), which incdirs.sh resolves)
 INCS="-I/tmp/f/$c -I/tmp/f/ovr -I$K/inc -I/tmp/f/priv $(bash incdirs.sh $SRC "$(bash srcmacro.sh $SRC/sources INCLUDES)") -I/tmp/f/pinc -I/tmp/f/oak -I/tmp/f/pub -I/tmp/f/crt"
 srcs=$(bash srclist.sh $COMP $ROOT)
@@ -80,41 +84,6 @@ armmacro() { [ -f $arm ] && sed -n "s/^$1=//p" $arm; }
 bash nttarget.sh $SRC pre $O || exit 1
 g=$(armsrcs | grep "^/tmp/f/gen/" | sed "s|^/tmp/f/gen/${SRC#/work/private/}/||")
 [ -z "$g" ] || bash nttarget.sh $SRC src $O $g || exit 1
-
-echo ">> compiling $COMP ($NAME.$EXT, $TYPE)"
-n=0; fail=0
-# the farmed directory of a source of the tree (..\x.c of tdi\tcpip\tcp\mp, or the port
-# version of one), where its quoted includes are found first, ahead of the include
-# directories of the port: those of the component too (make-lib.sh)
-srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
-# one source, compiled by the pool of msvc.sh (par, pwait)
-one() {
-  local f=$1 b=$(basename "${1%.*}" | tr A-Z a-z)
-  case $f in
-  *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
-  # a quoted include finds the header beside the source (#line): with port versions of
-  # headers, the farmed ones
-  *) ntsrc $f $DIR/src/$b.c && { [ -z "$PH" ] || sed -i "1s|.*/|#line 1 \"/tmp/f/$c/|" $DIR/src/$b.c; } &&
-     ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $(srcinc $f) $INCS ;;
-  esac
-}
-for f in $srcs $(armsrcs); do par one $f; done
-pwait; n=$PAROK; fail=$PARFAIL
-echo "   $n compiled, $fail failed"
-[ $fail -eq 0 ] || exit 1
-
-# The import libraries of ntoskrnl, the HAL (of a display driver, win32k.sys) and the
-# export drivers of TARGETLIBS, and the LIBRARY components of LINKLIBS and TARGETLIBS
-# (tdi\tcpip\tcp: ip.lib of tdi\tcpip\ip).
-case $TYPE in GDI_DRIVER) LIBS=$O/win32k.lib ;; HAL) LIBS=; [ -n "$(macro NOTARGETLIB)" ] || LIBS=$O/ntoskrnl.lib ;; *) LIBS="$O/ntoskrnl.lib $O/hal.lib" ;; esac
-set -f
-for l in $(macro LINKLIBS) $(macro TARGETLIBS); do
-  b=$(basename "$(echo "$l" | tr "\\\\" / | tr A-Z a-z)" .lib)
-  case $b in ntoskrnl|hal) continue ;; esac
-  [ -f $O/$b.lib ] || { echo "   missing library $b (build it first)"; exit 1; }
-  LIBS="$LIBS $O/$b.lib"
-done
-set +f
 
 DEF=""
 if [ $TYPE = EXPORT_DRIVER ] || [ $TYPE = HAL ]; then
@@ -141,16 +110,70 @@ if [ $TYPE = EXPORT_DRIVER ] || [ $TYPE = HAL ]; then
   grep -qi "^ *EXPORTS" $DIR/$NAME.def || { echo "   no EXPORTS in $NAME.def"; exit 1; }
   DEF="-def:$DIR/$NAME.def"
 fi
+# With IMPLIB=1 it writes the import library of the exports alone, as the library pass of
+# makefile.def does: two export drivers that import from each other (setupdd.sys, spddlang.sys).
+if [ "$IMPLIB" = 1 ]; then
+  [ -n "$DEF" ] || { echo "$COMP: no exports"; exit 1; }
+  lib -nologo -machine:arm -def:$DIR/$NAME.def -out:$DIR/$NAME.lib > $DIR/lib.err 2>&1 || { cat $DIR/lib.err; exit 1; }
+  ntimplib $DIR/$NAME.def $DIR/$NAME.lib $O/$NAME.lib
+  echo "   wrote $O/$NAME.lib (the import library of the .def)"
+  exit 0
+fi
 
+echo ">> compiling $COMP ($NAME.$EXT, $TYPE)"
+n=0; fail=0
+# the farmed directory of a source of the tree (..\x.c of tdi\tcpip\tcp\mp, or the port
+# version of one), where its quoted includes are found first, ahead of the include
+# directories of the port: those of the component too (make-lib.sh)
+srcinc() { local s=$(realpath $(dirname $1)); case $s in /work/RASPI/ported/*) s=/work/private/${s#/work/RASPI/ported/} ;; /work/RASPI/apps/*) s=/work/private/${s#/work/RASPI/apps/} ;; esac; case $s in /work/private/*) bash incdirs.sh $s "" | cut -d" " -f2 ;; esac; }
+# one source, compiled by the pool of msvc.sh (par, pwait)
+one() {
+  local f=$1 b=$(basename "${1%.*}" | tr A-Z a-z)
+  case $f in
+  *.asm) ntas $DIR/obj/${b}_asm.obj $f $DEFS -I/work/RASPI/obj/gen $INCS ;;
+  # a quoted include finds the header beside the source (#line): with port versions of
+  # headers, the farmed ones
+  *) ntsrc $f $DIR/src/$b.c && { [ -z "$PH" ] || sed -i "1s|.*/|#line 1 \"/tmp/f/$c/|" $DIR/src/$b.c; } &&
+     ntcc $DIR/obj/$b.obj $DIR/src/$b.c -kernel $DEFS $(srcinc $f) $INCS ;;
+  esac
+}
+for f in $srcs $(armsrcs); do par one $f; done
+pwait; n=$PAROK; fail=$PARFAIL
+echo "   $n compiled, $fail failed"
+[ $fail -eq 0 ] || exit 1
+
+# The import libraries of ntoskrnl, the HAL (of a display driver, win32k.sys) and the
+# export drivers of TARGETLIBS, and the LIBRARY components of LINKLIBS and TARGETLIBS
+# (tdi\tcpip\tcp: ip.lib of tdi\tcpip\ip). One of user mode comes from obj/um, as public\sdk\lib
+# held both (ntdll.lib of asyncmac.sys, after ntoskrnl.lib: it resolves nothing). An object is
+# the one its directory made (libpath.sh: rc4c.obj of the LSA crypt engine, of ndiswan.sys).
+case $TYPE in GDI_DRIVER) LIBS=$O/win32k.lib ;; HAL) LIBS=; [ -n "$(macro NOTARGETLIB)" ] || LIBS=$O/ntoskrnl.lib ;; *) LIBS="$O/ntoskrnl.lib $O/hal.lib" ;; esac
+set -f
+for l in $(macro LINKLIBS) $(macro TARGETLIBS); do
+  case $l in *.[Oo][Bb][Jj])
+    a=$(bash libpath.sh $SRC "$l"); [ -n "$a" ] || { echo "   missing object $l (build its directory first)"; exit 1; }
+    LIBS="$LIBS $a"; continue ;;
+  esac
+  b=$(basename "$(echo "$l" | tr "\\\\" / | tr A-Z a-z)" .lib)
+  case $b in ntoskrnl|hal) continue ;; esac
+  # (that of its directory first, with the $(BASEDIR) that macro drops: the RTL of user mode,
+  # \private\ntos\rtl\obj\*\rtl.lib of setupdd.sys)
+  case $l in \\*) a=$(bash libpath.sh $SRC "\$(BASEDIR)$l") ;; *) a=$(bash libpath.sh $SRC "$l") ;; esac
+  [ -n "$a" ] || a=$O/$b.lib; [ -f $a ] || a=$O/um/$b.lib
+  [ -f $a ] || { echo "   missing library $b (build it first)"; exit 1; }
+  LIBS="$LIBS $a"
+done
+set +f
 RC=$(bash srclist.sh $COMP $ROOT rc 2>/dev/null | head -1)
-RES=""; [ -z "$RC" ] || RES=$(bash rc.sh $SRC $RC $DEFS $INCS) || exit 1
+RES=""; [ -z "$RC" ] || RES=$(bash rc.sh $SRC $RC $RCDEFS $INCS) || exit 1
 F=$(echo $NAME.$EXT | tr a-z A-Z)
 # (a driver has no C run-time library but with USE_LIBCNTPR, as in makefile.def: the
 # routines of the run-time and the helpers of the compiler are exports of ntoskrnl)
 BASE=$(armmacro DRIVERBASE)
 [ $TYPE = HAL ] && { BASE=$(armmacro HALBASE); BASE=${BASE:-0x80010000}; }
 CRT=; [ -z "$(macro USE_LIBCNTPR)" ] || CRT=$O/libcntpr.lib
-link -nologo -machine:arm -release -driver -subsystem:native $ENTRY -base:${BASE:-0x10000} -nodefaultlib $LINKVER \
+# (-opt:ref as makefile.def links, which -debug would turn off; noicf: the link of 1996 folds nothing)
+link -nologo -machine:arm -release -opt:ref,noicf -driver -subsystem:native $ENTRY -base:${BASE:-0x10000} -nodefaultlib $LINKVER \
      -debug -pdb:$O/$NAME.pdb -map:$O/$NAME.map $DEF -out:$DIR/$NAME.$EXT \
      $DIR/obj/*.obj $LIBS $CRT $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }

@@ -1,0 +1,12 @@
+# riched32.dll, the RichEdit control of the programs of version 1.0 (MFC 4.2: WordPad), made of the
+# sources of RichEdit 2.0 as its makefile makes it (richedit.mak "Release Riched32"): RICHED32_BUILD
+# also registers the window class of version 1.0, RICHEDIT (reinit.cpp), and riched32.def.
+
+!include ..\sources
+
+TARGETNAME=riched32
+TARGETPATHLIB=
+DLLDEF=..\riched32.def
+INCLUDES=..\..\inc;..;$(BASEDIR)\public\sdk\inc\mfc40
+C_DEFINES=$(C_DEFINES) -DRICHED32_BUILD
+PRECOMPILED_INCLUDE=..\_common.h

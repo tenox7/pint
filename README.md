@@ -6,9 +6,10 @@ PINT 4.0 is work in progress. PINT 3.5, Windows NT 3.5 (build 782), is on the br
 
 ## Status
 
-- Runs in QEMU `raspi2b` on four CPUs: NT's developer first run, logon, the Explorer desktop and Start menu, Control
-  Panel, Task Manager, the accessories and games, TCP/IP networking, printing, WinHelp 4, POSIX and OpenGL.
-- Not yet: OLE (and with it Control Panel > Network), a real Pi.
+- Runs in QEMU `raspi2b` on four CPUs: NT's developer first run or NT 4.0's own setup, logon, the Explorer desktop
+  and Start menu, Control Panel, Task Manager, the accessories and games, WordPad and Paint (OLE), TCP/IP networking,
+  printing, WinHelp 4, POSIX and OpenGL.
+- Not yet: a real Pi.
 
 ## Raspberry Pi models
 
@@ -62,7 +63,7 @@ where the HAL keeps the time. Without an RTC the clock starts each boot at the f
 
 The first run is NT's developer setup (three boots). In the second, OK the boxes (Detected Display, Display Properties)
 and press a key at the console's pause; then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A
-C) and Enter log on as Administrator. Each boot says that a service failed: RpcSs, part of OLE, which is not built yet.
+C) and Enter log on as Administrator.
 
 The resolution is `framebuffer_width` and `framebuffer_height` of the SD card's `config.txt` (1920x1080; without them the
 display's mode), in QEMU `RES=1280x1024 build/run.sh`.
@@ -70,15 +71,26 @@ display's mode), in QEMU `RES=1280x1024 build/run.sh`.
 For a real Pi 2, 3 or 4, write `obj/nt-arcfw-sd.img` to an SD card. USB keyboards and mice, behind hubs too (and KVMs
 with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot menu lists the USB devices it found.
 
+## Setup card
+
+    tools/inf/make-infs.sh && sdcard/make-setup-image.sh   # obj/nt-setup-sd.img
+
+NT 4.0's own setup, as from its CD on an ARC machine; it installs NT on the card itself. The firmware's automatic boot
+fails on a fresh card (nothing installed yet): press a key, choose "Run a program" and type `arm\setupldr`. Text setup
+(keep the FAT partition, `\WINNT`), restart, GUI setup.
+In QEMU: `IMG=copy-of-nt-setup-sd.img build/run.sh -device usb-kbd`. For the network pick the adapter from the list
+(Raspberry Pi Ethernet Adapter); TCP/IP (with DHCP) and NetBEUI install.
+
 ## Networking
 
-TCP/IP with DHCP and NetBIOS over TCP/IP, and the server and workstation services. It uses the onboard Ethernet
+TCP/IP with DHCP and NetBIOS over TCP/IP, also to DNS names (`net use \\host.example.com\share`), the server and
+workstation services, ping, ipconfig and hostname (the other TCP/IP tools, such as ftp and telnet, are not in the
+NT 4.0 source tree, so ARM setup leaves them out). It uses the onboard Ethernet
 (LAN9514 on the Pi 2/3B, LAN7800 on the 3B+, the BCM2711's GENET on the Pi 4), in QEMU a USB Ethernet adapter
-(`NONET=1 build/run.sh`: none). Control Panel > Network needs OLE, which is not built yet.
+(`NONET=1 build/run.sh`: none).
 
 ## Roadmap
 
-- OLE, and with it Control Panel > Network.
 - A real Pi 2, 3 and 4.
 - Pi 4: memory above the first GB, the USB-C port, USB Ethernet adapters.
 

@@ -7,7 +7,7 @@
 # services REGINI calls on a live system, over the hive file, and hostnt.c the build
 # token. They run on the build machine (tools/host.sh); RCPP comes from tools/make-tools.sh.
 #
-# Usage: make-hives.sh [ARM|RETAIL|VALIDATE ...]   (default ARM)
+# Usage: make-hives.sh [ARM|RETAIL|SETUP|VALIDATE ...]   (default ARM)
 #   ARM -> obj/gen/hives/{SYSTEM,SOFTWARE,DEFAULT,USERDIFF}; every variant -> obj/gen/hives/<variant>/
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

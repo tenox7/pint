@@ -1,0 +1,79 @@
+# oleaut32.dll: the type library half (TYPELIB_OBJS of build\win32.mak), with the
+# dispatch half (..\dispatch\win32) linked in. OLE Automation has no build.exe
+# description in the tree: its own makefile builds it, with these flags for a RISC
+# machine (OLECLFLAGS of a retail build, -DOLEBLD of its rules), the NT headers
+# ahead of its own (LOCALBUILD=FALSE), the exports of oleaut32.def after the C
+# preprocessor and the entry of the C run-time, which calls DllMain. Its sources take
+# the C run-time without _DLL and _MT (OLECLFLAGS has neither; those of the dispatch half
+# have both), and it links its own list of libraries (-nodefaultlib), crtdll.lib among them.
+
+TARGETNAME=oleaut32
+TARGETPATH=obj
+# (its import library is the SDK's oleaut32.lib, which the NT tree links)
+TARGETPATHLIB=$(BASEDIR)\public\sdk\lib
+TARGETTYPE=DYNLINK
+DLLDEF=obj\*\oleaut32.def
+DLLBASE=0x777E0000
+DLLENTRY=_DllMainCRTStartup
+UMTYPE=windows
+USE_NOLIBS=1
+
+INCLUDES=.;$(BASEDIR)\public\sdk\inc;$(BASEDIR)\public\sdk\inc\crt;..\inc
+
+C_DEFINES=-DOLEBLD -DFV_UNICODE_OLE=1 -DWIN32 -DConst=const -DOSDEBUG -DID_DEBUG=0 -DRTPCHNAME=\"typelib.pch\"
+
+# the precompiled state of tlibpch.cxx, which each C++ source takes in place of its text up to
+# its #pragma hdrstop(RTPCHNAME) (/Yu, PCHOLE of build\win32.mak)
+PRECOMPILED_OPTION=/Yu
+PRECOMPILED_SOURCEFILE=tlibpch.cxx
+
+SOURCES=debug2.cxx    \
+        blkmgr.cxx    \
+        dassert.c     \
+        fstream.cxx   \
+        mem.cxx       \
+        sheapmgr.cxx  \
+        tlibutil.cxx  \
+        ntstring.cxx  \
+        tlibguid.c    \
+        obguid.c      \
+        mbstring.cxx  \
+        gdtinfo.cxx   \
+        gdtrt.cxx     \
+        stltinfo.cxx  \
+        nammgr.cxx    \
+        gtlibole.cxx  \
+        dfstream.cxx  \
+        oletmgr.cxx   \
+        impmgr.cxx    \
+        errmap.cxx    \
+        clutil.cxx    \
+        oautil.cxx    \
+        tdata1.cxx    \
+        tdata2.cxx    \
+        dtmbrs.cxx    \
+        entrymgr.cxx  \
+        dtbind.cxx    \
+        dfntbind.cxx  \
+        dbindtbl.cxx  \
+        gbindtbl.cxx  \
+        dstrmgr.cxx   \
+        gptbind.cxx   \
+        dfntcomp.cxx  \
+        convert.cxx   \
+        gtlibstg.cxx  \
+        tlibpch.cxx   \
+        oleaut32.rc
+
+LINKLIBS=..\dispatch\win32\obj\*\oledisp.lib
+
+# (oldnames.lib first, as its makefile links it: the old names of the C run-time, stricmp, itoa)
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\oldnames.lib \
+           $(BASEDIR)\public\sdk\lib\*\ole32.lib    \
+           $(BASEDIR)\public\sdk\lib\*\uuid.lib     \
+           $(BASEDIR)\public\sdk\lib\*\user32.lib   \
+           $(BASEDIR)\public\sdk\lib\*\gdi32.lib    \
+           $(BASEDIR)\public\sdk\lib\*\crtdll.lib   \
+           $(BASEDIR)\public\sdk\lib\*\kernel32.lib \
+           $(BASEDIR)\public\sdk\lib\*\advapi32.lib \
+           $(BASEDIR)\public\sdk\lib\*\mpr.lib

@@ -4,15 +4,15 @@
 # Supports what the recipes use: macros (also NAME=value lines in NMK_MACROS;
 # undefined ones are empty, as in nmake; $(NAME:a=b) substitutes; $O, a name of one letter), conditionals (!IF
 # with || && ! and parentheses, !IFDEF, !IFNDEF, !ELSEIF, !ELSE, !ENDIF), continued command lines,
-# "type << > f" and "type << >> f" inline files,
+# "type << > f" and "type << >> f" inline files (ended by <<, <<KEEP or <<NOKEEP),
 # "type a > b", "type a >> b", hextract, hsplit, "wcshdr < a > b" and "ws2hdr < a" (also in a
 # pipe, without the redirection), midl, mc, copy and cp (also "copy a + b c"),
-# del/erase, md/mkdir, delnode, attrib (nothing), lib (also link -lib), rcpp, solidpp, binplace, link32 -dump, uixport, guidlib, kbdtool, prodfilt, xdosnet and mibcc, piped with "|", "mapmsg ... > f", "listmung list template > f",
+# del/erase, md/mkdir, delnode, attrib (nothing), lib (also link -lib), rcpp, solidpp, binplace, link32 -dump, uixport, guidlib, kbdtool, prodfilt, xdosnet and mibcc, piped with "|", "mapmsg ... > f", "listmung list template > f", "riscdef ... > f",
 # the generators (set, "nmake obj\x.obj", link with an inline response file, "obj\machine\x.exe args")
 # ($@ and $** or $(**) as the target and its dependents, $? too, $(@D) $(@B) $(@F) $(@R) the parts of
 # the target's name, also in inline files and as $$(@D) in a dependency line), echo ignored but into a file, inference rules
 # (.FROM.TO, {FROMDIR}.FROM{TODIR}.TO: $<, $** and $? the source, $* its base), comment lines
-# in recipes and "IF EXIST f cmd" with commands joined by "&". Paths come out with "/" and the
+# in recipes, "IF EXIST f cmd" with commands joined by "&" and the - prefix. Paths come out with "/" and the
 # macros NMK_KEEP names (default SDKINC NTOSINC OAKINC BASEDIR) left as prefixes
 # for the caller to resolve. With NMK_DEPS set it prints the target's dependents
 # instead; with NMK_RULE set, the targets of its rule (exit status 1: it has none).
@@ -114,6 +114,16 @@ function names(h, t,    w, n, i) {
     return 0
 }
 
+# The line that ends an inline file: <<, or <<KEEP and <<NOKEEP (whether nmake keeps the file).
+function endinl(l) {
+    return toupper(l) ~ /^<<[ \t]*((NO)?KEEP)?[ \t]*$/
+}
+
+# The commands out of recipe line l, whose exit status nmake ignores if l has the - prefix (-del x, @-x).
+function ign(l, out) {
+    return l ~ /^@?-/ ? "{ " out "; } || true" : out
+}
+
 # One command of a recipe, of those that "&" joins; a pipeline, each of its commands.
 function command(cmd,    a, n, f, i) {
     sub(/^[ \t@-]+/, "", cmd)
@@ -184,7 +194,9 @@ function command(cmd,    a, n, f, i) {
     if (a[1] == "type" && a[3] == ">")
         return "nmk_type " a[2] " " a[4]
     if (tolower(a[1]) == "mapmsg") {
-        sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
+        # (or >>: rasmsg.mc of RAS, of two headers)
+        if (!sub(/[ \t]*>>[ \t]*/, " \\>\\> ", cmd))
+            sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
         return "nmk_mapmsg " substr(cmd, 8)
     }
     if (tolower(a[1]) == "listmung") {
@@ -194,6 +206,10 @@ function command(cmd,    a, n, f, i) {
     if (tolower(a[1]) == "cl") {
         sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
         return "nmk_cpp " substr(cmd, 4)
+    }
+    if (tolower(a[1]) == "riscdef") {
+        sub(/[ \t]*>[ \t]*/, " \\> ", cmd)
+        return "nmk_riscdef " substr(cmd, 9)
     }
     if (a[1] == "rcpp" || a[1] == "solidpp" || a[1] == "binplace" || a[1] == "link32" || a[1] == "uixport" || a[1] == "gensrv" || a[1] == "guidlib" || a[1] == "kbdtool" || a[1] == "prodfilt" || a[1] == "xdosnet" || a[1] == "mibcc")
         return "nmk_" cmd
@@ -242,7 +258,7 @@ function infer(    r, s, fe, te, fd, td, paths, ext, dir, base, src, i, l) {
             l = infc[r, i]
             if (substr(l, 1, 1) == "\001") {
                 l = substr(l, 2)
-                print (l == "<<" ? "NMK_EOF" : text(l))
+                print (endinl(l) ? "NMK_EOF" : text(l))
                 continue
             }
             gsub(/\$\(<B\)/, b, l); gsub(/\$\(<F\)/, src, l); gsub(/\$\(@B\)/, b, l); gsub(/\$\(@F\)/, tgt, l)
@@ -255,7 +271,7 @@ function infer(    r, s, fe, te, fd, td, paths, ext, dir, base, src, i, l) {
                 print (a[3] == ">" ? "nmk_new " : "nmk_add ") a[4] " <<'NMK_EOF'"
                 continue
             }
-            print command(l)
+            print ign(l, command(l))
         }
         return
     }
@@ -303,7 +319,7 @@ BEGIN {
 { sub(/\r$/, "") }
 
 inline {
-    if ($0 == "<<") { print "NMK_EOF"; inline = 0; next }
+    if (endinl($0)) { print "NMK_EOF"; inline = 0; next }
     print text(tnames($0, target, ""))
     next
 }
@@ -329,7 +345,7 @@ inline {
 !active { next }
 
 # The lines of an inline file (<<) of an inference rule, as they are.
-infinline { infc[inf, ++infn[inf]] = "\001" $0; if ($0 == "<<") infinline = 0; next }
+infinline { infc[inf, ++infn[inf]] = "\001" $0; if (endinl($0)) infinline = 0; next }
 
 # Comment lines, in and out of recipes.
 /^#/ { next }
@@ -419,10 +435,12 @@ inrecipe && /^[ \t]+[^ \t]/ {
         }
         next
     }
-    # a command with an inline file (link @<<, its response file): the file is its input
+    # a command with an inline file (link @<<, its response file): the file is its input, whose
+    # arguments lib takes (nmk_lib @-)
     if (line ~ /@<<[ \t]*$/) {
         sub(/[ \t]*@<<[ \t]*$/, "", line)
-        print command(line) " <<'NMK_EOF'"
+        out = command(line)
+        print out (out ~ /^nmk_lib / ? " @-" : "") " <<'NMK_EOF'"
         ncmds++
         inline = 1
         next
@@ -435,7 +453,7 @@ inrecipe && /^[ \t]+[^ \t]/ {
         out = out "; fi"
     } else
         for (i = 2; i <= n; i++) out = out "; " command(part[i])
-    print out
+    print ign(line, out)
     ncmds++
 }
 

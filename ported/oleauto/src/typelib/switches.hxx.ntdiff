@@ -1,0 +1,20 @@
+#ntdiff private/oleauto/src/typelib/switches.hxx
+=1 1 339
++//  HP_ARM           = ARM
+=1 340 20
++#else
++#ifdef _M_ARM
+=1 368 3
++#define HP_ARM               1
++#else
+=1 361 3
++#endif  // _M_ARM
+=1 364 3
++#else
+=1 368 5
++#ifndef HP_ARM
++#define HP_ARM               0
++#endif
+=1 372 56
++#if HP_R4000 || HP_POWERPC || HP_ALPHA || HP_ARM
+=1 429 29

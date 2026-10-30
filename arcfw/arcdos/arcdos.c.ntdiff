@@ -7,8 +7,8 @@
 +//
 +#include "arcdos_compat.h"
 =1 51 408
-=1 665 1
-=1 459 1838
+=1 1112 5
+=1 463 1834
 +                            (LastSlashLocation - (PCHAR)DefaultARCPath));
 =1 2298 5
 +                    *(Argv[*Argc]+(LastSlashLocation - (PCHAR)DefaultARCPath)) = 0;

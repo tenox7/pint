@@ -10,4 +10,7 @@ s/[[:space:]]\{1,\}RESIDENTNAME\>//I
 /^[[:space:]]*SEGMENTS[[:space:]]*$/Id
 # The CLASS of a section of SECTIONS (.data CLASS 'data' READ WRITE SHARED) and of a segment.
 s/[[:space:]]\{1,\}CLASS[[:space:]]\{1,\}'[^']*'//I
+# The SINGLE or MULTIPLE of a section of SECTIONS (quikview's .bss READ WRITE SINGLE), those of a
+# 16-bit DATA segment, which the librarian of 1996 dropped.
+s/^\([[:space:]]*[^[:space:]]\{1,\}\([[:space:]]\{1,\}\(READ\|WRITE\|EXECUTE\|SHARED\)\)*\)[[:space:]]\{1,\}\(SINGLE\|MULTIPLE\)\>/\1/I
 /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*\([[:space:]]\{1,\}\(PRELOAD\|LOADONCALL\|MOVEABLE\|MOVABLE\|FIXED\|DISCARDABLE\|NONDISCARDABLE\|PURE\|IMPURE\)\)\{1,\}[[:space:]]*$/Id

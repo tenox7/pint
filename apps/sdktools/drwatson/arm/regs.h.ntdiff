@@ -1,0 +1,17 @@
+#ntdiff private/sdktools/drwatson/mips/regs.h
++enum {
++    REGR0,   REGR1,  REGR2,  REGR3,  REGR4,  REGR5,  REGR6,  REGR7,
++    REGR8,   REGR9,  REGR10, REGR11, REGR12, REGSP,  REGLR,  REGPC,
++
++    REGCPSR, REGFPSCR,
++
++    FLAGN,   FLAGZ,  FLAGC,  FLAGV,  FLAGQ,  FLAGGE,
++    FLAGE,   FLAGA,  FLAGI,  FLAGF,  FLAGT,  FLAGMODE,
+=1 23 2
++    PREGU0, PREGU1,  PREGU2, PREGU3, PREGU4,
++    PREGU5, PREGU6,  PREGU7, PREGU8, PREGU9
++    };
++
++#define REGBASE		REGR0
++#define FLAGBASE	FLAGN
+=1 32 1

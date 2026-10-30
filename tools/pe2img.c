@@ -8,9 +8,10 @@
  *   binary and, for QEMU's -kernel, as an ELF executable with one segment there.
  *   The word at offset 8 receives the size (the ARC firmware's FwImageSize).
  *
- * pe2img -version major.minor image.exe
+ * pe2img [-version major.minor] [-misc] image.exe
  *   Set the subsystem version of an image (link.exe for ARM writes 6.02; NT 3.5
- *   takes 3.10 to 3.50), recomputing its checksum if it has one.
+ *   takes 3.10 to 3.50), and give it the misc debug record of the NT build (-misc),
+ *   recomputing its checksum if it has one.
  *
  * pe2img -align alignment image.exe
  *   The layout of an image the linker's -align below a page makes, which link.exe
@@ -31,8 +32,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #define FILE_ALIGN 0x200
+#define MISC_SIZE 0x110                 /* IMAGE_DEBUG_MISC with a name of MAX_PATH */
+#define USAGE "usage: pe2img image.exe address out.bin [out.elf] | pe2img -rom image.exe out.exe | pe2img [-version major.minor] [-misc] image.exe | pe2img -align alignment image.exe"
 
 static uint8_t *pe;
 static long pesize;
@@ -56,6 +60,7 @@ static void readpe(const char *name)
     pe = malloc(pesize);
     if (fread(pe, 1, pesize, f) != (size_t)pesize) die("cannot read the image");
     fclose(f);
+    if (pesize < 0x40 + 24 + 0xe0 || rd32(pe + 0x3c) > (uint32_t)pesize - 24 - 0xe0) die("not a PE image");
     nt = pe + rd32(pe + 0x3c);
     if (rd32(nt) != 0x4550) die("not a PE image");
     nsec = rd16(nt + 6);
@@ -175,14 +180,77 @@ static void writepe(const char *name)
     fclose(f);
 }
 
-static int version(const char *v, const char *name)
+/*
+ * The misc debug record the NT build left in every image when binplace split its
+ * symbols off: IMAGE_DEBUG_MISC_EXENAME holding the name of the symbol file,
+ * ext\name.dbg of the image's name, at the end of the file and not mapped. IMAGEHLP
+ * names a module by it (MapDebugInformation), and Dr. Watson the modules of its log.
+ * It takes the place of the records no tool of 1996 knows (types above
+ * IMAGE_DEBUG_TYPE_OMAP_FROM_SRC: VC_FEATURE, POGO). An image linked without debug
+ * information (no CodeView record: a type library), or with a misc record, stays
+ * as it is.
+ */
+static void misc(const char *name)
 {
-    unsigned major, minor;
+    uint32_t dbg = rd32(opt + 96 + 6 * 8), n = rd32(opt + 96 + 6 * 8 + 4) / 28, i, k = 0, cv = 0;
+    long o = nt - pe;
+    uint8_t *d = 0, *s, *m;
+    const char *b = name, *e;
+    char *c;
 
-    if (sscanf(v, "%u.%u", &major, &minor) != 2) die("the version is major.minor");
+    if (rd32(opt + 96 + 4 * 8 + 4)) die("the image has a certificate");
+    if (!(pe = realloc(pe, pesize + MISC_SIZE))) die("out of memory");
+    nt = pe + o;
+    opt = nt + 24;
+    sec = opt + rd16(nt + 20);
+    for (s = sec; dbg && n && s < sec + nsec * 40; s += 40)
+        if (dbg >= rd32(s + 12) && dbg + n * 28 <= rd32(s + 12) + rd32(s + 16))
+            d = pe + rd32(s + 20) + dbg - rd32(s + 12);
+    if (!d) return;
+    for (i = 0; i < n; i++) {
+        if (rd32(d + i * 28 + 12) == 4) return;
+        cv |= rd32(d + i * 28 + 12) == 2;
+    }
+    if (!cv) return;
+    for (i = 0; i < n; i++)
+        if (rd32(d + i * 28 + 12) <= 8) memmove(d + k++ * 28, d + i * 28, 28);
+    if (k == n) die("no room in the debug directory for the misc record");
+    memset(d + k * 28, 0, (n - k) * 28);
+    m = d + k++ * 28;
+    wr32(m + 4, rd32(nt + 8));                  /* the time stamp of the image */
+    wr32(m + 12, 4);                            /* IMAGE_DEBUG_TYPE_MISC */
+    wr32(m + 16, MISC_SIZE);
+    wr32(m + 24, pesize);
+    wr32(opt + 96 + 6 * 8 + 4, k * 28);
+    for (e = name; *e; e++)
+        if (*e == '\\' || *e == '/' || *e == ':') b = e + 1;
+    if (!(e = strrchr(b, '.')) || e == b) die("the image has no extension");
+    m = pe + pesize;
+    memset(m, 0, MISC_SIZE);
+    wr32(m, 1);                                 /* IMAGE_DEBUG_MISC_EXENAME */
+    wr32(m + 4, MISC_SIZE);
+    snprintf((char *)m + 12, MISC_SIZE - 12, "%s\\%.*s.dbg", e + 1, (int)(e - b), b);
+    for (c = (char *)m + 12; *c; c++) *c = tolower(*c);
+    pesize += MISC_SIZE;
+}
+
+static int fixup(int argc, char **argv)
+{
+    const char *name = argv[argc - 1], *v = 0;
+    unsigned major, minor;
+    int i, m = 0;
+
+    for (i = 1; i < argc - 1; i++)
+        if (!strcmp(argv[i], "-version") && i + 2 < argc) v = argv[++i];
+        else if (!strcmp(argv[i], "-misc")) m = 1;
+        else die(USAGE);
     readpe(name);
-    wr16(opt + 48, major);
-    wr16(opt + 50, minor);
+    if (v) {
+        if (sscanf(v, "%u.%u", &major, &minor) != 2) die("the version is major.minor");
+        wr16(opt + 48, major);
+        wr16(opt + 50, minor);
+    }
+    if (m) misc(name);
     writepe(name);
     return 0;
 }
@@ -260,11 +328,11 @@ int main(int argc, char **argv)
 
     if (argc == 4 && !strcmp(argv[1], "-rom"))
         return rom(argv[2], argv[3]);
-    if (argc == 4 && !strcmp(argv[1], "-version"))
-        return version(argv[2], argv[3]);
+    if (argc >= 3 && (!strcmp(argv[1], "-version") || !strcmp(argv[1], "-misc")))
+        return fixup(argc, argv);
     if (argc == 4 && !strcmp(argv[1], "-align"))
         return alignimage(argv[2], argv[3]);
-    if (argc < 4) die("usage: pe2img image.exe address out.bin [out.elf] | pe2img -rom image.exe out.exe | pe2img -version major.minor image.exe | pe2img -align alignment image.exe");
+    if (argc < 4) die(USAGE);
     base = strtoul(argv[2], 0, 0);
     readpe(argv[1]);
     for (i = 0; i < nsec; i++) {

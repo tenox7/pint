@@ -1,0 +1,6 @@
+#ntdiff private/windows/shell/quikview/stream/work/exe2/vs_exe2.c
+=1 1 1008
++
++                            case IMAGE_FILE_MACHINE_ARMNT:
++                                PutString(EXE_ARMNT, hProc);
+=1 1008 1587

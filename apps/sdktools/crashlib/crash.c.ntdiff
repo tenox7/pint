@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/crashlib/crash.c
+=1 1 1230
++#elif defined(_M_ARM)
++    DumpHeader.MachineImageType = IMAGE_FILE_MACHINE_ARMNT;
+=1 1231 191

@@ -1,0 +1,4 @@
+#ntdiff private/oleauto/src/typelib/sheapmgr.hxx
+=1 1 90
++#if HP_R4000 || HP_ALPHA || HP_ARM
+=1 92 966

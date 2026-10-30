@@ -74,7 +74,9 @@ for c in conv tran; do build /work/private/fp32/$c || ok=0; done
 [ $ok = 1 ] || exit 1
 
 # The DLL library leaves out the startup of the client images: crt32\makefile
-# lists its startup objects, and dllstuff gives it only crtlib (the DLL entry).
+# lists its startup objects, with crt0init (INITOBJECTS: the bounds of the sections of
+# the initializers, which crt0dat of the DLL runs), and dllstuff gives it only crtlib
+# (the DLL entry).
 # crtdll.lib takes txtmode, ncommode and tlssup from libcmt (crtlib\makefile):
 # the _fmode and _commode of the image, which crtexe hands to the DLL, and dllsupp its
 # _fltused (dllsupp.asm of x86), which Microsoft C for ARM references as that of x86 does.
@@ -85,7 +87,7 @@ DLL) [ -f $OUT/libcmt.lib ] || { echo "   build MT first: crtdll.lib takes txtmo
      ntas $DIR/dllstuff/dllsupp.obj $A/dllstuff/arm/dllsupp.asm || exit 1
      ntlib $OUT/crtdlls.lib $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe,dllsupp}.obj $DIR/startup/dllmain.obj \
          /tmp/mt/{txtmode,ncommode,tlssup}.obj || exit 1
-     rm -f $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe,dllsupp}.obj $DIR/startup/{crt0,crt0init,wincrt0,dllcrt0,dllmain,tlssup}.obj
+     rm -f $DIR/dllstuff/{crtexe,crtexew,crtdll,dllargv,cinitexe,dllsupp}.obj $DIR/startup/{crt0,wincrt0,dllcrt0,dllmain,tlssup}.obj
      echo "   wrote obj/um/crtdlls.lib" ;;
 ST)  for o in binmode commode setargv; do mv $DIR/linkopts/$o.obj $OUT/$o.obj; done
      ntlib $OUT/small.lib $DIR/small/*.obj && rm -rf $DIR/small || exit 1

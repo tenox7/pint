@@ -1,0 +1,32 @@
+#ntdiff private/sdktools/drwatson/mips/context.c
+=1 1 48
++        ptctx->pc = ptctx->context.Pc;
++        ptctx->frame = ptctx->context.Sp;
++        ptctx->stack = ptctx->context.Sp;
+=1 52 4
++
++void
++SkipBreakpoint( PDEBUGPACKET dp, LPDEBUG_EVENT de )
++{
++    PTHREADCONTEXT ptctx;
++    PLIST_ENTRY    List = dp->ThreadList.Flink;
++    CONTEXT        context;
++
++    //
++    // step the thread of the breakpoint exception over its breakpoint
++    // instruction (16-bit Thumb), if it still stands there
++    //
++    while (List != &dp->ThreadList) {
++        ptctx = CONTAINING_RECORD(List, THREADCONTEXT, ThreadList);
++        List = List->Flink;
++        if (ptctx->dwThreadId == de->dwThreadId) {
++            context.ContextFlags = CONTEXT_CONTROL;
++            if (GetThreadContext( ptctx->hThread, &context ) &&
++                context.Pc == (DWORD)de->u.Exception.ExceptionRecord.ExceptionAddress) {
++                context.Pc += 2;
++                SetThreadContext( ptctx->hThread, &context );
++            }
++            break;
++        }
++    }
++}

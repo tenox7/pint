@@ -1,0 +1,18 @@
+#ntdiff private/windows/setup/inf/win4/inf/games.inx
+#crlf
+=1 1 174
++@a:freecell.cnt
++@i:freecell.cnt
++@m:freecell.cnt
++@p:freecell.cnt
+=1 176 16
++@a:winmine.cnt
++@i:winmine.cnt
++@m:winmine.cnt
++@p:winmine.cnt
+=1 193 16
++@a:sol.cnt
++@i:sol.cnt
++@m:sol.cnt
++@p:sol.cnt
+=1 210 10

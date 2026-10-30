@@ -1,0 +1,3183 @@
+#ntdiff private/sdktools/drwatson/mips/disasm.c
+=1 1 10
++    This file provides support disassembly ( arm ).
++
++    Windows NT runs ARM code in the Thumb instruction set alone (Thumb-2):
++    16-bit instructions and 32-bit ones of two halfwords, the first halfword
++    0xe800 or above, with the VFP and Advanced SIMD instructions. They are
++    written in the unified assembler language of ARM. An instruction in an
++    IT block takes its condition from the IT instruction before it, when the
++    instructions are disassembled one after the other.
+=1 12 16
+=1 29 4
++#define OPSTART 31
++
++ULONG   EAaddr = 0;
+=1 45 2
+=1 487 3
+=1 491 7
++// The instruction being disassembled.
++//
++
++static PDEBUGPACKET Dp;
++static ULONG    InstrOffset;            // its address
++static ULONG    Hw1;                    // its first halfword
++static ULONG    Hw2;                    // the second one of a 32-bit instruction
++static ULONG    Cond;                   // its condition: 14 (always) but in an IT block or B<c>
++static BOOLEAN  InItBlock;
++static BOOLEAN  Undefined;              // no instruction: shown as one halfword
++static ULONG    EAsize;                 // bytes it reads or writes at the address below
++static ULONG    EAreg;                  // the address: base register (16: none, the offset alone)
++static ULONG    EAindex;                // index register (16: none)
++static ULONG    EAshift;                // the shift of the index
++static LONG     EAoffset;               // the offset
++
++//
++// The IT state the instruction at ItOffset takes its condition from.
++//
++
++static ULONG    ItState;
++static ULONG    ItOffset;
++
++static PUCHAR CondName[16] = {
++    "eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
++    "hi", "ls", "ge", "lt", "gt", "le", "", ""
++    };
++
++static PUCHAR ShiftName[4] = { "lsl", "lsr", "asr", "ror" };
+=1 496 10
+=1 509 2
++static VOID Thumb16 (VOID);
++static VOID Thumb32 (VOID);
+=1 510 6
++    USHORT      Halfword;
++    ULONG       Size;
++    ULONG       temp;
++    ULONG       Value[2];
+=1 521 7
++                       (LPVOID)&Halfword,
++                       sizeof(USHORT),
++                       NULL
++                      )) {
++        OutputString("???? ????");
+=1 533 4
++    Dp = dp;
++    InstrOffset = *poffset;
++    Hw1 = Halfword;
++    Size = 2;
++    if (Hw1 >= 0xe800) {
+=1 526 1 4
++                           (LPVOID)(*poffset + 2),
++                           (LPVOID)&Halfword,
++                           sizeof(USHORT),
++                           NULL
++                          )) {
++            OutputHex(Hw1, 4, FALSE);
++            OutputString(" ????");
+=1 533 3 4
++        Hw2 = Halfword;
++        Size = 4;
++    }
++
++    //  output hex contents, the halfwords as they are in memory
++
++    OutputHex(Hw1, 4, FALSE);
++    *pBuf++ = ' ';
++    if (Size == 4) {
++        OutputHex(Hw2, 4, FALSE);
++    } else {
++        OutputString("    ");
++    }
++    *pBuf++ = ' ';
++
++    //  the condition of an instruction of an IT block
++
++    if (InstrOffset != ItOffset) {
++        ItState = 0;
++    }
++    InItBlock = (BOOLEAN)((ItState & 0xf) != 0);
++    Cond = InItBlock ? ItState >> 4 : 14;
++    if (InItBlock) {
++        if ((ItState & 7) == 0) {
++            ItState = 0;
++        } else {
++            ItState = (ItState & 0xe0) | ((ItState << 1) & 0x1f);
+=1 602 3 -4
++    EAsize = 0;
++    Undefined = FALSE;
++    if (Size == 2) {
++        Thumb16();
++    } else {
++        Thumb32();
++        if (Undefined) {
++            memset(pBufStart + 14, ' ', 4);
++            Size = 2;
++        }
++    }
++    if (Undefined) {
++        ItState = 0;
++    }
++    ItOffset = InstrOffset + Size;
++
++    if (fEAout && EAsize != 0) {
++        EAaddr = EAoffset;
++        if (EAreg == REGPC) {
++            EAaddr += (InstrOffset + 4) & ~3;
++        } else if (EAreg < 16) {
++            EAaddr += (DWORD)GetRegValue(dp, EAreg + REGBASE);
++        }
++        if (EAindex < 16) {
++            EAaddr += (DWORD)GetRegValue(dp, EAindex + REGBASE) << EAshift;
++        }
+=1 717 7 -4
++                           (LPVOID)Value,
+=1 725 6 -4
++            }
++        } else if (EAsize == 8) {
++            OutputHex(Value[1], 8, FALSE);
++            OutputHex(Value[0], 8, FALSE);
++        } else {
++            temp = Value[0];
+=1 735 4 -4
++    *poffset += Size;
+=1 743 4
++//
++// The parts of an instruction.
++//
++
++static VOID
++OutputOp (PUCHAR Name, ULONG SetFlags, PUCHAR Suffix)
++{
++    OutputString(Name);
++    if (SetFlags) {
++        *pBuf++ = 's';
++    }
++    OutputString(CondName[Cond]);
++    if (Suffix != NULL) {
++        OutputString(Suffix);
++    }
++    BlankFill(OPSTART);
++}
++
++static VOID
++OutputUndefined (VOID)
++{
++    pBuf = pBufStart + 19;
++    OutputString(pszUndef);
++    EAsize = 0;
++    Undefined = TRUE;
++}
++
++static VOID
++OutputComma (VOID)
++{
++    *pBuf++ = ',';
++}
++
++static VOID
++OutputNumber (ULONG Value)
++{
++    ULONG Digits;
++
++    if (Value < 10) {
++        *pBuf++ = (UCHAR)('0' + Value);
++    } else {
++        for (Digits = 1; Digits < 8 && (Value >> (Digits * 4)) != 0; Digits++) {
++        }
++        OutputString("0x");
++        OutputHex(Value, Digits, FALSE);
+=1 851 3
++static VOID
++OutputNumberDecimal (ULONG Value)
++{
++    UCHAR   digit[10];
++    LONG    index = 0;
++
++    do {
++        digit[index++] = (UCHAR)('0' + Value % 10);
++        Value /= 10;
++        }
++    while (Value);
+=1 805 4
++static VOID
++OutputImm (ULONG Value)
++{
++    *pBuf++ = '#';
++    OutputNumber(Value);
++}
++
++static VOID
++OutputSignedImm (ULONG Value, ULONG Add)
++{
++    *pBuf++ = '#';
++    if (!Add) {
++        *pBuf++ = '-';
++    }
++    OutputNumber(Value);
++}
++
++static VOID
++OutputRegs (ULONG Count, ULONG Reg1, ULONG Reg2, ULONG Reg3, ULONG Reg4)
++{
++    OutputReg(Reg1);
++    if (Count > 1) {
++        OutputComma();
++        OutputReg(Reg2);
++    }
++    if (Count > 2) {
++        OutputComma();
++        OutputReg(Reg3);
++    }
++    if (Count > 3) {
++        OutputComma();
++        OutputReg(Reg4);
+=1 851 3
++static VOID
++OutputShift (ULONG Type, ULONG Imm)
++{
++    if (Type == 0 && Imm == 0) {
++        return;
++    }
++    OutputComma();
++    if (Type == 3 && Imm == 0) {
++        OutputString("rrx");
++    } else {
++        OutputString(ShiftName[Type]);
++        *pBuf++ = ' ';
++        OutputImm(Imm == 0 ? 32 : Imm);
+=1 851 3
++//
++// A register list, runs of three registers or more as ranges.  The register
++// numbers of a list wrap after 31.
++//
++
++static VOID
++OutputList (PUCHAR Prefix, ULONG First, ULONG Count, ULONG Step, PUCHAR Lane)
++{
++    ULONG Index;
++    ULONG Last;
++
++    *pBuf++ = '{';
++    for (Index = 0; Index < Count; Index = Last + 1) {
++        if (Index != 0) {
++            OutputComma();
++        }
++        Last = Index;
++        while (Step == 1 && Last + 1 < Count && ((First + Last + 1) & 31) != 0) {
++            Last += 1;
++        }
++        if (Last < Index + 2) {
++            Last = Index;
++        }
++        OutputString(Prefix);
++        OutputNumberDecimal((First + Index * Step) & 31);
++        if (Lane != NULL) {
++            OutputString(Lane);
++        }
++        if (Last != Index) {
++            *pBuf++ = '-';
++            OutputString(Prefix);
++            OutputNumberDecimal((First + Last) & 31);
++            if (Lane != NULL) {
++                OutputString(Lane);
+=1 731 3 -8
++    *pBuf++ = '}';
++}
++
++//
++// The ARM registers of a load or store multiple: sp, lr and pc are never
++// part of a range.
++//
++
++static VOID
++OutputRegList (ULONG Mask)
++{
++    ULONG Reg;
++    ULONG Last;
++    BOOLEAN First = TRUE;
++
++    *pBuf++ = '{';
++    for (Reg = 0; Reg < 16; Reg = Last + 1) {
++        Last = Reg;
++        if ((Mask & (1 << Reg)) == 0) {
++            continue;
++        }
++        if (!First) {
++            OutputComma();
++        }
++        First = FALSE;
++        OutputReg(Reg);
++        while (Last < 12 && (Mask & (1 << (Last + 1))) != 0) {
++            Last += 1;
++        }
++        if (Last >= Reg + 2) {
++            *pBuf++ = '-';
++            OutputReg(Last);
++        } else {
++            Last = Reg;
++        }
++    }
++    *pBuf++ = '}';
++}
++
++//
++// The address of a load or store: [Rn,#imm], [Rn,#imm]! or [Rn],#imm.
++//
++
++static VOID
++OutputAddress (ULONG Rn, ULONG Imm, ULONG Add, ULONG Index, ULONG WriteBack, ULONG Size)
++{
++    *pBuf++ = '[';
++    OutputReg(Rn);
++    if (Index) {
++        if (Imm != 0 || !Add) {
++            OutputComma();
++            OutputSignedImm(Imm, Add);
++        }
++        *pBuf++ = ']';
++        if (WriteBack) {
++            *pBuf++ = '!';
++        }
++    } else {
++        *pBuf++ = ']';
++        OutputComma();
++        OutputSignedImm(Imm, Add);
++    }
++
++    EAsize = Size;
++    EAreg = Rn;
++    EAindex = 16;
++    EAoffset = !Index ? 0 : Add ? (LONG)Imm : -(LONG)Imm;
++}
++
++static VOID
++OutputRegisterAddress (ULONG Rn, ULONG Rm, ULONG Shift, ULONG Size)
++{
++    *pBuf++ = '[';
++    OutputReg(Rn);
++    OutputComma();
++    OutputReg(Rm);
++    if (Shift != 0) {
++        OutputString(",lsl ");
++        OutputImm(Shift);
++    }
++    *pBuf++ = ']';
++
++    EAsize = Size;
++    EAreg = Rn;
++    EAindex = Rm;
++    EAshift = Shift;
++    EAoffset = 0;
++}
++
++//
++// A PC relative address (a literal), Align(PC,4) +/- imm.
++//
++
++static VOID
++OutputLiteral (ULONG Imm, ULONG Add, ULONG Size)
++{
++    LONG Offset = Add ? (LONG)Imm : -(LONG)Imm;
++
++    if (!Add && Imm == 0) {
++        OutputString("[pc,#-0]");
++    } else {
++        OutputDisSymbol(Dp, ((InstrOffset + 4) & ~3) + Offset);
++    }
++    EAsize = Size;
++    EAreg = REGPC;
++    EAindex = 16;
++    EAoffset = Offset;
++}
++
++static VOID
++OutputBranch (LONG Offset)
++{
++    OutputDisSymbol(Dp, InstrOffset + 4 + Offset);
++}
++
++//
++// The .w qualifier of a 32-bit instruction that has a 16-bit encoding too.
++// The 16-bit data-processing instructions set the flags outside an IT block
++// alone (Flags16), and the 16-bit loads and stores of a 5-bit offset take
++// low registers (NarrowOffset).
++//
++
++#define Flags16(S)  ((S) == (ULONG)!InItBlock)
++
++static PUCHAR
++Wide (ULONG Narrow)
++{
++    return Narrow ? ".w" : NULL;
++}
++
++static ULONG
++NarrowOffset (ULONG Rt, ULONG Rn, ULONG Imm, ULONG Size)
++{
++    return Rt < 8 && (Imm & (Size - 1)) == 0 &&
++           ((Rn < 8 && Imm <= 31 * Size) || (Size == 4 && Rn == 13 && Imm <= 1020));
++}
++
++//
++// The constant of a data-processing instruction (ThumbExpandImm), and
++// whether a value is one.
++//
++
++static ULONG
++ThumbExpandImm (ULONG Imm12)
++{
++    ULONG Imm8 = Imm12 & 0xff;
++    ULONG Rotation;
++
++    if ((Imm12 & 0xc00) == 0) {
++        switch ((Imm12 >> 8) & 3) {
++        case 0:
++            return Imm8;
++        case 1:
++            return Imm8 | (Imm8 << 16);
++        case 2:
++            return (Imm8 << 8) | (Imm8 << 24);
++        default:
++            return Imm8 * 0x01010101;
++        }
++    }
++    Imm8 = 0x80 | (Imm12 & 0x7f);
++    Rotation = (Imm12 >> 7) & 0x1f;
++    return (Imm8 >> Rotation) | (Imm8 << (32 - Rotation));
++}
++
++static BOOLEAN
++IsModifiedImm (ULONG Value)
++{
++    ULONG Rotation;
++    ULONG Unrotated;
++
++    if (Value < 0x100 || Value == (Value & 0xff) * 0x01010101) {
++        return TRUE;
++    }
++    if ((Value >> 16) == (Value & 0xffff) &&
++        ((Value & 0xff00ff00) == 0 || (Value & 0x00ff00ff) == 0)) {
++        return TRUE;
++    }
++    for (Rotation = 8; Rotation < 32; Rotation++) {
++        Unrotated = (Value << Rotation) | (Value >> (32 - Rotation));
++        if (Unrotated >= 0x80 && Unrotated <= 0xff) {
++            return TRUE;
++        }
++    }
+=1 534 3 -4
++//
++// The special undefined instructions of Windows on ARM (ntarm.h).
++//
++
++static PUCHAR
++UdfName (ULONG Imm)
++{
++    switch (Imm) {
++    case 0xfe:
++        return "__debugbreak";
++    case 0xfd:
++        return "__debugservice";
++    case 0xfc:
++        return "__assertfail";
++    case 0xfb:
++        return "__fastfail";
++    case 0xfa:
++        return "__rdpmccntr64";
++    case 0xf9:
++        return "__brkdiv0";
++    }
++    return NULL;
++}
++
++//
++// 16-bit instructions.
++//
++
++static VOID
++Misc16 (VOID)
++{
++    ULONG Opc = (Hw1 >> 5) & 0x7f;
++    ULONG Rd = Hw1 & 7;
++    ULONG Rm = (Hw1 >> 3) & 7;
++    ULONG Mask;
++    ULONG Index;
++    static PUCHAR ExtendName[4] = { "sxth", "sxtb", "uxth", "uxtb" };
++    static PUCHAR RevName[4] = { "rev", "rev16", "hlt", "revsh" };
++    static PUCHAR HintName[6] = { "nop", "yield", "wfe", "wfi", "sev", "sevl" };
++    UCHAR It[6];
++
++    if ((Opc & 0x78) == 0x00) {
++        OutputOp((Opc & 4) ? "sub" : "add", FALSE, NULL);
++        OutputRegs(2, 13, 13, 0, 0);
++        OutputComma();
++        OutputImm((Hw1 & 0x7f) << 2);
++    } else if ((Opc & 0x28) == 0x08) {
++        OutputOp((Hw1 & 0x800) ? "cbnz" : "cbz", FALSE, NULL);
++        OutputReg(Rd);
++        OutputComma();
++        OutputBranch((((Hw1 >> 3) & 0x1f) << 1) | ((Hw1 & 0x200) >> 3));
++    } else if ((Opc & 0x78) == 0x10) {
++        OutputOp(ExtendName[(Hw1 >> 6) & 3], FALSE, NULL);
++        OutputRegs(2, Rd, Rm, 0, 0);
++    } else if ((Opc & 0x70) == 0x20) {
++        OutputOp("push", FALSE, NULL);
++        OutputRegList((Hw1 & 0xff) | ((Hw1 & 0x100) << 6));
++    } else if ((Opc & 0x70) == 0x60) {
++        OutputOp("pop", FALSE, NULL);
++        OutputRegList((Hw1 & 0xff) | ((Hw1 & 0x100) << 7));
++    } else if (Opc == 0x32) {
++        OutputString("setend");
++        BlankFill(OPSTART);
++        OutputString((Hw1 & 8) ? "be" : "le");
++    } else if (Opc == 0x33) {
++        OutputString((Hw1 & 0x10) ? "cpsid" : "cpsie");
++        BlankFill(OPSTART);
++        if (Hw1 & 4) {
++            *pBuf++ = 'a';
++        }
++        if (Hw1 & 2) {
++            *pBuf++ = 'i';
++        }
++        if (Hw1 & 1) {
++            *pBuf++ = 'f';
++        }
++    } else if ((Opc & 0x78) == 0x50) {
++        Index = (Hw1 >> 6) & 3;
++        OutputOp(RevName[Index], FALSE, NULL);
++        if (Index == 2) {
++            OutputImm(Hw1 & 0x3f);
++        } else {
++            OutputRegs(2, Rd, Rm, 0, 0);
++        }
++    } else if ((Opc & 0x78) == 0x70) {
++        OutputString("bkpt");
++        BlankFill(OPSTART);
++        OutputImm(Hw1 & 0xff);
++    } else if ((Opc & 0x78) == 0x78) {
++        Mask = Hw1 & 0xf;
++        if (Mask != 0) {
++
++            //
++            // IT: then or else for each instruction after the first.
++            //
++
++            It[0] = 'i';
++            It[1] = 't';
++            for (Index = 2; (Mask & 7) != 0; Index++) {
++                It[Index] = (UCHAR)((((Mask >> 3) ^ (Hw1 >> 4)) & 1) ? 'e' : 't');
++                Mask = (Mask << 1) & 0xf;
++            }
++            It[Index] = '\0';
++            OutputString(It);
++            BlankFill(OPSTART);
++            Index = (Hw1 >> 4) & 0xf;
++            OutputString(Index == 14 ? "al" : Index == 15 ? "nv" : CondName[Index]);
++            ItState = Hw1 & 0xff;
++        } else {
++            Index = (Hw1 >> 4) & 0xf;
++            if (Index < 6) {
++                OutputOp(HintName[Index], FALSE, NULL);
++            } else {
++                OutputUndefined();
++            }
++        }
++    } else {
++        OutputUndefined();
+=1 851 3
++static VOID
++Thumb16 (VOID)
++{
++    ULONG Op = Hw1 >> 10;
++    ULONG S = !InItBlock;
++    ULONG Rd = Hw1 & 7;
++    ULONG Rn = (Hw1 >> 3) & 7;
++    ULONG Rm = (Hw1 >> 6) & 7;
++    ULONG Opc;
++    ULONG Imm;
++    ULONG L;
++    ULONG Size;
++    PUCHAR Name;
++    static PUCHAR DpName[16] = {
++        "and", "eor", "lsl", "lsr", "asr", "adc", "sbc", "ror",
++        "tst", "rsb", "cmp", "cmn", "orr", "mul", "bic", "mvn"
++        };
++    static PUCHAR LsName[8] = {
++        "str", "strh", "strb", "ldrsb", "ldr", "ldrh", "ldrb", "ldrsh"
++        };
++    static UCHAR LsSize[8] = { 4, 2, 1, 1, 4, 2, 1, 2 };
++
++    if (Op < 0x10) {
++
++        //
++        // Shift (immediate), add, subtract, move and compare.
++        //
++
++        Opc = (Hw1 >> 9) & 0x1f;
++        Imm = (Hw1 >> 6) & 0x1f;
++        if (Opc < 12) {
++            if (Opc < 4 && Imm == 0) {
++
++                //
++                // MOVS (register), which an IT block may not hold.
++                //
++
++                Cond = 14;
++                OutputOp("mov", TRUE, NULL);
++                OutputRegs(2, Rd, Rn, 0, 0);
++            } else {
++                OutputOp(ShiftName[Opc >> 2], S, NULL);
++                OutputRegs(2, Rd, Rn, 0, 0);
++                OutputComma();
++                OutputImm(Imm == 0 ? 32 : Imm);
++            }
++        } else if (Opc < 16) {
++            OutputOp((Opc & 1) ? "sub" : "add", S, NULL);
++            OutputRegs(2, Rd, Rn, 0, 0);
++            OutputComma();
++            if (Opc < 14) {
++                OutputReg(Rm);
++            } else {
++                OutputImm(Rm);
++            }
++        } else {
++            Rd = (Hw1 >> 8) & 7;
++            switch (Opc >> 2) {
++            case 4:
++                OutputOp("mov", S, NULL);
++                OutputReg(Rd);
++                break;
++            case 5:
++                OutputOp("cmp", FALSE, NULL);
++                OutputReg(Rd);
++                break;
++            default:
++                OutputOp((Opc & 4) ? "sub" : "add", S, NULL);
++                OutputReg(Rd);
++                if ((Hw1 & 0xff) >= 8) {
++                    OutputComma();
++                    OutputReg(Rd);
++                }
++                break;
++            }
++            OutputComma();
++            OutputImm(Hw1 & 0xff);
++        }
++
++    } else if (Op == 0x10) {
++
++        //
++        // Data-processing.
++        //
++
++        Opc = (Hw1 >> 6) & 0xf;
++        switch (Opc) {
++        case 8:
++        case 10:
++        case 11:
++            OutputOp(DpName[Opc], FALSE, NULL);
++            OutputRegs(2, Rd, Rn, 0, 0);
++            break;
++        case 9:
++            OutputOp("rsb", S, NULL);
++            OutputRegs(2, Rd, Rn, 0, 0);
++            OutputComma();
++            OutputImm(0);
++            break;
++        case 13:
++            OutputOp("mul", S, NULL);
++            OutputRegs(3, Rd, Rn, Rd, 0);
++            break;
++        case 15:
++            OutputOp("mvn", S, NULL);
++            OutputRegs(2, Rd, Rn, 0, 0);
++            break;
++        default:
++            OutputOp(DpName[Opc], S, NULL);
++            OutputRegs(3, Rd, Rd, Rn, 0);
++            break;
++        }
++
++    } else if (Op == 0x11) {
++
++        //
++        // Special data instructions and branch and exchange.
++        //
++
++        Opc = (Hw1 >> 6) & 0xf;
++        Rd = ((Hw1 >> 4) & 8) | (Hw1 & 7);
++        Rm = (Hw1 >> 3) & 0xf;
++        if (Opc < 4) {
++            OutputOp("add", FALSE, NULL);
++            OutputRegs(3, Rd, Rd, Rm, 0);
++        } else if (Opc < 12) {
++            OutputOp(Opc < 8 ? "cmp" : "mov", FALSE, NULL);
++            OutputRegs(2, Rd, Rm, 0, 0);
++        } else {
++            OutputOp(Opc < 14 ? "bx" : "blx", FALSE, NULL);
++            OutputReg(Rm);
++        }
++
++    } else if (Op < 0x14) {
++
++        //
++        // Load literal.
++        //
++
++        OutputOp("ldr", FALSE, NULL);
++        OutputReg((Hw1 >> 8) & 7);
++        OutputComma();
++        OutputLiteral((Hw1 & 0xff) << 2, TRUE, 4);
++
++    } else if (Op < 0x18) {
++
++        //
++        // Load and store, register offset.
++        //
++
++        Opc = (Hw1 >> 9) & 7;
++        OutputOp(LsName[Opc], FALSE, NULL);
++        OutputReg(Rd);
++        OutputComma();
++        OutputRegisterAddress(Rn, Rm, 0, LsSize[Opc]);
++
++    } else if (Op < 0x24) {
++
++        //
++        // Load and store, immediate offset: word, byte, halfword.
++        //
++
++        L = (Hw1 >> 11) & 1;
++        if (Op < 0x1c) {
++            Name = L ? "ldr" : "str";
++            Size = 4;
++        } else if (Op < 0x20) {
++            Name = L ? "ldrb" : "strb";
++            Size = 1;
++        } else {
++            Name = L ? "ldrh" : "strh";
++            Size = 2;
++        }
++        OutputOp(Name, FALSE, NULL);
++        OutputReg(Rd);
++        OutputComma();
++        OutputAddress(Rn, ((Hw1 >> 6) & 0x1f) * Size, TRUE, TRUE, FALSE, Size);
++
++    } else if (Op < 0x28) {
++
++        //
++        // Load and store, SP relative.
++        //
++
++        OutputOp((Hw1 & 0x800) ? "ldr" : "str", FALSE, NULL);
++        OutputReg((Hw1 >> 8) & 7);
++        OutputComma();
++        OutputAddress(13, (Hw1 & 0xff) << 2, TRUE, TRUE, FALSE, 4);
++
++    } else if (Op < 0x2a) {
++        OutputOp("adr", FALSE, NULL);
++        OutputReg((Hw1 >> 8) & 7);
++        OutputComma();
++        OutputDisSymbol(Dp, ((InstrOffset + 4) & ~3) + ((Hw1 & 0xff) << 2));
++
++    } else if (Op < 0x2c) {
++        OutputOp("add", FALSE, NULL);
++        OutputRegs(2, (Hw1 >> 8) & 7, 13, 0, 0);
++        OutputComma();
++        OutputImm((Hw1 & 0xff) << 2);
++
++    } else if (Op < 0x30) {
++        Misc16();
++
++    } else if (Op < 0x34) {
++
++        //
++        // Store and load multiple.
++        //
++
++        Rn = (Hw1 >> 8) & 7;
++        L = (Hw1 >> 11) & 1;
++        OutputOp(L ? "ldm" : "stm", FALSE, NULL);
++        OutputReg(Rn);
++        if (!L || (Hw1 & (1 << Rn)) == 0) {
++            *pBuf++ = '!';
++        }
++        OutputComma();
++        OutputRegList(Hw1 & 0xff);
++
++    } else if (Op < 0x38) {
++
++        //
++        // Conditional branch, permanently undefined, supervisor call.
++        //
++
++        Opc = (Hw1 >> 8) & 0xf;
++        if (Opc == 14) {
++            Name = UdfName(Hw1 & 0xff);
++            if (Name != NULL) {
++                OutputString(Name);
++            } else {
++                OutputOp("udf", FALSE, NULL);
++                if (Hw1 & 0xff) {
++                    OutputImm(Hw1 & 0xff);
++                }
++            }
++        } else if (Opc == 15) {
++            OutputOp("svc", FALSE, NULL);
++            OutputImm(Hw1 & 0xff);
++        } else {
++            Cond = Opc;
++            OutputOp("b", FALSE, NULL);
++            OutputBranch((LONG)(Hw1 << 24) >> 23);
++        }
++
++    } else {
++        OutputOp("b", FALSE, NULL);
++        OutputBranch((LONG)(Hw1 << 21) >> 20);
+=1 851 3
++//
++// 32-bit instructions.
++//
++
++static VOID
++LoadStoreMultiple (VOID)
++{
++    ULONG Op = (Hw1 >> 7) & 3;
++    ULONG W = (Hw1 >> 5) & 1;
++    ULONG L = (Hw1 >> 4) & 1;
++    ULONG Rn = Hw1 & 0xf;
++
++    if (Op == 0 || Op == 3) {
++        if (L) {
++            OutputOp(Op == 0 ? "rfedb" : "rfe", FALSE, NULL);
++            OutputReg(Rn);
++            if (W) {
++                *pBuf++ = '!';
++            }
++        } else {
++            OutputOp(Op == 0 ? "srsdb" : "srs", FALSE, NULL);
++            OutputReg(Rn);
++            if (W) {
++                *pBuf++ = '!';
++            }
++            OutputComma();
++            OutputImm(Hw2 & 0x1f);
++        }
++    } else if (W && Rn == 13 && (Op == 1) == (L == 1) && (Hw2 & (Hw2 - 1)) != 0) {
++        OutputOp(L ? "pop" : "push", FALSE, Wide((Hw2 & ~(L ? 0x80ff : 0x40ff)) == 0));
++        OutputRegList(Hw2);
++    } else {
++        OutputOp(Op == 1 ? (L ? "ldm" : "stm") : (L ? "ldmdb" : "stmdb"), FALSE,
++                 Wide(Op == 1 && Rn < 8 && (Hw2 & 0xff00) == 0 && (L ? W != ((Hw2 >> Rn) & 1) : W)));
++        OutputReg(Rn);
++        if (W) {
++            *pBuf++ = '!';
++        }
++        OutputComma();
++        OutputRegList(Hw2);
+=1 851 3
++static VOID
++LoadStoreDual (VOID)
++{
++    ULONG Op1 = (Hw1 >> 7) & 3;
++    ULONG Op2 = (Hw1 >> 4) & 3;
++    ULONG Op3 = (Hw2 >> 4) & 0xf;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rt = Hw2 >> 12;
++    ULONG Rt2 = (Hw2 >> 8) & 0xf;
++    ULONG Rd = Hw2 & 0xf;
++    static PUCHAR ExName[2][16] = {
++        { NULL,   NULL,   NULL,  NULL, "strexb", "strexh", NULL,    "strexd",
++          "stlb", "stlh", "stl", NULL, "stlexb", "stlexh", "stlex", "stlexd" },
++        { NULL,   NULL,   NULL,  NULL, "ldrexb", "ldrexh", NULL,    "ldrexd",
++          "ldab", "ldah", "lda", NULL, "ldaexb", "ldaexh", "ldaex", "ldaexd" }
++        };
++
++    if ((Op1 & 2) != 0 || (Op2 & 2) != 0) {
++        OutputOp((Op2 & 1) ? "ldrd" : "strd", FALSE, NULL);
++        OutputRegs(2, Rt, Rt2, 0, 0);
++        OutputComma();
++        if (Rn == 15 && (Op1 & 2) != 0 && (Op2 & 2) == 0) {
++            OutputLiteral((Hw2 & 0xff) << 2, Op1 & 1, 8);
++        } else {
++            OutputAddress(Rn, (Hw2 & 0xff) << 2, Op1 & 1, Op1 >> 1, Op2 >> 1, 8);
++        }
++    } else if (Op1 == 0) {
++        if (Op2 == 0) {
++            OutputOp("strex", FALSE, NULL);
++            OutputRegs(2, Rt2, Rt, 0, 0);
++        } else {
++            OutputOp("ldrex", FALSE, NULL);
++            OutputReg(Rt);
++        }
++        OutputComma();
++        if (Rn == 15) {
++            OutputLiteral((Hw2 & 0xff) << 2, TRUE, 4);
++        } else {
++            OutputAddress(Rn, (Hw2 & 0xff) << 2, TRUE, TRUE, FALSE, 4);
++        }
++    } else if (Op2 == 1 && Op3 < 2) {
++        OutputOp(Op3 ? "tbh" : "tbb", FALSE, NULL);
++        *pBuf++ = '[';
++        OutputRegs(2, Rn, Rd, 0, 0);
++        if (Op3) {
++            OutputString(",lsl #1");
++        }
++        *pBuf++ = ']';
++    } else if ((Op2 & 2) == 0 && ExName[Op2][Op3] != NULL) {
++
++        //
++        // The exclusive loads and stores of bytes, halfwords and doublewords,
++        // and the load-acquire and store-release instructions of ARMv8.
++        //
++
++        OutputOp(ExName[Op2][Op3], FALSE, NULL);
++        if (Op2 == 0 && (Op3 & 4)) {
++            OutputReg(Rd);
++            OutputComma();
++        }
++        OutputReg(Rt);
++        if ((Op3 & 3) == 3) {
++            OutputComma();
++            OutputReg(Rt2);
++        }
++        OutputComma();
++        if (Rn == 15) {
++            OutputLiteral(0, TRUE, 1 << (Op3 & 3));
++        } else {
++            OutputAddress(Rn, 0, TRUE, TRUE, FALSE, 1 << (Op3 & 3));
++        }
++    } else {
++        OutputUndefined();
+=1 851 3
++static VOID
++DataProcessingShiftedRegister (VOID)
++{
++    ULONG Op = (Hw1 >> 5) & 0xf;
++    ULONG S = (Hw1 >> 4) & 1;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rd = (Hw2 >> 8) & 0xf;
++    ULONG Rm = Hw2 & 0xf;
++    ULONG Type = (Hw2 >> 4) & 3;
++    ULONG Imm = ((Hw2 >> 10) & 0x1c) | ((Hw2 >> 6) & 3);
++    ULONG Plain = Type == 0 && Imm == 0;
++    ULONG Narrow;
++    static PUCHAR Name[16] = {
++        "and", "bic", "orr", "orn", "eor", NULL, NULL, NULL,
++        "add", NULL,  "adc", "sbc", NULL,  "sub", "rsb", NULL
++        };
++    static PUCHAR TestName[16] = {
++        "tst", NULL, NULL, NULL, "teq", NULL, NULL, NULL,
++        "cmn", NULL, NULL, NULL, NULL,  "cmp", NULL, NULL
++        };
++
++    if (Rd == 15 && S && TestName[Op] != NULL) {
++        OutputOp(TestName[Op], FALSE, Wide(Plain && (Op == 13 || (Op != 4 && Rn < 8 && Rm < 8))));
++        OutputRegs(2, Rn, Rm, 0, 0);
++        OutputShift(Type, Imm);
++    } else if (Rd == 15 && (TestName[Op] != NULL || Op == 6)) {
++        OutputUndefined();
++    } else if (Op == 2 && Rn == 15) {
++
++        //
++        // Move and the shifts by an immediate.
++        //
++
++        if (Type == 0 && Imm == 0) {
++            OutputOp("mov", S, (!S || (Rd < 8 && Rm < 8 && !InItBlock)) ? ".w" : NULL);
++            OutputRegs(2, Rd, Rm, 0, 0);
++        } else if (Type == 3 && Imm == 0) {
++            OutputOp("rrx", S, NULL);
++            OutputRegs(2, Rd, Rm, 0, 0);
++        } else {
++            OutputOp(ShiftName[Type], S, Wide(Type != 3 && Flags16(S) && Rd < 8 && Rm < 8));
++            OutputRegs(2, Rd, Rm, 0, 0);
++            OutputComma();
++            OutputImm(Imm == 0 ? 32 : Imm);
++        }
++    } else if (Op == 3 && Rn == 15) {
++        OutputOp("mvn", S, Wide(Plain && Flags16(S) && Rd < 8 && Rm < 8));
++        OutputRegs(2, Rd, Rm, 0, 0);
++        OutputShift(Type, Imm);
++    } else if (Op == 6 && S == 0 && (Type & 1) == 0) {
++        OutputOp(Type ? "pkhtb" : "pkhbt", FALSE, NULL);
++        OutputRegs(3, Rd, Rn, Rm, 0);
++        OutputShift(Type, Imm);
++    } else if (Name[Op] != NULL) {
++        if (Op == 8 || Op == 13) {
++            Narrow = (Flags16(S) && Rd < 8 && Rn < 8 && Rm < 8) || (Op == 8 && !S && Rd == Rn);
++        } else {
++            Narrow = Op != 3 && Op != 14 && Flags16(S) && Rd == Rn && Rd < 8 && Rm < 8;
++        }
++        OutputOp(Name[Op], S, Wide(Plain && Narrow));
++        OutputRegs(3, Rd, Rn, Rm, 0);
++        OutputShift(Type, Imm);
++    } else {
++        OutputUndefined();
+=1 851 3
++static VOID
++DataProcessingModifiedImmediate (VOID)
++{
++    ULONG Op = (Hw1 >> 5) & 0xf;
++    ULONG S = (Hw1 >> 4) & 1;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rd = (Hw2 >> 8) & 0xf;
++    ULONG Imm = ThumbExpandImm(((Hw1 & 0x400) << 1) | ((Hw2 >> 4) & 0x700) | (Hw2 & 0xff));
++    ULONG Narrow;
++    static PUCHAR Name[16] = {
++        "and", "bic", "orr", "orn", "eor", NULL, NULL, NULL,
++        "add", NULL,  "adc", "sbc", NULL,  "sub", "rsb", NULL
++        };
++    static PUCHAR TestName[16] = {
++        "tst", NULL, NULL, NULL, "teq", NULL, NULL, NULL,
++        "cmn", NULL, NULL, NULL, NULL,  "cmp", NULL, NULL
++        };
++
++    if (Rd == 15 && S && TestName[Op] != NULL) {
++        OutputOp(TestName[Op], FALSE, Wide(Op == 13 && Rn < 8 && Imm <= 255));
++        OutputReg(Rn);
++    } else if (Rd == 15 && TestName[Op] != NULL) {
++        OutputUndefined();
++        return;
++    } else if ((Op == 2 || Op == 3) && Rn == 15) {
++        OutputOp(Op == 2 ? "mov" : "mvn", S, Wide(Op == 2 && Flags16(S) && Rd < 8 && Imm <= 255));
++        OutputReg(Rd);
++    } else if (Name[Op] != NULL) {
++        if (Op == 8 || Op == 13) {
++            Narrow = (Flags16(S) && Rd < 8 && Rn < 8 && (Imm <= 7 || (Rd == Rn && Imm <= 255))) ||
++                     (!S && Rn == 13 && (Imm & 3) == 0 &&
++                      ((Rd == 13 && Imm <= 508) || (Op == 8 && Rd < 8 && Imm <= 1020)));
++        } else {
++            Narrow = Op == 14 && Flags16(S) && Rd < 8 && Rn < 8 && Imm == 0;
++        }
++        OutputOp(Name[Op], S, Wide(Narrow));
++        OutputRegs(2, Rd, Rn, 0, 0);
++    } else {
++        OutputUndefined();
++        return;
++    }
++    OutputComma();
++    OutputImm(Imm);
++}
++
++static VOID
++DataProcessingPlainImmediate (VOID)
++{
++    ULONG Op = (Hw1 >> 4) & 0x1f;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rd = (Hw2 >> 8) & 0xf;
++    ULONG Imm12 = ((Hw1 & 0x400) << 1) | ((Hw2 >> 4) & 0x700) | (Hw2 & 0xff);
++    ULONG Imm16 = ((Hw1 & 0xf) << 12) | Imm12;
++    ULONG Lsb = ((Hw2 >> 10) & 0x1c) | ((Hw2 >> 6) & 3);
++    ULONG Bits = Hw2 & 0x1f;
++
++    switch (Op) {
++    case 0x00:
++    case 0x0a:
++        if (Rn == 15 && (Op == 0 || Imm12 != 0)) {
++            OutputOp("adr", FALSE, Wide(Op == 0 && Rd < 8 && (Imm12 & 3) == 0 && Imm12 <= 1020));
++            OutputReg(Rd);
++            OutputComma();
++            OutputDisSymbol(Dp, ((InstrOffset + 4) & ~3) + (Op ? -(LONG)Imm12 : Imm12));
++        } else {
++            OutputOp(Op ? (IsModifiedImm(Imm12) ? "subw" : "sub") : (IsModifiedImm(Imm12) ? "addw" : "add"), FALSE, NULL);
++            OutputRegs(2, Rd, Rn, 0, 0);
++            OutputComma();
++            OutputImm(Imm12);
++        }
++        break;
++    case 0x04:
++        OutputOp(IsModifiedImm(Imm16) ? "movw" : "mov", FALSE, NULL);
++        OutputReg(Rd);
++        OutputComma();
++        OutputImm(Imm16);
++        break;
++    case 0x0c:
++        OutputOp("movt", FALSE, NULL);
++        OutputReg(Rd);
++        OutputComma();
++        OutputImm(Imm16);
++        break;
++    case 0x10:
++    case 0x12:
++    case 0x18:
++    case 0x1a:
++        if ((Op & 2) && Lsb == 0) {
++            OutputOp(Op & 8 ? "usat16" : "ssat16", FALSE, NULL);
++            OutputReg(Rd);
++            OutputComma();
++            OutputImm((Bits & 0xf) + (Op & 8 ? 0 : 1));
++            OutputComma();
++            OutputReg(Rn);
++        } else {
++            OutputOp(Op & 8 ? "usat" : "ssat", FALSE, NULL);
++            OutputReg(Rd);
++            OutputComma();
++            OutputImm(Bits + (Op & 8 ? 0 : 1));
++            OutputComma();
++            OutputReg(Rn);
++            OutputShift(Op & 2, Lsb);
++        }
++        break;
++    case 0x14:
++    case 0x1c:
++        OutputOp(Op & 8 ? "ubfx" : "sbfx", FALSE, NULL);
++        OutputRegs(2, Rd, Rn, 0, 0);
++        OutputComma();
++        OutputImm(Lsb);
++        OutputComma();
++        OutputImm(Bits + 1);
++        break;
++    case 0x16:
++        if (Rn == 15) {
++            OutputOp("bfc", FALSE, NULL);
++            OutputReg(Rd);
++        } else {
++            OutputOp("bfi", FALSE, NULL);
++            OutputRegs(2, Rd, Rn, 0, 0);
++        }
++        OutputComma();
++        OutputImm(Lsb);
++        OutputComma();
++        OutputSignedImm(Bits + 1 >= Lsb ? Bits + 1 - Lsb : Lsb - Bits - 1, Bits + 1 >= Lsb);
++        break;
++    default:
++        OutputUndefined();
++        break;
+=1 851 3
++//
++// MSR and MRS: the CPSR or SPSR, or a banked register of another mode (the
++// Virtualization Extensions; a value SYSm does not name shows as the SPSR).
++//
++
++static VOID
++MoveStatus (VOID)
++{
++    ULONG Mrs = (Hw1 & 0x60) == 0x60;
++    ULONG R = (Hw1 >> 4) & 1;
++    ULONG SysM = (Hw2 & 0x10) | (Mrs ? Hw1 & 0xf : (Hw2 >> 8) & 0xf);
++    static PUCHAR BankedName[32] = {
++        "r8_usr", "r9_usr", "r10_usr", "r11_usr", "r12_usr", "sp_usr", "lr_usr",  NULL,
++        "r8_fiq", "r9_fiq", "r10_fiq", "r11_fiq", "r12_fiq", "sp_fiq", "lr_fiq",  NULL,
++        "lr_irq", "sp_irq", "lr_svc",  "sp_svc",  "lr_abt",  "sp_abt", "lr_und",  "sp_und",
++        NULL,     NULL,     NULL,      NULL,      "lr_mon",  "sp_mon", "elr_hyp", "sp_hyp"
++        };
++
++    OutputOp(Mrs ? "mrs" : "msr", FALSE, NULL);
++    if (Mrs) {
++        OutputReg((Hw2 >> 8) & 0xf);
++        OutputComma();
++    }
++    if ((Hw2 & 0x20) == 0) {
++        OutputString(R ? "spsr" : "cpsr");
++        if (!Mrs && (Hw2 & 0xf00) != 0) {
++            *pBuf++ = '_';
++            if (Hw2 & 0x800) {
++                *pBuf++ = 'f';
++            }
++            if (Hw2 & 0x400) {
++                *pBuf++ = 's';
++            }
++            if (Hw2 & 0x200) {
++                *pBuf++ = 'x';
++            }
++            if (Hw2 & 0x100) {
++                *pBuf++ = 'c';
++            }
++        }
++    } else if (R && (SysM == 14 || SysM == 28 || SysM == 30 ||
++                     (SysM >= 16 && SysM <= 22 && (SysM & 1) == 0))) {
++
++        //
++        // The SPSR of a mode: SYSm of the mode's lr (elr_hyp).
++        //
++
++        OutputString("spsr_");
++        OutputString(strchr(BankedName[SysM], '_') + 1);
++    } else if (!R && BankedName[SysM] != NULL) {
++        OutputString(BankedName[SysM]);
++    } else {
++        OutputString("spsr");
++    }
++    if (!Mrs) {
++        OutputComma();
++        OutputReg(Hw1 & 0xf);
+=1 851 3
++static VOID
++BranchMisc (VOID)
++{
++    ULONG Op = (Hw1 >> 4) & 0x7f;
++    ULONG Op1 = (Hw2 >> 12) & 7;
++    ULONG S = (Hw1 >> 10) & 1;
++    ULONG J1 = (Hw2 >> 13) & 1;
++    ULONG J2 = (Hw2 >> 11) & 1;
++    ULONG Option;
++    ULONG Rd;
++    ULONG Rn;
++    ULONG Imm;
++    LONG Offset;
++    static PUCHAR HintName[6] = { "nop", "yield", "wfe", "wfi", "sev", "sevl" };
++    static PUCHAR BarrierName[16] = {
++        "#0", "oshld", "oshst", "osh", "#4", "nshld", "nshst", "nsh",
++        "#8", "ishld", "ishst", "ish", "#12", "ld", "st", ""
++        };
++
++    if (Op1 == 2 && Op == 0x7f) {
++        OutputOp("udf", FALSE, NULL);
++        if (((Hw1 & 0xf) << 12) | (Hw2 & 0xfff)) {
++            OutputImm(((Hw1 & 0xf) << 12) | (Hw2 & 0xfff));
++        }
++        return;
++    }
++
++    if ((Op1 & 5) == 0) {
++        if ((Op & 0x38) != 0x38) {
++            Offset = (S ? 0xfff00000 : 0) | (J2 << 19) | (J1 << 18) |
++                     ((Hw1 & 0x3f) << 12) | ((Hw2 & 0x7ff) << 1);
++            Cond = (Hw1 >> 6) & 0xf;
++            OutputOp("b", FALSE, Wide(InItBlock ? ItState == 0 && Offset >= -2048 && Offset <= 2046 :
++                                                  Offset >= -256 && Offset <= 254));
++            OutputBranch(Offset);
++        } else if ((Op & 0x7e) == 0x38 || (Op & 0x7e) == 0x3e) {
++            MoveStatus();
++        } else if (Op == 0x3a) {
++            if ((Hw2 & 0x700) != 0) {
++                OutputString((Hw2 & 0x600) == 0x600 ? "cpsid" : (Hw2 & 0x600) == 0x400 ? "cpsie" : "cps");
++                if ((Hw2 & 0x500) == 0x400) {
++                    OutputString(".w");
++                }
++                BlankFill(OPSTART);
++                if (Hw2 & 0x400) {
++                    if (Hw2 & 0x80) {
++                        *pBuf++ = 'a';
++                    }
++                    if (Hw2 & 0x40) {
++                        *pBuf++ = 'i';
++                    }
++                    if (Hw2 & 0x20) {
++                        *pBuf++ = 'f';
++                    }
++                    if (Hw2 & 0x100) {
++                        OutputComma();
++                    }
++                }
++                if (Hw2 & 0x100) {
++                    OutputImm(Hw2 & 0x1f);
++                }
++            } else if ((Hw2 & 0xf0) == 0xf0) {
++                OutputOp("dbg", FALSE, NULL);
++                OutputImm(Hw2 & 0xf);
++            } else {
++                if ((Hw2 & 0xff) < 6) {
++                    OutputOp(HintName[Hw2 & 0xff], FALSE, ".w");
++                } else {
++                    OutputUndefined();
++                }
++            }
++        } else if (Op == 0x3b) {
++            Option = Hw2 & 0xf;
++            switch ((Hw2 >> 4) & 0xf) {
++            case 0:
++            case 1:
++                OutputOp((Hw2 & 0x10) ? "enterx" : "leavex", FALSE, NULL);
++                break;
++            case 2:
++                OutputOp("clrex", FALSE, NULL);
++                break;
++            case 4:
++            case 5:
++                OutputOp((Hw2 & 0x10) ? "dmb" : "dsb", FALSE, NULL);
++                OutputString(BarrierName[Option]);
++                break;
++            case 6:
++                OutputOp("isb", FALSE, NULL);
++                if (Option != 15) {
++                    OutputImm(Option);
++                }
++                break;
++            default:
++                OutputUndefined();
++                break;
++            }
++        } else if (Op == 0x3c) {
++            OutputOp("bxj", FALSE, NULL);
++            OutputReg(Hw1 & 0xf);
++        } else if (Op == 0x3d) {
++
++            //
++            // SUBS PC,LR,#imm8 (ERET with 0), shown with its register fields.
++            //
++
++            Rd = (Hw2 >> 8) & 0xf;
++            Rn = Hw1 & 0xf;
++            Imm = Hw2 & 0xff;
++            if (Imm == 0 && Rd == 15 && Rn == 14) {
++                OutputOp("eret", FALSE, NULL);
++            } else {
++                OutputOp("subs", FALSE, Wide(!InItBlock && Rd < 8 && Rn < 8 && (Imm <= 7 || (Rd == Rn && Imm <= 255))));
++                OutputRegs(2, Rd, Rn, 0, 0);
++                OutputComma();
++                OutputImm(Imm);
++            }
++        } else if (Op == 0x7f && Op1 == 0) {
++            OutputOp("smc", FALSE, NULL);
++            OutputImm(Hw1 & 0xf);
++        } else if (Op == 0x7e && Op1 == 0) {
++            OutputOp("hvc", FALSE, NULL);
++            OutputImm(((Hw1 & 0xf) << 12) | (Hw2 & 0xfff));
++        } else {
++            OutputUndefined();
++        }
++        return;
++    }
++
++    if (Op1 == 2) {
++        OutputUndefined();
++        return;
++    }
++
++    Offset = (S ? 0xff000000 : 0) | ((J1 == S) << 23) | ((J2 == S) << 22) |
++             ((Hw1 & 0x3ff) << 12) | ((Hw2 & 0x7ff) << 1);
++
++    if ((Op1 & 5) == 1) {
++        OutputOp("b", FALSE, (Offset >= -2048 && Offset <= 2046 && (!InItBlock || ItState == 0)) ? ".w" : NULL);
++        OutputBranch(Offset);
++    } else if ((Op1 & 5) == 4) {
++        if (Hw2 & 1) {
++            OutputUndefined();
++            return;
++        }
++        OutputOp("blx", FALSE, NULL);
++        OutputDisSymbol(Dp, ((InstrOffset + 4) & ~3) + (Offset & ~3));
++    } else {
++        OutputOp("bl", FALSE, NULL);
++        OutputBranch(Offset);
+=1 851 3
++//
++// Loads and stores of one register: the forms of an 8-bit offset (and
++// the unprivileged ones) and of a register offset.  A preload (Size 0) has
++// no register.
++//
++
++static VOID
++OutputTransferReg (ULONG Rt, ULONG Size)
++{
++    if (Size != 0) {
++        OutputReg(Rt);
++        OutputComma();
+=1 851 3
++static VOID
++LoadStoreSingle (PUCHAR Name, PUCHAR Unprivileged, ULONG Size)
++{
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rt = Hw2 >> 12;
++    ULONG P = (Hw2 >> 10) & 1;
++    ULONG U = (Hw2 >> 9) & 1;
++    ULONG W = (Hw2 >> 8) & 1;
++    ULONG Imm = Hw2 & 0xff;
++
++    if ((Hw2 & 0x800) != 0) {
++        if (P && U && !W) {
++            OutputOp(Unprivileged, FALSE, NULL);
++            OutputTransferReg(Rt, Size);
++            OutputAddress(Rn, Imm, TRUE, TRUE, FALSE, Size);
++        } else if (P || W) {
++            if (Rn == 13 && Imm == 4 && W && Size == 4 && P != U && Rt != 13 &&
++                Name[0] == (P ? 's' : 'l')) {
++                OutputOp(P ? "push" : "pop", FALSE, Wide(Rt < 8 || Rt == (P ? 14 : 15)));
++                OutputRegList(1 << Rt);
++            } else {
++                OutputOp(Name, FALSE, NULL);
++                OutputTransferReg(Rt, Size);
++                OutputAddress(Rn, Imm, U, P, W, Size);
++            }
++        } else {
++            OutputUndefined();
++        }
++    } else if ((Hw2 & 0xfc0) == 0) {
++        OutputOp(Name, FALSE, Wide(Rt < 8 && Rn < 8 && (Hw2 & 0x3f) < 8));
++        OutputTransferReg(Rt, Size);
++        OutputRegisterAddress(Rn, Hw2 & 0xf, (Hw2 >> 4) & 3, Size);
++    } else {
++        OutputUndefined();
+=1 851 3
++static VOID
++StoreSingle (VOID)
++{
++    ULONG Op1 = (Hw1 >> 5) & 7;
++    static PUCHAR Name[3] = { "strb", "strh", "str" };
++    static PUCHAR Unprivileged[3] = { "strbt", "strht", "strt" };
++
++    if ((Op1 & 3) == 3 || (Hw1 & 0xf) == 15) {
++        OutputUndefined();
++    } else if (Op1 & 4) {
++        OutputOp(Name[Op1 & 3], FALSE, Wide(NarrowOffset(Hw2 >> 12, Hw1 & 0xf, Hw2 & 0xfff, 1 << (Op1 & 3))));
++        OutputReg(Hw2 >> 12);
++        OutputComma();
++        OutputAddress(Hw1 & 0xf, Hw2 & 0xfff, TRUE, TRUE, FALSE, 1 << (Op1 & 3));
++    } else {
++        LoadStoreSingle(Name[Op1], Unprivileged[Op1], 1 << Op1);
+=1 851 3
++static VOID
++LoadSingle (ULONG Kind)
++{
++    ULONG Op1 = (Hw1 >> 7) & 3;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rt = Hw2 >> 12;
++    ULONG Signed = Op1 >> 1;
++    ULONG Size = 1 << Kind;
++    PUCHAR Name;
++    static PUCHAR LoadName[2][3] = {
++        { "ldrb",  "ldrh",  "ldr" },
++        { "ldrsb", "ldrsh", NULL  }
++        };
++    static PUCHAR LoadTName[2][3] = {
++        { "ldrbt",  "ldrht",  "ldrt" },
++        { "ldrsbt", "ldrsht", NULL   }
++        };
++
++    if (Kind == 2 && Signed) {
++        OutputUndefined();
++        return;
++    }
++
++    if (Rt == 15 && Kind != 2) {
++
++        //
++        // Preload data (for write) and preload instruction, with any form of
++        // the address.  The memory hints of the signed halfword space are
++        // shown as undefined.
++        //
++
++        Name = Kind == 0 ? (Signed ? "pli" : "pld") : (Signed ? NULL : "pldw");
++        if (Name == NULL) {
++            OutputUndefined();
++        } else if (Rn == 15) {
++            OutputOp(Name, FALSE, NULL);
++            OutputLiteral(Hw2 & 0xfff, Op1 & 1, 0);
++        } else if (Op1 & 1) {
++            OutputOp(Name, FALSE, NULL);
++            OutputAddress(Rn, Hw2 & 0xfff, TRUE, TRUE, FALSE, 0);
++        } else {
++            LoadStoreSingle(Name, Name, 0);
++        }
++        return;
++    }
++
++    Name = LoadName[Signed][Kind];
++    if (Rn == 15) {
++        OutputOp(Name, FALSE, Wide(Kind == 2 && Rt < 8 && (Op1 & 1) && (Hw2 & 3) == 0 && (Hw2 & 0xfff) <= 1020));
++        OutputReg(Rt);
++        OutputComma();
++        OutputLiteral(Hw2 & 0xfff, Op1 & 1, Size);
++    } else if (Op1 & 1) {
++        OutputOp(Name, FALSE, Wide(!Signed && NarrowOffset(Rt, Rn, Hw2 & 0xfff, Size)));
++        OutputReg(Rt);
++        OutputComma();
++        OutputAddress(Rn, Hw2 & 0xfff, TRUE, TRUE, FALSE, Size);
++    } else {
++        LoadStoreSingle(Name, LoadTName[Signed][Kind], Size);
+=1 851 3
++static VOID
++DataProcessingRegister (VOID)
++{
++    ULONG Op1 = (Hw1 >> 4) & 0xf;
++    ULONG Op2 = (Hw2 >> 4) & 0xf;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rd = (Hw2 >> 8) & 0xf;
++    ULONG Rm = Hw2 & 0xf;
++    ULONG Index;
++    static PUCHAR ExtendName[6][2] = {
++        { "sxth",   "sxtah"   },
++        { "uxth",   "uxtah"   },
++        { "sxtb16", "sxtab16" },
++        { "uxtb16", "uxtab16" },
++        { "sxtb",   "sxtab"   },
++        { "uxtb",   "uxtab"   }
++        };
++    static PUCHAR ParallelName[8] = {
++        "add8", "add16", "asx", NULL, "sub8", "sub16", "sax", NULL
++        };
++    static PUCHAR ParallelPrefix[2][3] = {
++        { "s", "q",  "sh" },
++        { "u", "uq", "uh" }
++        };
++    static PUCHAR MiscName[4][4] = {
++        { "qadd", "qdadd", "qsub", "qdsub" },
++        { "rev",  "rev16", "rbit", "revsh" },
++        { "sel",  NULL,    NULL,   NULL    },
++        { "clz",  NULL,    NULL,   NULL    }
++        };
++
++    if ((Hw2 & 0xf000) != 0xf000) {
++        OutputUndefined();
++    } else if (Op2 == 0 && Op1 < 8) {
++        OutputOp(ShiftName[Op1 >> 1], Op1 & 1, Wide(Flags16(Op1 & 1) && Rd == Rn && Rd < 8 && Rm < 8));
++        OutputRegs(3, Rd, Rn, Rm, 0);
++    } else if ((Op2 & 8) != 0 && Op1 < 6) {
++        if (Rn == 15) {
++            OutputOp(ExtendName[Op1][0], FALSE, Wide((Op1 & 2) == 0 && (Op2 & 3) == 0 && Rd < 8 && Rm < 8));
++            OutputRegs(2, Rd, Rm, 0, 0);
++        } else {
++            OutputOp(ExtendName[Op1][1], FALSE, NULL);
++            OutputRegs(3, Rd, Rn, Rm, 0);
++        }
++        if (Op2 & 3) {
++            OutputString(",ror ");
++            OutputImm((Op2 & 3) * 8);
++        }
++    } else if ((Op1 & 8) != 0 && (Op2 & 8) == 0) {
++        if (ParallelName[Op1 & 7] == NULL || (Op2 & 3) == 3) {
++            OutputUndefined();
++            return;
++        }
++        OutputString(ParallelPrefix[Op2 >> 2][Op2 & 3]);
++        OutputOp(ParallelName[Op1 & 7], FALSE, NULL);
++        OutputRegs(3, Rd, Rn, Rm, 0);
++    } else if ((Op1 & 0xc) == 8 && (Op2 & 0xc) == 8 &&
++               MiscName[Op1 & 3][Op2 & 3] != NULL) {
++        Index = Op1 & 3;
++        OutputOp(MiscName[Index][Op2 & 3], FALSE, Wide(Index == 1 && (Op2 & 3) != 2 && Rd < 8 && Rm < 8));
++        if (Index == 0) {
++            OutputRegs(3, Rd, Rm, Rn, 0);
++        } else if (Index == 2) {
++            OutputRegs(3, Rd, Rn, Rm, 0);
++        } else {
++            OutputRegs(2, Rd, Rm, 0, 0);
++        }
++    } else {
++        OutputUndefined();
+=1 851 3
++static VOID
++Multiply (VOID)
++{
++    ULONG Op1 = (Hw1 >> 4) & 7;
++    ULONG Op2 = (Hw2 >> 4) & 3;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Ra = Hw2 >> 12;
++    ULONG Rd = (Hw2 >> 8) & 0xf;
++    ULONG Rm = Hw2 & 0xf;
++    ULONG Accumulate = Ra != 15;
++    UCHAR Name[8];
++
++    if ((Hw2 & 0xc0) != 0 || (Op1 != 1 && Op2 > 1) || (Op1 == 7 && Op2 != 0)) {
++        OutputUndefined();
++        return;
++    }
++
++    switch (Op1) {
++    case 0:
++        strcpy(Name, Op2 ? "mls" : Accumulate ? "mla" : "mul");
++        Accumulate |= Op2;
++        break;
++    case 1:
++        strcpy(Name, Accumulate ? "smlaxy" : "smulxy");
++        Name[4] = (UCHAR)((Op2 & 2) ? 't' : 'b');
++        Name[5] = (UCHAR)((Op2 & 1) ? 't' : 'b');
++        break;
++    case 2:
++    case 4:
++        strcpy(Name, Op1 == 2 ? (Accumulate ? "smlad" : "smuad") : (Accumulate ? "smlsd" : "smusd"));
++        if (Op2) {
++            strcat(Name, "x");
++        }
++        break;
++    case 3:
++        strcpy(Name, Accumulate ? "smlaw" : "smulw");
++        strcat(Name, Op2 ? "t" : "b");
++        break;
++    case 5:
++    case 6:
++        strcpy(Name, Op1 == 6 ? "smmls" : Accumulate ? "smmla" : "smmul");
++        if (Op2) {
++            strcat(Name, "r");
++        }
++        Accumulate |= Op1 == 6;
++        break;
++    default:
++        strcpy(Name, Accumulate ? "usada8" : "usad8");
++        break;
++    }
++    OutputOp(Name, FALSE, Wide(Op1 == 0 && !Accumulate && InItBlock && Rd == Rm && Rd < 8 && Rn < 8));
++    OutputRegs(Accumulate ? 4 : 3, Rd, Rn, Rm, Ra);
++}
++
++static VOID
++LongMultiply (VOID)
++{
++    ULONG Op1 = (Hw1 >> 4) & 7;
++    ULONG Op2 = (Hw2 >> 4) & 0xf;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG RdLo = Hw2 >> 12;
++    ULONG RdHi = (Hw2 >> 8) & 0xf;
++    ULONG Rm = Hw2 & 0xf;
++    UCHAR Name[8];
++
++    Name[0] = '\0';
++    switch (Op1) {
++    case 0:
++    case 2:
++        if (Op2 == 0) {
++            strcpy(Name, Op1 ? "umull" : "smull");
++        }
++        break;
++    case 1:
++    case 3:
++        if (Op2 == 15) {
++            OutputOp(Op1 == 1 ? "sdiv" : "udiv", FALSE, NULL);
++            OutputRegs(3, RdHi, Rn, Rm, 0);
++            return;
++        }
++        break;
++    case 4:
++        if (Op2 == 0) {
++            strcpy(Name, "smlal");
++        } else if ((Op2 & 0xc) == 8) {
++            strcpy(Name, "smlalxy");
++            Name[5] = (UCHAR)((Op2 & 2) ? 't' : 'b');
++            Name[6] = (UCHAR)((Op2 & 1) ? 't' : 'b');
++        } else if ((Op2 & 0xe) == 0xc) {
++            strcpy(Name, (Op2 & 1) ? "smlaldx" : "smlald");
++        }
++        break;
++    case 5:
++        if ((Op2 & 0xe) == 0xc) {
++            strcpy(Name, (Op2 & 1) ? "smlsldx" : "smlsld");
++        }
++        break;
++    case 6:
++        if (Op2 == 0) {
++            strcpy(Name, "umlal");
++        } else if (Op2 == 6) {
++            strcpy(Name, "umaal");
++        }
++        break;
++    }
++    if (Name[0] == '\0') {
++        OutputUndefined();
++        return;
++    }
++    OutputOp(Name, FALSE, NULL);
++    OutputRegs(4, RdLo, RdHi, Rn, Rm);
++}
++
++//
++// Floating point (VFP) and Advanced SIMD.
++//
++
++static VOID
++OutputVfpReg (ULONG Double, ULONG Reg)
++{
++    *pBuf++ = (UCHAR)(Double ? 'd' : 's');
++    OutputNumberDecimal(Reg);
++}
++
++static VOID
++OutputCoprocessorReg (ULONG Reg)
++{
++    *pBuf++ = 'c';
++    OutputNumberDecimal(Reg);
++}
++
++static VOID
++OutputSimdReg (ULONG Quad, ULONG Reg)
++{
++    if (Quad) {
++        *pBuf++ = 'q';
++        OutputNumberDecimal(Reg >> 1);
++    } else {
++        *pBuf++ = 'd';
++        OutputNumberDecimal(Reg);
+=1 851 3
++//
++// Register numbers: D:Vd, N:Vn, M:Vm of double registers, Vd:D, Vn:N,
++// Vm:M of single ones.
++//
++
++#define VD(Double) ((Double) ? (((Hw1 >> 2) & 0x10) | (Hw2 >> 12)) : (((Hw2 >> 11) & 0x1e) | ((Hw1 >> 6) & 1)))
++#define VN(Double) ((Double) ? (((Hw2 >> 3) & 0x10) | (Hw1 & 0xf)) : (((Hw1 & 0xf) << 1) | ((Hw2 >> 7) & 1)))
++#define VM(Double) ((Double) ? (((Hw2 >> 1) & 0x10) | (Hw2 & 0xf)) : (((Hw2 & 0xf) << 1) | ((Hw2 >> 5) & 1)))
++
++//
++// The constant of VMOV (immediate): +/- (16 + frac) / 16 * 2^exp,
++// exp -3 to 4, written in decimal.
++//
++
++static VOID
++OutputVfpImm (ULONG Imm8)
++{
++    ULONG Exponent = (Imm8 & 0x40) ? ((Imm8 >> 4) & 3) : ((Imm8 >> 4) & 3) + 4;
++    ULONG Value = (16 + (Imm8 & 0xf)) << Exponent;      // the value * 128
++    ULONG Fraction;
++
++    *pBuf++ = '#';
++    if (Imm8 & 0x80) {
++        *pBuf++ = '-';
++    }
++    OutputNumberDecimal(Value >> 7);
++    Fraction = Value & 0x7f;
++    if (Fraction != 0) {
++        *pBuf++ = '.';
++        while (Fraction != 0) {
++            Fraction *= 10;
++            *pBuf++ = (UCHAR)('0' + (Fraction >> 7));
++            Fraction &= 0x7f;
+=1 731 3 -12
++
++static VOID
++ExtensionLoadStore (VOID)
++{
++    ULONG Opcode = (Hw1 >> 4) & 0x1f;
++    ULONG Double = (Hw2 >> 8) & 1;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Imm8 = Hw2 & 0xff;
++    ULONG P = (Opcode >> 4) & 1;
++    ULONG U = (Opcode >> 3) & 1;
++    ULONG W = (Opcode >> 1) & 1;
++    ULONG L = Opcode & 1;
++    ULONG Count;
++
++    if (P && !W) {
++        OutputOp(L ? "vldr" : "vstr", FALSE, NULL);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        if (Rn == 15) {
++            OutputLiteral(Imm8 << 2, U, Double ? 8 : 4);
++        } else {
++            OutputAddress(Rn, Imm8 << 2, U, TRUE, FALSE, Double ? 8 : 4);
++        }
++        return;
++    }
++
++    if (P == U || (P && !W)) {
++        OutputUndefined();
++        return;
++    }
++
++    //
++    // An odd count of double registers is the FLDMX and FSTMX of VFPv2.
++    //
++
++    Count = Double ? Imm8 >> 1 : Imm8;
++    if (Double && (Imm8 & 1)) {
++        OutputOp(L ? (P ? "fldmdbx" : "fldmiax") : (P ? "fstmdbx" : "fstmiax"), FALSE, NULL);
++        OutputReg(Rn);
++        if (W) {
++            *pBuf++ = '!';
++        }
++        OutputComma();
++    } else if (Rn == 13 && W && (P ? !L : L)) {
++        OutputOp(L ? "vpop" : "vpush", FALSE, NULL);
++    } else {
++        OutputOp(L ? (P ? "vldmdb" : "vldm") : (P ? "vstmdb" : "vstm"), FALSE, NULL);
++        OutputReg(Rn);
++        if (W) {
++            *pBuf++ = '!';
++        }
++        OutputComma();
++    }
++    if (VD(Double) + Count > 32) {
++        Count = 32 - VD(Double);
++    }
++    OutputList(Double ? "d" : "s", VD(Double), Count, 1, NULL);
++}
++
++static VOID
++VfpTransfer64 (VOID)
++{
++    ULONG ToArm = (Hw1 >> 4) & 1;
++    ULONG Double = (Hw2 >> 8) & 1;
++    ULONG Rt = Hw2 >> 12;
++    ULONG Rt2 = Hw1 & 0xf;
++    ULONG Vm = VM(Double);
++
++    if ((Hw2 & 0xd0) != 0x10) {
++        OutputUndefined();
++        return;
++    }
++    OutputOp("vmov", FALSE, NULL);
++    if (ToArm) {
++        OutputRegs(2, Rt, Rt2, 0, 0);
++        OutputComma();
++    }
++    OutputVfpReg(Double, Vm);
++    if (!Double) {
++        OutputComma();
++        OutputVfpReg(FALSE, Vm + 1);
++    }
++    if (!ToArm) {
++        OutputComma();
++        OutputRegs(2, Rt, Rt2, 0, 0);
+=1 851 3
++static VOID
++VfpTransfer32 (VOID)
++{
++    ULONG A = (Hw1 >> 5) & 7;
++    ULONG L = (Hw1 >> 4) & 1;
++    ULONG C = (Hw2 >> 8) & 1;
++    ULONG B = (Hw2 >> 5) & 3;
++    ULONG Rt = Hw2 >> 12;
++    ULONG Reg = ((Hw2 >> 3) & 0x10) | (Hw1 & 0xf);
++    ULONG Opc = ((Hw1 >> 3) & 0xc) | B;        // opc1:opc2
++    ULONG Index;
++    PUCHAR Dt;
++    static PUCHAR SysReg[16] = {
++        "fpsid", "fpscr", NULL, NULL, NULL, NULL, "mvfr1", "mvfr0",
++        "fpexc", "fpinst", "fpinst2", NULL, NULL, NULL, NULL, NULL
++        };
++
++    if (!C) {
++        if (A == 0) {
++            OutputOp("vmov", FALSE, NULL);
++            if (L) {
++                OutputReg(Rt);
++                OutputComma();
++            }
++            OutputVfpReg(FALSE, VN(FALSE));
++            if (!L) {
++                OutputComma();
++                OutputReg(Rt);
++            }
++        } else if (A == 7) {
++            OutputOp(L ? "vmrs" : "vmsr", FALSE, NULL);
++            if (L) {
++                if (Rt == 15) {
++                    OutputString("apsr_nzcv");
++                } else {
++                    OutputReg(Rt);
++                }
++                OutputComma();
++            }
++            if (SysReg[Hw1 & 0xf] != NULL) {
++                OutputString(SysReg[Hw1 & 0xf]);
++            } else {
++                OutputCoprocessorReg(Hw1 & 0xf);
++            }
++            if (!L) {
++                OutputComma();
++                OutputReg(Rt);
++            }
++        } else {
++            OutputUndefined();
++        }
++        return;
++    }
++
++    if (!L && (A & 4)) {
++
++        //
++        // VDUP (ARM core register).
++        //
++
++        Index = ((Hw1 >> 5) & 2) | ((Hw2 >> 5) & 1);
++        if (Index == 3 || (Hw2 & 0x40) || ((Hw1 & 0x20) && (Reg & 1))) {
++            OutputUndefined();
++            return;
++        }
++        OutputOp("vdup", FALSE, Index == 2 ? ".8" : Index == 1 ? ".16" : ".32");
++        OutputSimdReg((Hw1 >> 5) & 1, Reg);
++        OutputComma();
++        OutputReg(Rt);
++        return;
++    }
++
++    //
++    // VMOV between an ARM core register and a scalar.
++    //
++
++    if (Opc & 8) {
++        Dt = L ? ((Hw1 & 0x80) ? ".u8" : ".s8") : ".8";
++        Index = Opc & 7;
++    } else if (Opc & 1) {
++        Dt = L ? ((Hw1 & 0x80) ? ".u16" : ".s16") : ".16";
++        Index = (Opc >> 1) & 3;
++    } else if ((Opc & 2) == 0 && !(L && (Hw1 & 0x80))) {
++        Dt = ".32";
++        Index = (Opc >> 2) & 1;
++    } else {
++        OutputUndefined();
++        return;
++    }
++    OutputOp("vmov", FALSE, Dt);
++    if (L) {
++        OutputReg(Rt);
++        OutputComma();
++    }
++    OutputVfpReg(TRUE, Reg);
++    *pBuf++ = '[';
++    OutputNumber(Index);
++    *pBuf++ = ']';
++    if (!L) {
++        OutputComma();
++        OutputReg(Rt);
+=1 851 3
++static VOID
++VfpDataProcessing (VOID)
++{
++    ULONG Opc1 = ((Hw1 >> 4) & 0xb);
++    ULONG Opc2 = Hw1 & 0xf;
++    ULONG Opc3 = (Hw2 >> 6) & 3;
++    ULONG Double = (Hw2 >> 8) & 1;
++    PUCHAR Dt = Double ? ".f64" : ".f32";
++    PUCHAR Name = NULL;
++    ULONG Op = (Hw2 >> 6) & 1;
++    ULONG Bits;
++
++    switch (Opc1) {
++    case 0:
++        Name = Op ? "vmls" : "vmla";
++        break;
++    case 1:
++        Name = Op ? "vnmla" : "vnmls";
++        break;
++    case 2:
++        Name = Op ? "vnmul" : "vmul";
++        break;
++    case 3:
++        Name = Op ? "vsub" : "vadd";
++        break;
++    case 8:
++        Name = Op ? NULL : "vdiv";
++        break;
++    case 9:
++        Name = Op ? "vfnma" : "vfnms";
++        break;
++    case 10:
++        Name = Op ? "vfms" : "vfma";
++        break;
++    }
++
++    if (Name != NULL) {
++        OutputOp(Name, FALSE, Dt);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpReg(Double, VN(Double));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        return;
++    }
++
++    if (Opc1 != 11) {
++        OutputUndefined();
++        return;
++    }
++
++    if ((Opc3 & 1) == 0) {
++        OutputOp("vmov", FALSE, Dt);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpImm((Opc2 << 4) | (Hw2 & 0xf));
++        return;
++    }
++
++    switch (Opc2) {
++    case 0:
++    case 1:
++        OutputOp(Opc2 ? (Opc3 == 1 ? "vneg" : "vsqrt") : (Opc3 == 1 ? "vmov" : "vabs"), FALSE, Dt);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        break;
++    case 2:
++    case 3:
++        if (Double) {
++            OutputOp((Hw2 & 0x80) ? "vcvtt" : "vcvtb", FALSE, Opc2 & 1 ? ".f16.f64" : ".f64.f16");
++        } else {
++            OutputOp((Hw2 & 0x80) ? "vcvtt" : "vcvtb", FALSE, Opc2 & 1 ? ".f16.f32" : ".f32.f16");
++        }
++        OutputVfpReg(Double && !(Opc2 & 1), VD(Double && !(Opc2 & 1)));
++        OutputComma();
++        OutputVfpReg(Double && (Opc2 & 1), VM(Double && (Opc2 & 1)));
++        break;
++    case 4:
++    case 5:
++        OutputOp((Hw2 & 0x80) ? "vcmpe" : "vcmp", FALSE, Dt);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        if (Opc2 & 1) {
++            OutputImm(0);
++        } else {
++            OutputVfpReg(Double, VM(Double));
++        }
++        break;
++    case 6:
++        OutputOp((Hw2 & 0x80) ? "vrintz" : "vrintr", FALSE, Dt);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        break;
++    case 7:
++        if (Opc3 == 1) {
++            OutputOp("vrintx", FALSE, Dt);
++            OutputVfpReg(Double, VD(Double));
++            OutputComma();
++            OutputVfpReg(Double, VM(Double));
++            break;
++        }
++        OutputOp("vcvt", FALSE, Double ? ".f32.f64" : ".f64.f32");
++        OutputVfpReg(!Double, VD(!Double));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        break;
++    case 8:
++        OutputOp("vcvt", FALSE, Double ? ((Hw2 & 0x80) ? ".f64.s32" : ".f64.u32") : ((Hw2 & 0x80) ? ".f32.s32" : ".f32.u32"));
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpReg(FALSE, VM(FALSE));
++        break;
++    case 12:
++    case 13:
++        OutputOp((Hw2 & 0x80) ? "vcvt" : "vcvtr", FALSE,
++                 Double ? ((Opc2 & 1) ? ".s32.f64" : ".u32.f64") : ((Opc2 & 1) ? ".s32.f32" : ".u32.f32"));
++        OutputVfpReg(FALSE, VD(FALSE));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        break;
++    case 10:
++    case 11:
++    case 14:
++    case 15:
++
++        //
++        // Fixed point: the register is converted in place.
++        //
++
++        Bits = (Hw2 & 0x80) ? 32 : 16;
++        if (Opc2 & 4) {
++            Dt = Double ? ((Opc2 & 1) ? ((Bits == 32) ? ".u32.f64" : ".u16.f64") : ((Bits == 32) ? ".s32.f64" : ".s16.f64"))
++                        : ((Opc2 & 1) ? ((Bits == 32) ? ".u32.f32" : ".u16.f32") : ((Bits == 32) ? ".s32.f32" : ".s16.f32"));
++        } else {
++            Dt = Double ? ((Opc2 & 1) ? ((Bits == 32) ? ".f64.u32" : ".f64.u16") : ((Bits == 32) ? ".f64.s32" : ".f64.s16"))
++                        : ((Opc2 & 1) ? ((Bits == 32) ? ".f32.u32" : ".f32.u16") : ((Bits == 32) ? ".f32.s32" : ".f32.s16"));
++        }
++        OutputOp("vcvt", FALSE, Dt);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputImm(Bits - (((Hw2 & 0xf) << 1) | ((Hw2 >> 5) & 1)));
++        break;
++    default:
++        OutputUndefined();
++        break;
+=1 851 3
++//
++// The floating point instructions of ARMv8 that take no condition.
++//
++
++static BOOLEAN
++VfpUnconditional (VOID)
++{
++    ULONG Double = (Hw2 >> 8) & 1;
++    PUCHAR Dt = Double ? ".f64" : ".f32";
++    static PUCHAR SelName[4] = { "vseleq", "vselvs", "vselge", "vselgt" };
++    static PUCHAR RoundName[4] = { "a", "n", "p", "m" };
++
++    if ((Hw1 & 0xff80) == 0xfe00 && (Hw2 & 0x0e50) == 0x0a00) {
++        OutputString(SelName[(Hw1 >> 4) & 3]);
++    } else if ((Hw1 & 0xffb0) == 0xfe80 && (Hw2 & 0x0e10) == 0x0a00) {
++        OutputString((Hw2 & 0x40) ? "vminnm" : "vmaxnm");
++    } else if ((Hw1 & 0xffbc) == 0xfeb8 && (Hw2 & 0x0ed0) == 0x0a40) {
++        OutputString("vrint");
++        OutputString(RoundName[Hw1 & 3]);
++        OutputString(Dt);
++        BlankFill(OPSTART);
++        OutputVfpReg(Double, VD(Double));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        return TRUE;
++    } else if ((Hw1 & 0xffbc) == 0xfebc && (Hw2 & 0x0e50) == 0x0a40) {
++        OutputString("vcvt");
++        OutputString(RoundName[Hw1 & 3]);
++        OutputString((Hw2 & 0x80) ? ".s32" : ".u32");
++        OutputString(Dt);
++        BlankFill(OPSTART);
++        OutputVfpReg(FALSE, VD(FALSE));
++        OutputComma();
++        OutputVfpReg(Double, VM(Double));
++        return TRUE;
++    } else {
++        return FALSE;
++    }
++    OutputString(Dt);
++    BlankFill(OPSTART);
++    OutputVfpReg(Double, VD(Double));
++    OutputComma();
++    OutputVfpReg(Double, VN(Double));
++    OutputComma();
++    OutputVfpReg(Double, VM(Double));
+=1 744 3
++//
++// Coprocessor instructions.
++//
++
++static VOID
++OutputCoprocessor (PUCHAR Name, ULONG Two, PUCHAR Suffix)
++{
++    OutputString(Name);
++    if (Two) {
++        *pBuf++ = '2';
++    }
++    OutputOp("", FALSE, Suffix);
++    *pBuf++ = 'p';
++    OutputNumberDecimal((Hw2 >> 8) & 0xf);
++    OutputComma();
++}
++
++static VOID
++Coprocessor (VOID)
++{
++    ULONG Op1 = (Hw1 >> 4) & 0x3f;
++    ULONG Coproc = (Hw2 >> 8) & 0xf;
++    ULONG Two = (Hw1 >> 12) & 1;
++    ULONG Rn = Hw1 & 0xf;
++
++    if ((Op1 & 0x3e) == 0) {
++        OutputUndefined();
++        return;
++    }
++
++    if ((Coproc & 0xe) == 0xa && Two && VfpUnconditional()) {
++        return;
++    }
++
++    if ((Coproc & 0xe) == 0xa && !Two) {
++        if ((Op1 & 0x20) == 0) {
++            if ((Op1 & 0x3e) == 0x04) {
++                VfpTransfer64();
++            } else {
++                ExtensionLoadStore();
++            }
++        } else if (Hw2 & 0x10) {
++            VfpTransfer32();
++        } else {
++            VfpDataProcessing();
++        }
++        if (!Undefined) {
++            return;
++        }
++
++        //
++        // Not a floating point instruction: the coprocessor instruction.
++        //
++
++        pBuf = pBufStart + 19;
++        Undefined = FALSE;
++    }
++
++    if ((Op1 & 0x3e) == 0x04) {
++        OutputCoprocessor(Op1 & 1 ? "mrrc" : "mcrr", Two, NULL);
++        OutputImm((Hw2 >> 4) & 0xf);
++        OutputComma();
++        OutputRegs(2, Hw2 >> 12, Rn, 0, 0);
++        OutputComma();
++        OutputCoprocessorReg(Hw2 & 0xf);
++    } else if ((Op1 & 0x20) == 0) {
++        OutputCoprocessor(Op1 & 1 ? "ldc" : "stc", Two, Op1 & 4 ? "l" : NULL);
++        OutputCoprocessorReg(Hw2 >> 12);
++        OutputComma();
++        if (Rn == 15 && (Op1 & 0x12) == 0x10) {
++            OutputLiteral((Hw2 & 0xff) << 2, (Op1 >> 3) & 1, 0);
++        } else if ((Op1 & 0x12) == 0) {
++            *pBuf++ = '[';
++            OutputReg(Rn);
++            OutputString("],{");
++            OutputNumber(Hw2 & 0xff);
++            *pBuf++ = '}';
++        } else {
++            OutputAddress(Rn, (Hw2 & 0xff) << 2, (Op1 >> 3) & 1, (Op1 >> 4) & 1, (Op1 >> 1) & 1, 0);
++        }
++    } else if (Hw2 & 0x10) {
++        OutputCoprocessor(Op1 & 1 ? "mrc" : "mcr", Two, NULL);
++        OutputImm((Hw1 >> 5) & 7);
++        OutputComma();
++        OutputReg(Hw2 >> 12);
++        OutputComma();
++        OutputCoprocessorReg(Rn);
++        OutputComma();
++        OutputCoprocessorReg(Hw2 & 0xf);
++        if (Hw2 & 0xe0) {
++            OutputComma();
++            OutputImm((Hw2 >> 5) & 7);
++        }
++    } else {
++        OutputCoprocessor("cdp", Two, NULL);
++        OutputImm((Hw1 >> 4) & 0xf);
++        OutputComma();
++        OutputCoprocessorReg(Hw2 >> 12);
++        OutputComma();
++        OutputCoprocessorReg(Rn);
++        OutputComma();
++        OutputCoprocessorReg(Hw2 & 0xf);
++        if (Hw2 & 0xe0) {
++            OutputComma();
++            OutputImm((Hw2 >> 5) & 7);
++        }
++    }
++    EAsize = 0;
++}
++
++//
++// Advanced SIMD: register numbers D:Vd, N:Vn, M:Vm and the data types.
++//
++
++#define QD (((Hw1 >> 2) & 0x10) | (Hw2 >> 12))
++#define QN (((Hw2 >> 3) & 0x10) | (Hw1 & 0xf))
++#define QM (((Hw2 >> 1) & 0x10) | (Hw2 & 0xf))
++
++static UCHAR DataType[8];
++
++static PUCHAR
++SimdType (UCHAR Kind, ULONG Size)
++{
++    PUCHAR p = DataType;
++
++    *p++ = '.';
++    if (Kind != '\0') {
++        *p++ = Kind;
++    }
++    switch (Size) {
++    case 0:
++        *p++ = '8';
++        break;
++    case 1:
++        *p++ = '1';
++        *p++ = '6';
++        break;
++    case 2:
++        *p++ = '3';
++        *p++ = '2';
++        break;
++    default:
++        *p++ = '6';
++        *p++ = '4';
++        break;
++    }
++    *p = '\0';
++    return DataType;
++}
++
++static VOID
++OutputSimd3 (ULONG Qd, ULONG Rd, ULONG Qn, ULONG Rn, ULONG Qm, ULONG Rm)
++{
++    OutputSimdReg(Qd, Rd);
++    OutputComma();
++    OutputSimdReg(Qn, Rn);
++    OutputComma();
++    OutputSimdReg(Qm, Rm);
++}
++
++static VOID
++SimdThreeSame (VOID)
++{
++    ULONG A = (Hw2 >> 8) & 0xf;
++    ULONG B = (Hw2 >> 4) & 1;
++    ULONG U = (Hw1 >> 12) & 1;
++    ULONG C = (Hw1 >> 4) & 3;
++    ULONG Q = (Hw2 >> 6) & 1;
++    UCHAR Sign = (UCHAR)(U ? 'u' : 's');
++    PUCHAR Name = NULL;
++    PUCHAR Dt = NULL;
++    static PUCHAR Logical[2][4] = {
++        { "vand", "vbic", "vorr", "vorn" },
++        { "veor", "vbsl", "vbit", "vbif" }
++        };
++    static PUCHAR IntName[16][2] = {
++        { "vhadd",  "vqadd"   },
++        { "vrhadd", NULL      },
++        { "vhsub",  "vqsub"   },
++        { "vcgt",   "vcge"    },
++        { "vshl",   "vqshl"   },
++        { "vrshl",  "vqrshl"  },
++        { "vmax",   "vmin"    },
++        { "vabd",   "vaba"    }
++        };
++
++    if (Q && ((QD | QN | QM) & 1)) {
++        OutputUndefined();
++        return;
++    }
++
++    if (A < 8) {
++        if (A == 1 && B) {
++            if (!U && C == 2 && QN == QM) {
++                OutputOp("vmov", FALSE, NULL);
++                OutputSimdReg(Q, QD);
++                OutputComma();
++                OutputSimdReg(Q, QM);
++            } else {
++                OutputOp(Logical[U][C], FALSE, NULL);
++                OutputSimd3(Q, QD, Q, QN, Q, QM);
++            }
++            return;
++        }
++        Name = IntName[A][B];
++        Dt = SimdType(Sign, C);
++        if (A == 4 || A == 5) {
++            OutputOp(Name, FALSE, Dt);
++            OutputSimd3(Q, QD, Q, QM, Q, QN);
++            return;
++        }
++        if (C == 3 && !((A == 0 || A == 2) && B)) {
++            Name = NULL;
++        }
++    } else {
++        switch (A) {
++        case 8:
++            if (!B || C != 3) {
++                Name = B ? (U ? "vceq" : "vtst") : (U ? "vsub" : "vadd");
++                Dt = SimdType((UCHAR)(B && !U ? '\0' : 'i'), C);
++            }
++            break;
++        case 9:
++            if (C != 3 && !(B && U && C != 0)) {
++                Name = B ? "vmul" : (U ? "vmls" : "vmla");
++                Dt = SimdType((UCHAR)(B && U ? 'p' : 'i'), C);
++            }
++            break;
++        case 10:
++            if (C != 3) {
++                Name = B ? "vpmin" : "vpmax";
++                Dt = SimdType(Sign, C);
++            }
++            break;
++        case 11:
++            if (!B && (C == 1 || C == 2)) {
++                Name = U ? "vqrdmulh" : "vqdmulh";
++                Dt = SimdType('s', C);
++            } else if (B && !U && C != 3) {
++                Name = "vpadd";
++                Dt = SimdType('i', C);
++            }
++            break;
++        default:
++            if (A == 12 && !B) {
++
++                //
++                // The SHA instructions of ARMv8.
++                //
++
++                if (Q && !(U && C == 3)) {
++                    Name = U ? (C == 0 ? "sha256h" : C == 1 ? "sha256h2" : "sha256su1") :
++                               (C == 0 ? "sha1c" : C == 1 ? "sha1p" : C == 2 ? "sha1m" : "sha1su0");
++                    Dt = ".32";
++                }
++                break;
++            }
++            if (C & 1) {
++                break;
++            }
++            Dt = ".f32";
++            switch ((A << 2) | (B << 1) | U) {
++            case (12 << 2) | 2:
++                Name = (C & 2) ? "vfms" : "vfma";
++                break;
++            case (13 << 2) | 0:
++                Name = (C & 2) ? "vsub" : "vadd";
++                break;
++            case (13 << 2) | 1:
++                Name = (C & 2) ? "vabd" : "vpadd";
++                break;
++            case (13 << 2) | 2:
++                Name = (C & 2) ? "vmls" : "vmla";
++                break;
++            case (13 << 2) | 3:
++                Name = (C & 2) ? NULL : "vmul";
++                break;
++            case (14 << 2) | 0:
++                Name = (C & 2) ? NULL : "vceq";
++                break;
++            case (14 << 2) | 1:
++                Name = (C & 2) ? "vcgt" : "vcge";
++                break;
++            case (14 << 2) | 3:
++                Name = (C & 2) ? "vacgt" : "vacge";
++                break;
++            case (15 << 2) | 0:
++                Name = (C & 2) ? "vmin" : "vmax";
++                break;
++            case (15 << 2) | 1:
++                Name = (C & 2) ? "vpmin" : "vpmax";
++                break;
++            case (15 << 2) | 2:
++                Name = (C & 2) ? "vrsqrts" : "vrecps";
++                break;
++            case (15 << 2) | 3:
++                Name = (C & 2) ? "vminnm" : "vmaxnm";
++                break;
++            }
++            break;
++        }
++        if (Name != NULL && (A == 10 || (A == 11 && B) || (A >= 13 && (U || B) && Name[1] == 'p'))) {
++            if (Q) {
++                Name = NULL;
+=1 731 3 -8
++
++    if (Name == NULL) {
++        OutputUndefined();
++        return;
++    }
++    OutputOp(Name, FALSE, Dt);
++    OutputSimd3(Q, QD, Q, QN, Q, QM);
++}
++
++static VOID
++SimdThreeDifferent (VOID)
++{
++    ULONG A = (Hw2 >> 8) & 0xf;
++    ULONG U = (Hw1 >> 12) & 1;
++    ULONG Size = (Hw1 >> 4) & 3;
++    PUCHAR Name;
++    UCHAR Sign = (UCHAR)(U ? 'u' : 's');
++    ULONG Form;                         // 0: Qd,Dn,Dm 1: Qd,Qn,Dm 2: Dd,Qn,Qm
++    static PUCHAR LongName[16] = {
++        "vaddl", "vaddw", "vsubl", "vsubw", NULL, "vabal", NULL, "vabdl",
++        "vmlal", "vqdmlal", "vmlsl", "vqdmlsl", "vmull", "vqdmull", "vmull", NULL
++        };
++
++    Name = LongName[A];
++    Form = (A == 1 || A == 3) ? 1 : 0;
++    if (A == 4 || A == 6) {
++        Name = A == 4 ? (U ? "vraddhn" : "vaddhn") : (U ? "vrsubhn" : "vsubhn");
++        Form = 2;
++    }
++    if (Name == NULL || ((A == 9 || A == 11 || A == 13) && (U || Size == 0)) || (A == 14 && (U || (Size & 1))) ||
++        (Form == 0 && (QD & 1)) || (Form == 1 && ((QD | QN) & 1)) || (Form == 2 && ((QN | QM) & 1))) {
++        OutputUndefined();
++        return;
++    }
++
++    OutputOp(Name, FALSE, Form == 2 ? SimdType('i', Size + 1) : A == 14 ? (Size ? ".p64" : ".p8") : SimdType(Sign, Size));
++    OutputSimd3(Form != 2, QD, Form != 0, QN, Form == 2, QM);
++}
++
++static VOID
++SimdScalar (VOID)
++{
++    ULONG A = (Hw2 >> 8) & 0xf;
++    ULONG U = (Hw1 >> 12) & 1;
++    ULONG Size = (Hw1 >> 4) & 3;
++    ULONG Rm;
++    ULONG Index;
++    ULONG Long;
++    ULONG Float;
++    PUCHAR Name;
++    PUCHAR Dt;
++    static PUCHAR ScalarName[16] = {
++        "vmla", "vmla", "vmlal", "vqdmlal", "vmls", "vmls", "vmlsl", "vqdmlsl",
++        "vmul", "vmul", "vmull", "vqdmull", "vqdmulh", "vqrdmulh", NULL, NULL
++        };
++
++    Name = ScalarName[A];
++    Long = (A & 0xb) == 2 || (A & 0xb) == 3 || A == 10 || A == 11;
++    Float = (A & 0xb) == 1 || A == 9;
++    if (Name == NULL || Size == 0 || Size == 3 || ((A == 3 || A == 7 || A == 11) && U) ||
++        (Float && Size != 2) || (Long && (QD & 1)) || (!Long && U && ((QD | QN) & 1))) {
++        OutputUndefined();
++        return;
++    }
++    if (Float) {
++        Dt = ".f32";
++    } else if (Long || A >= 12) {
++        Dt = SimdType((UCHAR)((A == 2 || A == 6 || A == 10) && U ? 'u' : 's'), Size);
++    } else {
++        Dt = SimdType('i', Size);
++    }
++
++    if (Size == 1) {
++        Rm = Hw2 & 7;
++        Index = ((Hw2 >> 4) & 2) | ((Hw2 >> 3) & 1);
++    } else {
++        Rm = Hw2 & 0xf;
++        Index = (Hw2 >> 5) & 1;
++    }
++
++    OutputOp(Name, FALSE, Dt);
++    OutputSimdReg(Long || U, QD);
++    OutputComma();
++    OutputSimdReg(!Long && U, QN);
++    OutputComma();
++    OutputVfpReg(TRUE, Rm);
++    *pBuf++ = '[';
++    OutputNumber(Index);
++    *pBuf++ = ']';
++}
++
++static VOID
++SimdShift (VOID)
++{
++    ULONG A = (Hw2 >> 8) & 0xf;
++    ULONG U = (Hw1 >> 12) & 1;
++    ULONG L = (Hw2 >> 7) & 1;
++    ULONG B = (Hw2 >> 6) & 1;
++    ULONG Imm6 = (Hw1 >> 0) & 0x3f;
++    ULONG Size;
++    ULONG Shift;
++    ULONG Bits;
++    PUCHAR Name = NULL;
++    UCHAR Kind;
++    ULONG Narrow = FALSE;
++    ULONG Left = FALSE;
++
++    if (L) {
++        Size = 3;
++    } else if (Imm6 & 0x20) {
++        Size = 2;
++    } else if (Imm6 & 0x10) {
++        Size = 1;
++    } else {
++        Size = 0;
++    }
++    Bits = 8 << Size;
++    Kind = (UCHAR)(U ? 'u' : 's');
++
++    switch (A) {
++    case 0:
++        Name = "vshr";
++        break;
++    case 1:
++        Name = "vsra";
++        break;
++    case 2:
++        Name = "vrshr";
++        break;
++    case 3:
++        Name = "vrsra";
++        break;
++    case 4:
++        if (U) {
++            Name = "vsri";
++            Kind = '\0';
++        }
++        break;
++    case 5:
++        Name = U ? "vsli" : "vshl";
++        Kind = (UCHAR)(U ? '\0' : 'i');
++        Left = TRUE;
++        break;
++    case 6:
++        if (U) {
++            Name = "vqshlu";
++            Kind = 's';
++            Left = TRUE;
++        }
++        break;
++    case 7:
++        Name = "vqshl";
++        Left = TRUE;
++        break;
++    case 8:
++    case 9:
++        if (L) {
++            break;
++        }
++        Narrow = TRUE;
++        if (A == 8 && !U) {
++            Name = B ? "vrshrn" : "vshrn";
++            Kind = 'i';
++        } else if (A == 8) {
++            Name = B ? "vqrshrun" : "vqshrun";
++            Kind = 's';
++        } else {
++            Name = B ? "vqrshrn" : "vqshrn";
++        }
++        break;
++    case 10:
++        if (L || B || (QD & 1)) {
++            break;
++        }
++        Shift = Imm6 - Bits;
++        if (Shift == 0) {
++            OutputOp("vmovl", FALSE, SimdType(Kind, Size));
++        } else {
++            OutputOp("vshll", FALSE, SimdType(Kind, Size));
++        }
++        OutputSimdReg(TRUE, QD);
++        OutputComma();
++        OutputSimdReg(FALSE, QM);
++        if (Shift != 0) {
++            OutputComma();
++            OutputImm(Shift);
++        }
++        return;
++    case 14:
++    case 15:
++        if (L || (Imm6 & 0x20) == 0 || (B && ((QD | QM) & 1))) {
++            break;
++        }
++        OutputOp("vcvt", FALSE, (A & 1) ? (U ? ".u32.f32" : ".s32.f32") : (U ? ".f32.u32" : ".f32.s32"));
++        OutputSimdReg(B, QD);
++        OutputComma();
++        OutputSimdReg(B, QM);
++        OutputComma();
++        OutputImm(64 - Imm6);
++        return;
++    }
++
++    if (Name == NULL || (Narrow && (QM & 1)) || (B && !Narrow && ((QD | QM) & 1))) {
++        OutputUndefined();
++        return;
++    }
++
++    if (Narrow) {
++        OutputOp(Name, FALSE, SimdType(Kind, Size + 1));
++        OutputSimdReg(FALSE, QD);
++        OutputComma();
++        OutputSimdReg(TRUE, QM);
++        OutputComma();
++        OutputImm(2 * Bits - Imm6);
++        return;
++    }
++
++    if (L) {
++        Shift = Left ? Imm6 : 64 - Imm6;
++    } else {
++        Shift = Left ? Imm6 - Bits : 2 * Bits - Imm6;
++    }
++    OutputOp(Name, FALSE, SimdType(Kind, Size));
++    OutputSimdReg(B, QD);
++    OutputComma();
++    OutputSimdReg(B, QM);
++    OutputComma();
++    OutputImm(Shift);
++}
++
++static VOID
++SimdModifiedImmediate (VOID)
++{
++    ULONG Cmode = (Hw2 >> 8) & 0xf;
++    ULONG Op = (Hw2 >> 5) & 1;
++    ULONG Q = (Hw2 >> 6) & 1;
++    ULONG Imm8 = ((Hw1 >> 5) & 0x80) | ((Hw1 & 7) << 4) | (Hw2 & 0xf);
++    ULONG Imm = 0;
++    ULONG High = 0;
++    ULONG Index;
++    PUCHAR Name;
++    PUCHAR Dt;
++
++    if (Q && (QD & 1)) {
++        OutputUndefined();
++        return;
++    }
++
++    if (Cmode < 8) {
++        Name = (Cmode & 1) ? (Op ? "vbic" : "vorr") : (Op ? "vmvn" : "vmov");
++        Dt = ".i32";
++        Imm = Imm8 << (8 * (Cmode >> 1));
++    } else if (Cmode < 12) {
++        Name = (Cmode & 1) ? (Op ? "vbic" : "vorr") : (Op ? "vmvn" : "vmov");
++        Dt = ".i16";
++        Imm = Imm8 << (8 * ((Cmode >> 1) & 1));
++    } else if (Cmode < 14) {
++        Name = Op ? "vmvn" : "vmov";
++        Dt = ".i32";
++        Imm = (Cmode & 1) ? (Imm8 << 16) | 0xffff : (Imm8 << 8) | 0xff;
++    } else if (Cmode == 14 && !Op) {
++        Name = "vmov";
++        Dt = ".i8";
++        Imm = Imm8;
++    } else if (Cmode == 14) {
++        Name = "vmov";
++        Dt = ".i64";
++        for (Index = 0; Index < 4; Index++) {
++            if (Imm8 & (1 << Index)) {
++                Imm |= 0xff << (Index * 8);
++            }
++            if (Imm8 & (0x10 << Index)) {
++                High |= 0xff << (Index * 8);
++            }
++        }
++    } else if (!Op) {
++        OutputOp("vmov", FALSE, ".f32");
++        OutputSimdReg(Q, QD);
++        OutputComma();
++        OutputVfpImm(Imm8);
++        return;
++    } else {
++        OutputUndefined();
++        return;
++    }
++
++    OutputOp(Name, FALSE, Dt);
++    OutputSimdReg(Q, QD);
++    OutputComma();
++    if (Cmode < 12 && (Cmode & 1)) {
++        OutputSimdReg(Q, QD);
++        OutputComma();
++    }
++    if (High != 0) {
++        OutputImm(High);
++        OutputHex(Imm, 8, FALSE);
++    } else {
++        OutputImm(Imm);
+=1 851 3
++static VOID
++SimdTwoMisc (VOID)
++{
++    ULONG A = Hw1 & 3;
++    ULONG B = (Hw2 >> 6) & 0x1f;
++    ULONG Size = (Hw1 >> 2) & 3;
++    ULONG Q = (Hw2 >> 6) & 1;
++    ULONG F = (Hw2 >> 10) & 1;
++    ULONG Op = (B >> 1) & 0xf;
++    ULONG Sizes = 0;                    // the sizes it takes, bit n for size n
++    PUCHAR Name = NULL;
++    PUCHAR Dt = NULL;
++    ULONG Zero = FALSE;
++    static PUCHAR Misc0[16] = {
++        "vrev64", "vrev32", "vrev16", NULL, "vpaddl", "vpaddl", NULL, NULL,
++        "vcls", "vclz", "vcnt", "vmvn", "vpadal", "vpadal", "vqabs", "vqneg"
++        };
++    static UCHAR Misc0Sizes[16] = {
++        7, 3, 1, 0, 7, 7, 0, 0,
++        7, 7, 1, 1, 7, 7, 7, 7
++        };
++    static PUCHAR Misc1[8] = {
++        "vcgt", "vcge", "vceq", "vcle", "vclt", NULL, "vabs", "vneg"
++        };
++    static PUCHAR Misc2[4] = { "vswp", "vtrn", "vuzp", "vzip" };
++    static PUCHAR Round[8] = {
++        "vrintn", "vrintx", "vrinta", "vrintz", NULL, "vrintm", NULL, "vrintp"
++        };
++    static PUCHAR Convert[4] = { "vcvta", "vcvtn", "vcvtp", "vcvtm" };
++
++    switch (A) {
++    case 0:
++        if (Op == 6 || Op == 7) {
++
++            //
++            // The AES instructions of ARMv8: Q registers always.
++            //
++
++            Name = Op == 6 ? ((B & 1) ? "aesd" : "aese") : ((B & 1) ? "aesimc" : "aesmc");
++            Sizes = 1;
++            Dt = ".8";
++            Q = TRUE;
++            break;
++        }
++        Name = Misc0[Op];
++        Sizes = Misc0Sizes[Op];
++        switch (Op) {
++        case 4:
++        case 5:
++        case 12:
++        case 13:
++            Dt = SimdType((UCHAR)((B & 2) ? 'u' : 's'), Size);
++            break;
++        case 8:
++        case 14:
++        case 15:
++            Dt = SimdType('s', Size);
++            break;
++        case 9:
++            Dt = SimdType('i', Size);
++            break;
++        case 10:
++            Dt = ".8";
++            break;
++        case 11:
++            break;
++        default:
++            Dt = SimdType('\0', Size);
++            break;
++        }
++        break;
++    case 1:
++        if (B == 0x0b) {
++            Name = "sha1h";
++            Sizes = 4;
++            Dt = ".32";
++            break;
++        }
++        Name = Misc1[Op & 7];
++        Sizes = F ? 4 : 7;
++        Dt = F ? ".f32" : SimdType((UCHAR)((Op & 7) == 2 ? 'i' : 's'), Size);
++        Zero = (Op & 7) < 5;
++        break;
++    case 2:
++        if (Op < 4) {
++            Name = Misc2[Op];
++            Sizes = Op == 0 ? 1 : 7;
++            if (Op != 0) {
++                Dt = SimdType('\0', Size);
++            }
++            if (Op >= 2 && !Q && Size == 2) {
++                Sizes = 0;
++            }
++            break;
++        }
++        if (B == 14 || B == 15) {
++            Name = B == 14 ? "sha1su1" : "sha256su0";
++            Sizes = 4;
++            Dt = ".32";
++            Q = TRUE;
++            break;
++        }
++        if (B >= 16 && B != 24 && B != 28) {
++            Name = Round[Op & 7];
++            Sizes = 4;
++            Dt = ".f32";
++            break;
++        }
++        if (Size == 3 || (B >= 8 && B <= 12 && (QM & 1)) || (B == 12 && (QD & 1))) {
++            break;
++        }
++        if (B == 8 || B == 9 || B == 10 || B == 11) {
++            OutputOp(B == 8 ? "vmovn" : B == 9 ? "vqmovun" : "vqmovn", FALSE,
++                     SimdType((UCHAR)(B == 8 ? 'i' : B == 11 ? 'u' : 's'), Size + 1));
++            OutputSimdReg(FALSE, QD);
++            OutputComma();
++            OutputSimdReg(TRUE, QM);
++            return;
++        } else if (B == 12) {
++            OutputOp("vshll", FALSE, SimdType('i', Size));
++            OutputSimdReg(TRUE, QD);
++            OutputComma();
++            OutputSimdReg(FALSE, QM);
++            OutputComma();
++            OutputImm(8 << Size);
++            return;
++        } else if ((B == 24 && !(QM & 1)) || (B == 28 && !(QD & 1))) {
++            if (Size != 1) {
++                break;
++            }
++            OutputOp("vcvt", FALSE, B == 24 ? ".f16.f32" : ".f32.f16");
++            OutputSimdReg(B == 28, QD);
++            OutputComma();
++            OutputSimdReg(B == 24, QM);
++            return;
++        }
++        break;
++    case 3:
++        Sizes = 4;
++        if (B < 16) {
++            Name = Convert[(B >> 2) & 3];
++            Dt = (B & 2) ? ".u32.f32" : ".s32.f32";
++        } else if ((B & 0x18) == 0x10) {
++            Name = (B & 2) ? "vrsqrte" : "vrecpe";
++            Dt = (B & 4) ? ".f32" : ".u32";
++        } else {
++            Name = "vcvt";
++            switch ((B >> 1) & 3) {
++            case 0:
++                Dt = ".f32.s32";
++                break;
++            case 1:
++                Dt = ".f32.u32";
++                break;
++            case 2:
++                Dt = ".s32.f32";
++                break;
++            default:
++                Dt = ".u32.f32";
++                break;
++            }
++        }
++        break;
++    }
++
++    if (Name == NULL || (Sizes & (1 << Size)) == 0 || (Q && ((QD | QM) & 1))) {
++        OutputUndefined();
++        return;
++    }
++    OutputOp(Name, FALSE, Dt);
++    OutputSimdReg(Q, QD);
++    OutputComma();
++    OutputSimdReg(Q, QM);
++    if (Zero) {
++        OutputComma();
++        OutputImm(0);
+=1 851 3
++static VOID
++AdvancedSimd (VOID)
++{
++    ULONG U = (Hw1 >> 12) & 1;
++    ULONG A = (Hw1 >> 3) & 0x1f;
++    ULONG B = (Hw2 >> 8) & 0xf;
++    ULONG C = (Hw2 >> 4) & 0xf;
++    ULONG Q = (Hw2 >> 6) & 1;
++    ULONG Imm4;
++    ULONG Length;
++
++
++    if ((A & 0x10) == 0) {
++        SimdThreeSame();
++    } else if ((C & 9) == 1) {
++        if ((A & 0x17) == 0x10) {
++            SimdModifiedImmediate();
++        } else {
++            SimdShift();
++        }
++    } else if ((C & 9) == 9) {
++        SimdShift();
++    } else if ((A & 0x16) != 0x16) {
++        if ((C & 5) == 0) {
++            SimdThreeDifferent();
++        } else if ((C & 5) == 4) {
++            SimdScalar();
++        } else {
++            OutputUndefined();
++        }
++    } else if (!U) {
++        if ((C & 1) == 0 && !(Q ? (QD | QN | QM) & 1 : B & 8)) {
++            OutputOp("vext", FALSE, ".8");
++            OutputSimd3(Q, QD, Q, QN, Q, QM);
++            OutputComma();
++            OutputImm(B);
++        } else {
++            OutputUndefined();
++        }
++    } else if ((B & 8) == 0 && (C & 1) == 0) {
++        SimdTwoMisc();
++    } else if ((B & 0xc) == 8 && (C & 1) == 0) {
++        Length = (B & 3) + 1;
++        if (QN + Length > 32) {
++            Length = 32 - QN;
++        }
++        OutputOp((Hw2 & 0x40) ? "vtbx" : "vtbl", FALSE, ".8");
++        OutputSimdReg(FALSE, QD);
++        OutputComma();
++        OutputList("d", QN, Length, 1, NULL);
++        OutputComma();
++        OutputSimdReg(FALSE, QM);
++    } else if (B == 12 && (C & 9) == 0) {
++        Imm4 = Hw1 & 0xf;
++        if (Imm4 & 1) {
++            OutputOp("vdup", FALSE, ".8");
++            Imm4 >>= 1;
++        } else if (Imm4 & 2) {
++            OutputOp("vdup", FALSE, ".16");
++            Imm4 >>= 2;
++        } else if (Imm4 & 4) {
++            OutputOp("vdup", FALSE, ".32");
++            Imm4 >>= 3;
++        } else {
++            OutputUndefined();
++            return;
++        }
++        if (Q && (QD & 1)) {
++            OutputUndefined();
++            return;
++        }
++        OutputSimdReg(Q, QD);
++        OutputComma();
++        OutputVfpReg(TRUE, QM);
++        *pBuf++ = '[';
++        OutputNumber(Imm4);
++        *pBuf++ = ']';
++    } else {
++        OutputUndefined();
+=1 851 3
++static VOID
++SimdLoadStore (VOID)
++{
++    ULONG A = (Hw1 >> 7) & 1;
++    ULONG L = (Hw1 >> 5) & 1;
++    ULONG Rn = Hw1 & 0xf;
++    ULONG Rm = Hw2 & 0xf;
++    ULONG Type = (Hw2 >> 8) & 0xf;
++    ULONG IndexAlign = (Hw2 >> 4) & 0xf;
++    ULONG Size;
++    ULONG Elements;                     // n of VLDn and VSTn
++    ULONG Regs;                         // the registers of the list
++    ULONG Step;                         // between them
++    ULONG AlignBits = 0;
++    ULONG Valid = TRUE;
++    UCHAR Lane[4];
++    UCHAR Name[6];
++    static UCHAR MultipleElements[11] = { 4, 4, 1, 2, 3, 3, 1, 1, 2, 2, 1 };
++    static UCHAR MultipleRegs[11]     = { 4, 4, 4, 4, 3, 3, 3, 1, 2, 2, 2 };
++    static UCHAR MultipleStep[11]     = { 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1 };
++
++    Lane[0] = '\0';
++
++    if (!A) {
++
++        //
++        // Multiple elements: the alignment is 64 << (align - 1) bits.
++        //
++
++        if (Type > 10) {
++            OutputUndefined();
++            return;
++        }
++        Size = (Hw2 >> 6) & 3;
++        Elements = MultipleElements[Type];
++        Regs = MultipleRegs[Type];
++        Step = MultipleStep[Type];
++        if (Elements != 1 && Size == 3) {
++            Valid = FALSE;
++        }
++        if ((Type >= 4 && Type <= 7 && (IndexAlign & 2)) ||
++            (Type >= 8 && (IndexAlign & 3) == 3)) {
++            Valid = FALSE;
++        }
++        if (IndexAlign & 3) {
++            AlignBits = 32 << (IndexAlign & 3);
++        }
++
++    } else if ((Hw2 & 0xc00) == 0xc00) {
++
++        //
++        // One element to all lanes (loads only).
++        //
++
++        Elements = ((Hw2 >> 8) & 3) + 1;
++        Size = (Hw2 >> 6) & 3;
++        Regs = Elements;
++        Step = (Hw2 & 0x20) ? 2 : 1;
++        if (Elements == 1) {
++            Regs = Step;
++            Step = 1;
++        }
++        if (!L || (Size == 3 && (Elements != 4 || !(Hw2 & 0x10))) ||
++            (Elements == 1 && Size == 0 && (Hw2 & 0x10)) ||
++            (Elements == 3 && (Hw2 & 0x10))) {
++            Valid = FALSE;
++        }
++        if (Hw2 & 0x10) {
++            switch (Elements) {
++            case 1:
++                AlignBits = 8 << Size;
++                break;
++            case 2:
++                AlignBits = 16 << Size;
++                break;
++            default:
++                AlignBits = Size == 0 ? 32 : Size == 3 ? 128 : 64;
++                break;
++            }
++        }
++        if (Size == 3) {
++            Size = 2;
++        }
++        strcpy(Lane, "[]");
++
++    } else {
++
++        //
++        // One element to one lane: index_align holds the lane, the
++        // spacing of the registers and the alignment.
++        //
++
++        Elements = ((Hw2 >> 8) & 3) + 1;
++        Size = (Hw2 >> 10) & 3;
++        Regs = Elements;
++        Step = (Elements != 1 && Size != 0 && (IndexAlign & (1 << Size))) ? 2 : 1;
++        switch (Elements) {
++        case 1:
++            if (Size == 0) {
++                Valid = !(IndexAlign & 1);
++            } else if (Size == 1) {
++                Valid = !(IndexAlign & 2);
++                AlignBits = (IndexAlign & 1) ? 16 : 0;
++            } else {
++                Valid = !(IndexAlign & 4) && ((IndexAlign & 3) == 0 || (IndexAlign & 3) == 3);
++                AlignBits = (IndexAlign & 3) ? 32 : 0;
++            }
++            break;
++        case 2:
++            Valid = Size != 2 || !(IndexAlign & 2);
++            AlignBits = (IndexAlign & 1) ? 16 << Size : 0;
++            break;
++        case 3:
++            Valid = !(IndexAlign & (Size == 2 ? 3 : 1));
++            break;
++        default:
++            if (Size == 2) {
++                Valid = (IndexAlign & 3) != 3;
++                AlignBits = (IndexAlign & 3) ? 32 << (IndexAlign & 3) : 0;
++            } else {
++                AlignBits = (IndexAlign & 1) ? 32 << Size : 0;
++            }
++            break;
++        }
++        Lane[0] = '[';
++        Lane[1] = (UCHAR)('0' + (IndexAlign >> (Size + 1)));
++        Lane[2] = ']';
++        Lane[3] = '\0';
++    }
++
++    if (!Valid) {
++        OutputUndefined();
++        return;
++    }
++
++    strcpy(Name, L ? "vld" : "vst");
++    Name[3] = (UCHAR)('0' + Elements);
++    Name[4] = '\0';
++    OutputOp(Name, FALSE, SimdType('\0', Size));
++    OutputList("d", QD, Regs, Step, Lane[0] != '\0' ? Lane : NULL);
++    OutputComma();
++    *pBuf++ = '[';
++    OutputReg(Rn);
++    if (AlignBits != 0) {
++        *pBuf++ = '@';
++        OutputNumberDecimal(AlignBits);
++    }
++    *pBuf++ = ']';
++    if (Rm == 13) {
++        *pBuf++ = '!';
++    } else if (Rm != 15) {
++        OutputComma();
++        OutputReg(Rm);
++    }
++
++    EAsize = A ? 1 << Size : 8;
++    EAreg = Rn;
++    EAindex = 16;
++    EAoffset = 0;
++}
++
++static VOID
++Thumb32 (VOID)
++{
++    ULONG Op1 = (Hw1 >> 11) & 3;
++    ULONG Op2 = (Hw1 >> 4) & 0x7f;
++
++    if ((Hw1 & 0xef00) == 0xef00) {
++        AdvancedSimd();
++        return;
++    }
++
++    if (Op1 == 1) {
++        if ((Op2 & 0x64) == 0x00) {
++            LoadStoreMultiple();
++        } else if ((Op2 & 0x64) == 0x04) {
++            LoadStoreDual();
++        } else if ((Op2 & 0x60) == 0x20) {
++            DataProcessingShiftedRegister();
++        } else {
++            Coprocessor();
++        }
++    } else if (Op1 == 2) {
++        if (Hw2 & 0x8000) {
++            BranchMisc();
++        } else if (Op2 & 0x20) {
++            DataProcessingPlainImmediate();
++        } else {
++            DataProcessingModifiedImmediate();
++        }
++    } else {
++        if ((Op2 & 0x71) == 0x00) {
++            StoreSingle();
++        } else if ((Op2 & 0x67) == 0x01) {
++            LoadSingle(0);
++        } else if ((Op2 & 0x67) == 0x03) {
++            LoadSingle(1);
++        } else if ((Op2 & 0x67) == 0x05) {
++            LoadSingle(2);
++        } else if ((Op2 & 0x67) == 0x07) {
++            OutputUndefined();
++        } else if ((Op2 & 0x71) == 0x10) {
++            SimdLoadStore();
++        } else if ((Op2 & 0x70) == 0x20) {
++            DataProcessingRegister();
++        } else if ((Op2 & 0x78) == 0x30) {
++            Multiply();
++        } else if ((Op2 & 0x78) == 0x38) {
++            LongMultiply();
++        } else {
++            Coprocessor();
+=1 731 3 -12
+=1 746 133

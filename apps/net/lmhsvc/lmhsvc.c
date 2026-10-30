@@ -6,14 +6,25 @@ Module Name:
 
 Abstract:
 
-    The LmHosts service of TCP/IP (lmhsvc.dll, run by services.exe): NetBIOS
-    over TCP/IP resolves with DNS the names it finds neither in its cache, on
-    its name servers nor in LMHOSTS. NetBT holds a request of this service
-    (IOCTL_NETBT_DNS_NAME_RESOLVE, a tIPADDR_BUFFER) and completes it with the
-    name to resolve; the service resolves the name with the host name
-    resolution of Windows Sockets and answers with its next request, which
-    carries the address (in host order, as NetBT keeps addresses) and whether
-    the name resolved.
+    The LmHosts service of TCP/IP (lmhsvc.dll, run by services.exe), the
+    TCP/IP NetBIOS Helper: it does for NetBIOS over TCP/IP what NetBT cannot
+    do in the kernel. NetBT holds a request of each kind (a
+    tIPADDR_BUFFER_DNS) and completes it with work; the service answers in
+    the buffer of its next request of that kind.
+
+    IOCTL_NETBT_DNS_NAME_RESOLVE: a name that NetBT found neither in its
+    cache, on its name servers nor in LMHOSTS. The service looks it up in
+    DNS, and only there (the host name resolution of Windows Sockets would
+    ask NetBT again), and answers with its addresses, ending with 0, and
+    whether it resolved.
+
+    IOCTL_NETBT_CHECK_IP_ADDR: the addresses of a multihomed host to which
+    NetBT sets up a session, the best first, ending with 0. The service sends
+    each an echo request and answers with the first that replies, or with
+    the first of the list if none does.
+
+    NetBT keeps addresses in host order; those it sends to check are in
+    network order, as the name query response carried them.
 
 --*/
 
@@ -21,25 +32,40 @@ Abstract:
 #include <ntrtl.h>
 #include <nturtl.h>
 #include <windows.h>
-#include <winsock.h>
+#include <winsock2.h>
+#include <svcguid.h>
+#include <ipexport.h>
+#include <icmpapi.h>
 #include <lmcons.h>
 #include <lmsname.h>
 #include <svcs.h>
 #include <nbtioctl.h>
 
 #define NETBT_LINKAGE   L"System\\CurrentControlSet\\Services\\NetBT\\Linkage"
+#define ECHO_TIMEOUT    1000            // milliseconds an address has to answer
+
+//
+// A request NetBT holds, and the routine that does its work.
+//
+
+typedef struct _LMH_REQUEST {
+    ULONG IoControlCode;
+    VOID (*Answer)(tIPADDR_BUFFER_DNS *Buffer);
+    tIPADDR_BUFFER_DNS Buffer;
+    IO_STATUS_BLOCK IoStatus;
+} LMH_REQUEST;
+
+static VOID LmhResolveName(tIPADDR_BUFFER_DNS *Buffer);
+static VOID LmhCheckAddresses(tIPADDR_BUFFER_DNS *Buffer);
+
+static LMH_REQUEST LmhDnsRequest = { IOCTL_NETBT_DNS_NAME_RESOLVE, LmhResolveName };
+static LMH_REQUEST LmhCheckRequest = { IOCTL_NETBT_CHECK_IP_ADDR, LmhCheckAddresses };
 
 static SERVICE_STATUS_HANDLE LmhStatusHandle;
 static SERVICE_STATUS LmhStatus;
 static HANDLE LmhStopEvent;
-
-//
-// The request NetBT holds, and its status: NetBT may complete it after the
-// service stopped.
-//
-
-static tIPADDR_BUFFER LmhBuffer;
-static IO_STATUS_BLOCK LmhIoStatus;
+static HANDLE LmhNetBT;
+static HANDLE LmhIcmp;
 
 static VOID
 LmhSetStatus (
@@ -77,7 +103,7 @@ LmhControlHandler (
 
 //
 // Open the first device NetBT exports (Linkage\Export): any of them reaches
-// the name queries of all of them.
+// the requests of all of them.
 //
 
 static NTSTATUS
@@ -122,52 +148,113 @@ LmhOpenNetBT (
 }
 
 //
-// Resolve the name of the request (15 characters, padded with spaces) with
-// the host name resolution of Windows Sockets.
+// Look the name up in DNS (a NetBIOS name comes padded with spaces to 15
+// characters).
 //
 
 static VOID
-LmhResolve (
-    tIPADDR_BUFFER *Buffer
+LmhResolveName (
+    tIPADDR_BUFFER_DNS *Buffer
     )
 {
-    CHAR Name[NETBIOS_NAMESIZE];
+    static GUID HostName = SVCID_INET_HOSTADDRBYNAME;
+    WSAQUERYSETA Query;
+    union {
+        WSAQUERYSETA Set;
+        UCHAR Space[2048];
+    } Results;
+    DWORD Size = sizeof(Results);
+    HANDLE Lookup;
+    PCHAR Base;
     struct hostent *Host;
+    ULONG *Offset;
+    ULONG Count = 0;
     int Length;
 
-    RtlCopyMemory(Name, Buffer->Name, NETBIOS_NAMESIZE - 1);
-    Name[NETBIOS_NAMESIZE - 1] = '\0';
-    for (Length = lstrlenA(Name); Length > 0 && Name[Length - 1] == ' '; Length -= 1) {
-        Name[Length - 1] = '\0';
+    Buffer->pName[sizeof(Buffer->pName) - 1] = '\0';
+    for (Length = lstrlenA((LPSTR)Buffer->pName); Length > 0 && Buffer->pName[Length - 1] == ' '; Length -= 1) {
+        Buffer->pName[Length - 1] = '\0';
     }
 
-    Buffer->IpAddress = 0;
-    Buffer->Resolved = FALSE;
-    if (Length == 0) {
-        return;
+    if (Length != 0) {
+        RtlZeroMemory(&Query, sizeof(Query));
+        Query.dwSize = sizeof(Query);
+        Query.lpszServiceInstanceName = (LPSTR)Buffer->pName;
+        Query.lpServiceClassId = &HostName;
+        Query.dwNameSpace = NS_DNS;
+        if (WSALookupServiceBeginA(&Query, LUP_RETURN_BLOB, &Lookup) == 0) {
+            if (WSALookupServiceNextA(Lookup, 0, &Size, &Results.Set) == 0 && Results.Set.lpBlob != NULL) {
+
+                //
+                // The blob is a hostent whose pointers are offsets from it.
+                //
+
+                Base = (PCHAR)Results.Set.lpBlob->pBlobData;
+                Host = (struct hostent *)Base;
+                if (Host->h_addrtype == AF_INET && Host->h_length == sizeof(ULONG) && Host->h_addr_list != NULL) {
+                    Offset = (ULONG *)(Base + (ULONG)Host->h_addr_list);
+                    while (Count < MAX_IPADDRS_PER_HOST && Offset[Count] != 0) {
+                        Buffer->IpAddrsList[Count] = ntohl(*(ULONG UNALIGNED *)(Base + Offset[Count]));
+                        Count += 1;
+                    }
+                }
+            }
+            WSALookupServiceEnd(Lookup);
+        }
     }
 
-    Host = gethostbyname(Name);
-    if (Host == NULL || Host->h_length != sizeof(ULONG) || Host->h_addr_list[0] == NULL) {
-        return;
-    }
-
-    Buffer->IpAddress = ntohl(*(u_long *)Host->h_addr_list[0]);
-    Buffer->Resolved = TRUE;
+    Buffer->IpAddrsList[Count] = 0;
+    Buffer->Resolved = Count != 0;
 }
 
 //
-// Hold a request in NetBT until it has a name to resolve, then answer with
-// the next one, until the service stops.
+// Find the first address of the list that answers an echo request.
+//
+
+static VOID
+LmhCheckAddresses (
+    tIPADDR_BUFFER_DNS *Buffer
+    )
+{
+    union {
+        ICMP_ECHO_REPLY Echo;
+        UCHAR Space[sizeof(ICMP_ECHO_REPLY) + 8];
+    } Reply;
+    ULONG Count;
+    ULONG Index;
+
+    for (Count = 0; Count <= MAX_IPADDRS_PER_HOST && Buffer->IpAddrsList[Count] != 0; Count += 1) {
+    }
+
+    for (Index = 0; Index < Count; Index += 1) {
+        if (IcmpSendEcho(LmhIcmp, Buffer->IpAddrsList[Index], NULL, 0, NULL, &Reply, sizeof(Reply), ECHO_TIMEOUT) != 0 &&
+            Reply.Echo.Status == IP_SUCCESS) {
+            break;
+        }
+    }
+
+    if (Index == Count) {
+        Index = 0;
+    }
+
+    Buffer->IpAddrsList[0] = ntohl(Buffer->IpAddrsList[Index]);
+    Buffer->IpAddrsList[1] = 0;
+    Buffer->Resolved = Count != 0;
+}
+
+//
+// Hold a request in NetBT until it has work, then answer with the next one,
+// until the service stops; then take the request back.
 //
 
 static DWORD
-LmhResolveNames (
-    HANDLE NetBT
+LmhServe (
+    LMH_REQUEST *Request
     )
 {
     HANDLE Done;
     HANDLE Events[2];
+    IO_STATUS_BLOCK IoStatus;
     NTSTATUS Status;
 
     Done = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -177,38 +264,47 @@ LmhResolveNames (
 
     Events[0] = LmhStopEvent;
     Events[1] = Done;
-    RtlZeroMemory(&LmhBuffer, sizeof(LmhBuffer));
+    RtlZeroMemory(&Request->Buffer, sizeof(Request->Buffer));
     for (;;) {
-        ResetEvent(Done);
-        Status = NtDeviceIoControlFile(NetBT,
+        Status = NtDeviceIoControlFile(LmhNetBT,
                                        Done,
                                        NULL,
                                        NULL,
-                                       &LmhIoStatus,
-                                       IOCTL_NETBT_DNS_NAME_RESOLVE,
+                                       &Request->IoStatus,
+                                       Request->IoControlCode,
                                        NULL,
                                        0,
-                                       &LmhBuffer,
-                                       sizeof(LmhBuffer));
+                                       &Request->Buffer,
+                                       sizeof(Request->Buffer));
 
         if (Status == STATUS_PENDING) {
             if (WaitForMultipleObjects(2, Events, FALSE, INFINITE) != WAIT_OBJECT_0 + 1) {
+                NtCancelIoFile(LmhNetBT, &IoStatus);
+                WaitForSingleObject(Done, INFINITE);
+                Status = STATUS_SUCCESS;
                 break;
             }
 
-            Status = LmhIoStatus.Status;
+            Status = Request->IoStatus.Status;
         }
 
         if (!NT_SUCCESS(Status)) {
-            CloseHandle(Done);
-            return RtlNtStatusToDosError(Status);
+            break;
         }
 
-        LmhResolve(&LmhBuffer);
+        Request->Answer(&Request->Buffer);
     }
 
     CloseHandle(Done);
-    return NO_ERROR;
+    return NT_SUCCESS(Status) ? NO_ERROR : RtlNtStatusToDosError(Status);
+}
+
+static DWORD WINAPI
+LmhCheckThread (
+    LPVOID Parameter
+    )
+{
+    return LmhServe(&LmhCheckRequest);
 }
 
 VOID
@@ -220,7 +316,9 @@ ServiceEntry (
     )
 {
     WSADATA WsaData;
-    HANDLE NetBT;
+    HANDLE Thread;
+    DWORD ThreadId;
+    DWORD CheckError;
     NTSTATUS Status;
     DWORD Error;
 
@@ -236,14 +334,14 @@ ServiceEntry (
         return;
     }
 
-    Error = WSAStartup(0x0101, &WsaData);
+    Error = WSAStartup(MAKEWORD(2, 0), &WsaData);
     if (Error != 0) {
         CloseHandle(LmhStopEvent);
         LmhSetStatus(SERVICE_STOPPED, Error);
         return;
     }
 
-    Status = LmhOpenNetBT(&NetBT);
+    Status = LmhOpenNetBT(&LmhNetBT);
     if (!NT_SUCCESS(Status)) {
         WSACleanup();
         CloseHandle(LmhStopEvent);
@@ -251,10 +349,26 @@ ServiceEntry (
         return;
     }
 
-    LmhSetStatus(SERVICE_RUNNING, NO_ERROR);
-    Error = LmhResolveNames(NetBT);
+    LmhIcmp = IcmpCreateFile();
+    Thread = CreateThread(NULL, 0, LmhCheckThread, NULL, 0, &ThreadId);
+    if (Thread == NULL) {
+        Error = GetLastError();
+    } else {
+        LmhSetStatus(SERVICE_RUNNING, NO_ERROR);
+        Error = LmhServe(&LmhDnsRequest);
 
-    NtClose(NetBT);
+        SetEvent(LmhStopEvent);
+        WaitForSingleObject(Thread, INFINITE);
+        if (Error == NO_ERROR && GetExitCodeThread(Thread, &CheckError)) {
+            Error = CheckError;
+        }
+        CloseHandle(Thread);
+    }
+
+    if (LmhIcmp != INVALID_HANDLE_VALUE) {
+        IcmpCloseHandle(LmhIcmp);
+    }
+    NtClose(LmhNetBT);
     WSACleanup();
     CloseHandle(LmhStopEvent);
     LmhSetStatus(SERVICE_STOPPED, Error);

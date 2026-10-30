@@ -1,0 +1,6 @@
+#ntdiff private/net/ras/src/common/src/eventlog/msgdll/makefile.inc
++# mapmsg writes every message of raserror.h, then stops at RASBASEEND (the last number again)
++# with exit code 1; nmake leaves the rasmsg.mc it wrote, and the next build goes on with it
+=1 1 2
++    -mapmsg RAS RASBASE $(_NTBINDIR)\public\sdk\inc\raserror.h >> rasmsg.mc
+=1 4 3

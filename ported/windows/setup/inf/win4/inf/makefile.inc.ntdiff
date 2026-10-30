@@ -20,11 +20,50 @@
 +    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
 =1 106 5
 +    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
-=1 112 21
+=1 94 3
++# the files the setup source of ARM has not are platform lines of optional.inx
+=1 115 1
+=1 92 1
 +    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
-=1 134 18
+=1 94 3
++# the files the setup source of ARM has not are platform lines of accessor.inx
+=1 119 1
+=1 92 1
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 3
++# the files the setup source of ARM has not are platform lines of communic.inx
+=1 123 1
+=1 92 1
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 3
++# the files the setup source of ARM has not are platform lines of games.inx
+=1 127 1
+=1 92 1
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 3
+=1 131 2
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 134 7
++# the files the setup source of ARM has not are platform lines of mmopt.inx
+=1 141 1
+=1 92 1
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 3
+=1 145 7
 +    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
-=1 153 55
+=1 75 4
++# the files the setup source of ARM has not are platform lines of multimed.inx
+=1 157 1
+=1 92 1
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 3
+=1 161 4
++# the converters and the help files of wordpad.inx are platform lines: they are not on ARM
+=1 165 1
+=1 92 1
++    prodfilt $(@B).tmp $@ +$(PLATSWITCH)
+=1 94 3
+=1 169 39
 +    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)
 =1 209 8
 +    prodfilt $(@B).tmp2 $@ +$(PLATSWITCH)

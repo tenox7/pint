@@ -1,0 +1,9 @@
+#ntdiff private/oleauto/src/typelib/macros.hxx
+=1 1 94
++#if OE_WIN32
++// the Win32 C runtime's new.h has the placement operator new
++#include <new.h>
++#else
+=1 95 4
++#endif
+=1 99 178

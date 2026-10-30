@@ -1,0 +1,13 @@
+#ntdiff private/sdktools/vctools/ntmfc/src42/olecall.cpp
+=1 1 80
++// ARM version
++
++#ifdef _ARM_
++
++// Note: ARM version is in src\arm\olecall_.asm
++
++// The ARM compiler does not support inline assembly, so it
++//  must be built separately with the ARM assembler.
++
++#endif // _ARM_
+=1 79 30

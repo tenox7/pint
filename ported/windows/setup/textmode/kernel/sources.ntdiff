@@ -1,0 +1,10 @@
+#ntdiff private/windows/setup/textmode/kernel/sources
+#crlf
+=1 1 85
++#
++# As the text setup of NT 4.0 was built: without the fast recovery of the tree (_FASTRECOVER_),
++# which reads the answer file of an unattended setup also in one that is not.
++#
++C_DEFINES=-D_NTSYSTEM_
+=1 87 2
++

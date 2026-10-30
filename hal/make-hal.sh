@@ -4,7 +4,7 @@
 # library and the kernel C run-time, exporting hal.src.
 #
 # Usage:  cd RASPI/hal && ./make-hal.sh                 # -> obj/HAL.DLL
-#         INSTALL=1 ./make-hal.sh                       # -> sdcard/root/os/nt/HAL.DLL (system partition)
+#         INSTALL=1 ./make-hal.sh                       # -> sdcard/root/os/winnt40/HAL.DLL (system partition)
 # Needs obj/ntoskrnl.lib (make-execlink.sh) and obj/libcntpr.lib (../crt/make-crt.sh).
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,8 +35,8 @@ echo "   $n compiled, $fail failed"
 
 tr -d "\032\r" < hal.src > $DIR/hal.src
 cl -nologo -EP -D_ARM_ $DIR/hal.src > $DIR/hal.def 2>/dev/null
-OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/os/nt && mkdir -p $OUT
-link -nologo -machine:arm -release -dll -noentry -subsystem:native -base:0x81800000 -nodefaultlib $LINKVER \
+OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/os/winnt40 && mkdir -p $OUT
+link -nologo -machine:arm -release -opt:ref,noicf -dll -noentry -subsystem:native -base:0x81800000 -nodefaultlib $LINKVER \
      -debug -pdb:$O/hal.pdb -map:$O/hal.map -def:$DIR/hal.def -out:$DIR/hal.dll \
      $DIR/obj/*.obj $O/ntoskrnl.lib $O/libcntpr.lib > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|unresolved" $DIR/link.err | sort | uniq -c | sort -rn | head -40; exit 1; }

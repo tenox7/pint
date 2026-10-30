@@ -1,0 +1,5 @@
+#ntdiff private/windows/setup/textmode/kernel/spsetup.c
+=1 1 248
++#elif defined(_ARM_)
++PWSTR PlatformExtension = L".arm";
+=1 249 2973

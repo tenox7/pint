@@ -1,0 +1,20 @@
+#ntdiff private/sdktools/drwatson/debug.c
+=1 1 128
++#if defined(_M_ARM)
++void
++SkipBreakpoint(
+=1 65 3
++#endif
+=1 128 67
++#if defined(_M_ARM)
++                        //
++                        // ARM stops at the breakpoint instruction, which the
++                        // continue would execute again: step over it, so that
++                        // the thread of the attach goes on and exits.
++                        //
++                        SkipBreakpoint( dp, &de );
++#endif
+=1 195 335
++#elif defined(_M_ARM)
++    machType = IMAGE_FILE_MACHINE_ARMNT;
+=1 530 497

@@ -1,0 +1,5 @@
+#ntdiff private/windows/shell/quikview/viewer/common/sccd.h
+=1 1 87
++	/* (the compilers of 1996 took the name before its typedef below) */
++typedef struct SCCDGENINFOtag FAR * LPSCCDGENINFO;
+=1 88 346

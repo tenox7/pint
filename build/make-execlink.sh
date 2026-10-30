@@ -100,7 +100,7 @@ cl -nologo -EP -D_ARM_ $DIR/hal.src > $DIR/hal.def 2>/dev/null
 lib -nologo -machine:arm -def:$DIR/hal.def -name:hal.dll -out:$DIR/hal.lib > $DIR/hal.err 2>&1 || { cat $DIR/hal.err; exit 1; }
 RES=$(bash $B/rc.sh /work/private/ntos/init /work/private/ntos/init/ntoskrnl.rc $DEFS $KINCS) || exit 1
 echo ">> linking"
-link -nologo -machine:arm -release -driver -subsystem:native -entry:KiSystemStartup -base:0x81000000 -nodefaultlib $LINKVER \
+link -nologo -machine:arm -release -opt:ref,noicf -driver -subsystem:native -entry:KiSystemStartup -base:0x81000000 -nodefaultlib $LINKVER \
      -debug -pdb:$O/ntoskrnl.pdb -map:$O/ntoskrnl.map -def:$DIR/ntoskrnl.def -out:$DIR/ntoskrnl.exe \
      $DIR/arch/*.obj $DIR/exec.lib $O/libcntpr.lib $DIR/hal.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED (all messages in obj/ntoskrnl.link.err)"; cp $DIR/link.err $O/ntoskrnl.link.err

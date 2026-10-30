@@ -1,0 +1,5 @@
+# sdktools\drwatson ARM_SOURCES (its MIPS_SOURCES: the registers, the disassembler and the
+# thread context of the machine)
+arm/regs.c
+arm/disasm.c
+arm/context.c

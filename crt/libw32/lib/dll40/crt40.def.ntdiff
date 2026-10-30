@@ -1,0 +1,10 @@
+#ntdiff private/sdktools/vctools/crt/libw32/lib/dll40/crt40.def
+#crlf
+=1 1 9211
++#elif defined(_M_ARM)
+=1 8115 220
+=1 1437 8
+=1 1446 9
+=1 1460 8
+=1 8372 553
+=1 8926 299

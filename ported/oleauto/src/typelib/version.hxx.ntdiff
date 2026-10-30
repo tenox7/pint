@@ -1,0 +1,4 @@
+#ntdiff private/oleauto/src/typelib/version.hxx
+=1 1 42
++#if defined (_MIPS_) || defined (_ALPHA_) || defined (_PPC_) || defined (_ARM_)
+=1 44 24

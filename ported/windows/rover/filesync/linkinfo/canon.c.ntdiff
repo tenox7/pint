@@ -1,4 +1,5 @@
 #ntdiff private/windows/rover/filesync/linkinfo/canon.c
 =1 1 455
 +    return fCanonical;
-=1 456 2
++}
++#endif

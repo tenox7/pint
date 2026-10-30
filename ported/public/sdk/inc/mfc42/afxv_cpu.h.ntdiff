@@ -1,0 +1,11 @@
+#ntdiff public/sdk/inc/mfc42/afxv_cpu.h
+=1 1 12
++#if !defined(_M_MRX000) && !defined(_M_ALPHA) && !defined(_M_PPC) && !defined(_M_M68K) && !defined(_M_MPPC) && !defined(_M_ARM)
++	#error afxv_cpu.h is only for MIPS R4000, DEC AXP, Motorola M68000, IBM PowerPC, and ARM builds
+=1 15 49
++
++#ifdef _ARM_
++// specific overrides for ARM...
++#define _AFX_PACKING    8       // default ARM alignment (required)
++#endif //_ARM_
+=1 16 2

@@ -40,8 +40,8 @@ echo ">> infs"
 bash $B/nttarget.sh $D pre
 
 echo ">> bom tools"
-# The tools of the INFs of NT 3.x (bom: SIZE, LAYOUT, INFS with GENERAL; LOCAL; STRIPINF),
-# compiled as NT compiles them (the port's version of a source, if any) and linked with libc
+# The tools of the INFs of NT 3.x (bom: SIZE, LAYOUT, INFS with GENERAL; LOCAL; STRIPINF) and
+# INFSIZE (the release's file sizes of layout.inf: make-setup-image.sh), compiled as NT compiles them (the port's version of a source, if any) and linked with libc
 # as the build tools of make-tools.sh (their USE_CRTDLL is for the run-time DLL of NT), into
 # obj/inf/host: obj/host is an input of every step of the build (stamp.sh)
 # bomcc DIR SOURCE: SOURCE of setup\DIR as NT compiles the programs of DIR
@@ -75,6 +75,7 @@ bomprog() {
 for t in size layout infs; do bomprog $t bom/$t $t.c -- $T/general.obj; done
 bomprog local localinf local.c --
 bomprog stripinf stripinf stripinf.c --
+bomprog infsize bom/infsize infsize.c --
 mkdir -p /tmp/ir/RASPI/obj && ln -sfn $IH /tmp/ir/RASPI/obj/host
 run() { NTROOT=/tmp/ir bash $R/tools/host.sh "$@"; }
 

@@ -3,7 +3,9 @@
 # assembler of what MIPS has in assembler. A line: DIRECTORY SOURCE. DIRECTORY is a
 # component, for each of its library types that has MIPS_SOURCES (misc of DLLLIB has none),
 # or one library type (crtw32\misc\nt); SOURCE is named from the directory of the library
-# type, as there: ..\memccpy.c, ..\arm\chandler.c (the port's, crt\<path>).
+# type, as there: ..\memccpy.c, ..\arm\chandler.c (the port's, crt\<path>). dllstuff\dlllib takes
+# the _fltused of its i386_SOURCES (..\i386\dllsupp.asm), which Microsoft C for ARM references
+# as that of x86 does: the port's of crt32 (crt\dllstuff\arm).
 crtw32/eh ../arm/trnsctrl.cpp
 crtw32/eh ../arm/ehstate.cpp
 crtw32/eh ../arm/handlers.asm
@@ -21,6 +23,7 @@ crtw32/misc ../arm/setjmp.asm
 crtw32/misc ../arm/setjmpex.asm
 crtw32/misc ../arm/longjmp.asm
 crtw32/misc ../arm/jmpuwind.asm
+crtw32/dllstuff/dlllib ../../../dllstuff/arm/dllsupp.asm
 crtw32/startup ../arm/chkstk.asm
 crtw32/mbstring ../mbscat.c
 crtw32/mbstring ../mbsdup.c

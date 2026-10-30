@@ -1,0 +1,3 @@
+#ntdiff private/sdktools/crashlib/sources
+=1 1 12
++ARM_FLAGS   =-DHOST_ARM   -D_CROSS_PLATFORM_

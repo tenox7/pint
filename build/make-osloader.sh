@@ -31,7 +31,7 @@ link -nologo -machine:arm -subsystem:native -entry:BlOsLoader -base:0x80600000 \
      -nodefaultlib -debug -pdb:$O/osloader.pdb -map:$O/osloader.map -out:$O/osloader.pe $DIR/config.obj $DIR/kernldat.obj \
      $O/bldr.lib $O/boot.lib $O/bconfig.lib $O/bldrrtl.lib $O/libcntpr.lib $RES > $DIR/link.err 2>&1 \
   || { echo ">> LINK FAILED"; grep -E "error|warning LNK4" $DIR/link.err | head -60; exit 1; }
-OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/os/nt && mkdir -p $OUT
+OUT=$O; [ "$INSTALL" = 1 ] && OUT=/work/RASPI/sdcard/root/os/winnt40 && mkdir -p $OUT
 bash /work/RASPI/tools/host.sh pe2img -rom $O/osloader.pe $OUT/OSLOADER.EXE || exit 1
 echo "   wrote $OUT/OSLOADER.EXE"
 '

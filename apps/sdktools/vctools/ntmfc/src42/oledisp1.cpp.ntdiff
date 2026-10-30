@@ -1,0 +1,132 @@
+#ntdiff private/sdktools/vctools/ntmfc/src42/oledisp1.cpp
+=1 1 455
++#ifdef _ARM_
++// ARM: the place of each argument by the procedure call standard of the ARM
++//  architecture (floating-point arguments in VFP registers), as the ARM
++//  compiler passes them.  The first _STACK_OFFSET bytes are s0-s15 (d0-d7),
++//  the 16 bytes after them r0-r3 (the 'this' pointer and the return value
++//  pointer first) and the bytes after those the arguments on the stack, for
++//  _AfxDispatchCall (arm\olecall_.asm).  A word goes in the next
++//  core register, a CY in an even register and the next; a float goes in the
++//  lowest free single register (also one a double left free), a double in the
++//  lowest free double register.  What does not fit goes on the stack (a CY or
++//  a double at an 8-byte boundary), and so does every floating-point argument
++//  after one that did not fit.
++
++#define _VFP_ARG    0x80000000  // AFX_ARMARGS::Place: offset in the VFP area
++#define _CORE_SIZE  (_CORE_REGS*sizeof(_STACK_PTR))
++
++struct AFX_ARMARGS
++{
++	UINT nCore;     // bytes of r0-r3 used
++	UINT nStack;    // end of the stack arguments (from r0)
++	DWORD dwVfp;    // bit n: sn used
++	BOOL bVfpFull;  // no floating-point argument in a register any more
++
++	AFX_ARMARGS(UINT nCoreUsed)
++		{ nCore = nCoreUsed; nStack = _CORE_SIZE; dwVfp = 0; bVfpFull = FALSE; }
++	UINT Place(VARTYPE vt);
++};
++
++// the offset of the next argument, of type vt (VT_BYREF: a pointer), from r0,
++// or from s0 with _VFP_ARG
++UINT AFX_ARMARGS::Place(VARTYPE vt)
++{
++	UINT n;
++	switch (vt)
++	{
++	case VT_R4:
++		for (n = 0; !bVfpFull && n < _VFP_SINGLES; n++)
++		{
++			if (!(dwVfp & (1 << n)))
++			{
++				dwVfp |= 1 << n;
++				return _VFP_ARG | (n * sizeof(float));
++			}
++		}
++		bVfpFull = TRUE;
++		n = nStack;
++		nStack += sizeof(_STACK_FLOAT);
++		return n;
++
++	case VT_R8:
++	case VT_DATE:
++		for (n = 0; !bVfpFull && n < _VFP_SINGLES; n += 2)
++		{
++			if (!(dwVfp & (3 << n)))
++			{
++				dwVfp |= 3 << n;
++				return _VFP_ARG | (n * sizeof(float));
++			}
++		}
++		bVfpFull = TRUE;
++		nStack = (nStack + 7) & ~7;
++		n = nStack;
++		nStack += sizeof(_STACK_DOUBLE);
++		return n;
++
++	case VT_CY:
++		nCore = (nCore + 7) & ~7;
++		if (nCore < _CORE_SIZE)
++		{
++			n = nCore;
++			nCore += sizeof(CY);
++			return n;
++		}
++		nStack = (nStack + 7) & ~7;
++		n = nStack;
++		nStack += sizeof(CY);
++		return n;
++
++	default:
++		if (nCore < _CORE_SIZE)
++		{
++			n = nCore;
++			nCore += sizeof(_STACK_PTR);
++			return n;
++		}
++		n = nStack;
++		nStack += sizeof(_STACK_PTR);
++		return n;
++	}
++}
++#endif //_ARM_
+=1 455 61
++#ifdef _ARM_
++	// the arguments by the procedure call standard (AFX_ARMARGS): s0-s15,
++	//  then those in r0-r3 and on the stack, 8-byte aligned (the stack at
++	//  the call)
+=1 523 1
++	AFX_ARMARGS args(sizeof(CCmdTarget*) + rgnRetVal[vtResult]);
+=1 636 2
++	for (; *pbParams != 0; ++pbParams)
+=1 532 3
+=1 542 1
++			args.Place((VARTYPE)((*pbParams & VT_MFCBYREF) ?
++				VT_BYREF : *pbParams));
++		}
++	}
++	return _STACK_OFFSET + ((args.nStack + 7) & ~7);
++#else
+=1 516 44
++#endif //!_ARM_
+=1 560 23
++#ifdef _ARM_
++	// s0-s15, then the arguments (r0-r3 and the stack)
++	BYTE* pVfpArgs = pStack;
+=1 961 1
++	BYTE* pStackArgs = pStack;
+=1 581 50
++#ifdef _ARM_
++	// the places of the arguments, after the 'this' and return value pointers
++	AFX_ARMARGS args(pStack - pStackArgs);
++#endif
+=1 630 93
++#ifdef _ARM_
++		// the place of the parameter: a core register, the stack or a VFP
++		//  register (the stores below, which go there)
++		UINT nPlace = args.Place(vt);
++		pStack = (nPlace & _VFP_ARG) ? pVfpArgs + (nPlace & ~_VFP_ARG) :
++			pStackArgs + nPlace;
++#endif
+=1 722 845

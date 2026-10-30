@@ -1,5 +1,5 @@
 #ntdiff private/windows/cmd/cbatch.c
 =1 1 2374
 +        // (the node types not above, CMPTYP and HELPTYP: as on x86 NT 4.0, which failed here)
-=1 2308 1 -24
++        return(FAILURE) ;
 =1 2375 1528

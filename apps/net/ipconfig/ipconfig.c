@@ -169,9 +169,10 @@ PrintHardwareAddress(
     LPBYTE Address;
     DWORD Length;
     DWORD Index;
+    DWORD Instance;
     DWORD Context = Dword(Key, "IpInterfaceContext", 0xFFFFFFFF);
 
-    if (Context == 0xFFFFFFFF || DhcpQueryHWInfo(Context, &Type, &Address, &Length) != ERROR_SUCCESS) {
+    if (Context == 0xFFFFFFFF || DhcpQueryHWInfo(Context, &Instance, &Type, &Address, &Length) != ERROR_SUCCESS) {
         return;
     }
 

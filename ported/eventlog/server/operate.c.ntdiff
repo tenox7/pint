@@ -1,4 +1,4 @@
 #ntdiff private/eventlog/server/operate.c
 =1 1 611
-=1 610 1 -4
++    return(FALSE);
 =1 612 2506

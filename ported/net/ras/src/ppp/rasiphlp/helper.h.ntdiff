@@ -1,0 +1,5 @@
+#ntdiff private/net/ras/src/ppp/rasiphlp/helper.h
+=1 1 120
++// pPCB is declared nowhere here: the compiler of 1996 read the list as names, a type without prototype
++typedef VOID (* TIMERFUNC) () ;
+=1 122 114

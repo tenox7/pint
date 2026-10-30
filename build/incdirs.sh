@@ -142,14 +142,21 @@ common() {
 # has elsewhere (netcmd\common\pword.c: "..\..\messages\netmsg.h", not netcmd\inc\netmsg.h).
 # So does one of a file of the tree there of the name of one beside the source, which the
 # flattened name would find (psprint\lib\prnlib.c: "..\..\lib\devmode.c", beside its own
-# devmode.c); not a source of its own name, which ntsrc includes from a directory of its own.
+# devmode.c), or of one of NT's common include directories (sndrec32's srecnew.c:
+# "..\..\msacm\msacm\msacm.h", newer than the SDK's msacm.h); not a source of its own name,
+# which ntsrc includes from a directory of its own.
+shadowed() {
+    local c
+    for c in priv pinc pub crt oak winc; do [ -e /tmp/f/$c/$1 ] && return 0; done
+    return 1
+}
 if [ "$1" = --gen ]; then
     m=
     for i in $(tr -d '\r' < "$2" | sed -nE 's/^[[:space:]]*#[[:space:]]*include[[:space:]]*"(\.\.[\\/][^"]*)".*/\1/p' | sort -u); do
         b=$(echo "${i##*[\\/]}" | tr A-Z a-z)
         t=$(resolve "$3" "${i%[\\/]*}") && [ -z "$(common "$t")" ] || continue
         if ls "$t" | grep -qix -- "$b"; then
-            [ "$(realpath "$t")" != "$(realpath "$3")" ] && ls "$3" | grep -qix -- "$b" &&
+            [ "$(realpath "$t")" != "$(realpath "$3")" ] && { ls "$3" | grep -qix -- "$b" || shadowed "$b"; } &&
                 [ "$b" != "$(basename "$2" | tr A-Z a-z)" ] || continue
         else
             ls "/tmp/f/gen/${t#/work/private/}" 2>/dev/null | grep -qix -- "$b" || continue
