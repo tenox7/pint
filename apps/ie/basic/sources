@@ -1,0 +1,31 @@
+MAJORCOMP=apps
+MINORCOMP=ie
+
+TARGETNAME=iebasic
+TARGETPATH=obj
+TARGETTYPE=LIBRARY
+
+USE_LIBCMT=1
+
+# HTTP Basic authentication (sec\basic in the upstream tree): shared (basic,
+# htuu, private, pwcache) and win32 (dlg_conf, dlg_pw, main_w32) merged here.
+# Built into iexplore.exe, not a separate BASIC.DLL (see make\emosaic.rc).
+C_DEFINES=-DFEATURE_TOOLBAR -DFEATURE_JPEG -DFEATURE_SOUND_PLAYER \
+	-DFEATURE_IMAGE_VIEWER -DFEATURE_TABLES -DFEATURE_LOCAL_DIRECTORY \
+	-DFEATURE_ASYNC_IMAGES -DFEATURE_PROGRESSIVE_IMAGE -DFEATURE_MULTISCAN_JPEG \
+	-DFEATURE_SPM -DFEATURE_IAPI -DFEATURE_NO_EXIT_ON_SECONDARY_WINDOWS \
+	-DFEATURE_BROKEN_ATTRIBUTE_PARSER -DFEATURE_CLIENT_IMAGEMAP \
+	-DFEATURE_TABLE_WIDTH -DFEATURE_HTTP_COOKIES -DFEATURE_SSL \
+	-DWINVER=0x0400 -DSTRICT -DWIN32_BUFFERED -D_WINDOWS -DNO_GROUPS \
+	-DACCESS_AUTH -D_GIBRALTAR -UWIN32_LEAN_AND_MEAN
+
+INCLUDES=..\secinc;..\shared;..\win32;..\xxdebug
+
+SOURCES=                \
+	basic.c         \
+	htuu.c          \
+	private.c       \
+	pwcache.c       \
+	dlg_conf.c      \
+	dlg_pw.c        \
+	main_w32.c      \

@@ -1,0 +1,5 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/sh_sid.h
+=1 1 162
++#define SID_ERR_SSL_FAILED_S_S                             20151
++#define SID_HTPNG_RECEIVING_INLINE_S                       20152
++#define SID_HTPNG_RECEIVING_INLINE_S_S                     20153

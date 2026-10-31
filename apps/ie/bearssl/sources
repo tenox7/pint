@@ -1,0 +1,64 @@
+MAJORCOMP=apps
+MINORCOMP=ie
+
+TARGETNAME=iebssl
+TARGETPATH=obj
+TARGETTYPE=LIBRARY
+
+USE_LIBCMT=1
+
+# BearSSL (bearssl.org, MIT), the TLS 1.2 client parts https needs, adapted for
+# the 1993 compilers (no 64-bit int; see bearssl\NT31.txt). The upstream inc\,
+# src\ and nt31\ folders are flattened into this one directory, so that the
+# header farm resolves every header by bare name (and so a component whose
+# INCLUDES named its own subdirs cannot truncate them through a farm symlink).
+# inline is not a keyword for these compilers, so it is mapped to __inline.
+C_DEFINES=-Dinline=__inline
+
+SOURCES=                        \
+	aes_ct.c                \
+	aes_ct_ctr.c            \
+	aes_ct_enc.c            \
+	ccopy.c                 \
+	dec32be.c               \
+	ec_p256_m15.c           \
+	ec_prime_i15.c          \
+	ec_secp256r1.c          \
+	ec_secp384r1.c          \
+	ec_secp521r1.c          \
+	ecdsa_atr.c             \
+	ecdsa_i15_bits.c        \
+	ecdsa_i15_vrfy_asn1.c   \
+	ecdsa_i15_vrfy_raw.c    \
+	enc32be.c               \
+	ghash_ctmul32.c         \
+	hmac.c                  \
+	hmac_drbg.c             \
+	i15_add.c               \
+	i15_bitlen.c            \
+	i15_decmod.c            \
+	i15_decode.c            \
+	i15_encode.c            \
+	i15_fmont.c             \
+	i15_iszero.c            \
+	i15_modpow.c            \
+	i15_modpow2.c           \
+	i15_montmul.c           \
+	i15_muladd.c            \
+	i15_ninv15.c            \
+	i15_rshift.c            \
+	i15_sub.c               \
+	i15_tmont.c             \
+	multihash.c             \
+	prf.c                   \
+	prf_sha256.c            \
+	rsa_i15_pkcs1_vrfy.c    \
+	rsa_i15_pub.c           \
+	rsa_pkcs1_sig_unpad.c   \
+	sha2small.c             \
+	ssl_client.c            \
+	ssl_engine.c            \
+	ssl_hs_client.c         \
+	ssl_rec_gcm.c           \
+	sysrng.c                \
+	x509_decoder.c          \

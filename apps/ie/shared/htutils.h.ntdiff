@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htutils.h
+=1 1 49
++#if defined(FEATURE_STATUS_ICONS) || defined(FEATURE_SSL)
+=1 51 86

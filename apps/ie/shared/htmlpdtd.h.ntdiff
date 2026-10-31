@@ -1,0 +1,68 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htmlpdtd.h
+=1 1 43
++    HTML_ARTICLE,
++    HTML_ASIDE,
+=1 44 6
++    HTML_BUTTON,
+=1 50 7
++    HTML_DETAILS,
++    HTML_DFN,
++    HTML_DIR,
++    HTML_DIV,
+=1 59 3
++    HTML_FIELDSET,
++    HTML_FIGCAPTION,
++    HTML_FIGURE,
++    HTML_FONT,
++    HTML_FOOTER,
++    HTML_FORM,
++    HTML_FRAME,
++    HTML_FRAMESET,
+=1 64 8
++    HTML_HEADER,
+=1 72 4
++    HTML_IFRAME,
+=1 76 6
++    HTML_LABEL,
++    HTML_LEGEND,
+=1 82 4
++    HTML_MAIN,
++    HTML_MAP,
++    HTML_MENU,
++    HTML_META,
++    HTML_NAV,
++    HTML_NEXTID,
++    HTML_NOFRAMES,
+=1 89 8
++    HTML_SCRIPT,
++    HTML_SECTION,
++    HTML_SELECT,
++    HTML_SPAN,
+=1 98 2
++    HTML_STYLE,
++    HTML_SUB,
++    HTML_SUMMARY,
++    HTML_SUP,
+=1 100 3
++    HTML_TEMPLATE,
+=1 103 59
++#define HTML_BUTTON_NAME        0
++#define HTML_BUTTON_TYPE        1
++#define HTML_BUTTON_VALUE       2
++#define HTML_BUTTON_ATTRIBUTES  3
+=1 161 13
++#define HTML_FRAME_HEIGHT       0   /* FRAME and IFRAME */
++#define HTML_FRAME_NAME         1
++#define HTML_FRAME_SRC          2
++#define HTML_FRAME_TITLE        3
++#define HTML_FRAME_WIDTH        4
++#define HTML_FRAME_ATTRIBUTES   5
+=1 173 48
++#define HTML_P_ALIGN            0   /* P and DIV */
+=1 222 14
++#define HTML_META_CHARSET       0
++#define HTML_META_CONTENT       1
++#define HTML_META_HTTP_EQUIV    2
++#define HTML_META_NAME          3
++#define HTML_META_ATTRIBUTES    4
+=1 235 85

@@ -1,0 +1,37 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/w32forms.c
+=1 1 72
++    text->bInForm = TRUE;
+=1 73 947
++    text->bInForm = FALSE;
+=1 172 3 -16
++   <BUTTON> in a form: a push button with its own label, which sends
++   NAME=VALUE.  Outside a form (a button for scripts) only the label shows.
++ */
++void HText_addButton(HText * text, BOOL bReset, const char *name, const char *value, const char *label)
++{
++    struct _element *pel;
++    int len;
++
++    if (!text->bInForm)
++    {
++        HText_appendText(text, label);
+=1 984 3
++    if (!label || !*label)
++    {
++        label = value;      /* HText_addInput falls back to "Submit" */
++    }
++    HText_addInput(text, FALSE, FALSE, NULL, NULL, name, NULL, bReset ? "reset" : "submit",
++                   (label && *label) ? label : NULL, NULL, NULL, NULL);
++
++    pel = &text->w3doc->aElements[text->iElement];
++    if (pel->type == ELE_SUBMIT)
++    {
++        if (value)
++        {
++            pel->textOffset = POOL_GetOffset(&text->w3doc->pool);
+=1 180 2 -8
++            pel->textLen = len;
+=1 567 3
++            pel->textLen = 0;   /* sends no value */
+=1 1050 4
+=1 1022 461

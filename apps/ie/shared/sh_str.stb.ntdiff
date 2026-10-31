@@ -1,0 +1,6 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/sh_str.stb
+=1 1 243
++GTR_SID(SID_ERR_SSL_FAILED_S_S,                             "Secure connection to %s failed: %s")
++GTR_SID(SID_HTPNG_RECEIVING_INLINE_S,                       "Receiving inline PNG image: %s")
++GTR_SID(SID_HTPNG_RECEIVING_INLINE_S_S,                     "Receiving inline PNG image (%s): %s")
+=1 244 32

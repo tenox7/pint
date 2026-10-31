@@ -1,0 +1,20 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/reformat.c
+=1 1 724
++                        /* <SUP> text sits higher, <SUB> text lower */
++                        if (pel->lFlags & (ELEFLAG_SUP | ELEFLAG_SUB))
++                        {
++                            int nHeight = pel->r.bottom - pel->r.top;
++
++                            offset = (pel->lFlags & ELEFLAG_SUP) ? -(nHeight * 2 / 5) : (nHeight / 4);
+=1 720 2
+=1 723 2464
++                    if (pel->lFlags & (ELEFLAG_SUP | ELEFLAG_SUB))
++                    {
++                        bNeedsAdjust = TRUE;    /* see x_adjust_one_line */
+=1 187 3 12
+=1 3189 54
++                        if (pel->lFlags & (ELEFLAG_SUP | ELEFLAG_SUB))
++                        {
++                            bNeedsAdjust = TRUE;    /* see x_adjust_one_line */
+=1 2545 3 4
+=1 3245 1378

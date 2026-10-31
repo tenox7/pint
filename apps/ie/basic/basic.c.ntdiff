@@ -1,0 +1,7 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/sec/basic/shared/basic.c
+=1 1 361
++/* Called directly from generic\win32\htspm_os.c (Basic is built into
++ * iexplore.exe), so it is not exported; see basic.h.
++ */
++
+=1 369 32

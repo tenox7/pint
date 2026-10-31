@@ -8,7 +8,7 @@ PINT 4.0 is work in progress. PINT 3.5, Windows NT 3.5 (build 782), is on the br
 
 - Runs in QEMU `raspi2b` on four CPUs: NT's developer first run or NT 4.0's own setup, logon, the Explorer desktop
   and Start menu, Control Panel, Task Manager, the accessories and games, WordPad and Paint (OLE), TCP/IP networking,
-  printing, WinHelp 4, POSIX and OpenGL.
+  Internet Explorer, printing, WinHelp 4, POSIX and OpenGL.
 - Not yet: a real Pi.
 
 ## Raspberry Pi models
@@ -91,20 +91,26 @@ TCP/IP tools are in no source tree, so ARM setup leaves them out). It uses the o
 
 ## Games
 
-Start > Programs > Accessories > Games has the games of PINT 3.5 (`apps/games`, in `\GAMES`): 2048, Breakout, Bubble
+Start > Programs > Games has the games of PINT 3.5 (`apps/games`, in `\GAMES`): 2048, Breakout, Bubble
 Breaker, Moon Lander, Missile Command, Snake, Tankz, NT Rigue, RISCque, Sokoban, RISCoban and WiNTown, a port of
 Micropolis. WiNTown and the Micropolis simulator are under the GPL 3.0 with Electronic Arts' additional terms
 (`apps/games/wintown/LICENSE`); the other games are public domain.
 
 ## VNC viewer
 
-`\APPS\TENOXVNC.EXE` (TenoxVNC in Accessories) is the Win32 build of TenoxVNC (`apps/tenoxvnc`, from
+`\APPS\TENOXVNC.EXE` (Start > Programs > Apps) is the Win32 build of TenoxVNC (`apps/tenoxvnc`, from
 github.com/tenox7/tenoxvnc), a VNC viewer. Run without a server, it asks for one (`host`, `host:display` or
 `host::port`), with the password, encoding and colors; F8 opens its menu (full screen, Ctrl+Alt+Del, clipboard,
 settings). It is under the GPL 2.0 (`apps/tenoxvnc/LICENCE.TXT`), its zlib and IJG JPEG decoders under their own terms
 (`LICENSE.zlib`, `README.jpeg`).
 
-The games and TenoxVNC are on the SD image; the setup card does not install them.
+## Internet Explorer
+
+`\APPS\IEXPLORE.EXE` (Start > Programs > Apps) is the Internet Explorer 1.5 of PINT 3.5: NT's Mosaic (edit scripts in
+`apps/ie`) with PNG images (stb_image, public domain), UTF-8 pages and HTTPS with TLS 1.2 (BearSSL, MIT license:
+`apps/ie/bearssl/LICENSE.txt`). HTTPS does not check server certificates.
+
+The games, TenoxVNC and Internet Explorer are on the SD image; the setup card does not install them.
 
 ## Roadmap
 

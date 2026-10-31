@@ -1,0 +1,6 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/guitar.c
+=1 1 538
++#ifdef WIN32
++    TW_CancelRefresh(tw);       /* a <META> refresh is for the page that set it */
++#endif
+=1 538 441

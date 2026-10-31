@@ -1,10 +1,9 @@
 #ntdiff private/windows/setup/inf/win4/inf/syssetup.inx
 #crlf
 =1 1 376
-+Games = %accessories_games%,0
-=1 377 34
-+%tenoxvnc% = %24%\apps\tenoxvnc.exe,%24%\apps\tenoxvnc.exe,,0
-+
++Games = %games%,0
++Apps = %apps%,0
+=1 377 35
 +[Games]
 +%game2048% = %24%\games\2048.exe,%24%\games\2048.exe,,0
 +%breakout% = %24%\games\breakout.exe,%24%\games\breakout.exe,,0
@@ -18,6 +17,10 @@
 +%sokoban% = %24%\games\sokoban.exe,%24%\games\sokoban.exe,,0
 +%riscoban% = %24%\games\riscoban.exe,%24%\games\riscoban.exe,,0
 +%wintown% = %24%\games\wintown.exe,%24%\games\wintown.exe,,0
++
++[Apps]
++%iexplore% = %24%\apps\iexplore.exe,%24%\apps\iexplore.exe,,0
++%tenoxvnc% = %24%\apps\tenoxvnc.exe,%24%\apps\tenoxvnc.exe,,0
 =1 411 77
 =1 488 1 0 @@:@a:
 =1 488 1 0 @@:@i:

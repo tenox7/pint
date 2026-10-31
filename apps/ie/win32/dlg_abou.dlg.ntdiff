@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/dlg_abou.dlg
+=1 1 6
++    CONTROL         "Microsoft Internet Explorer v1.5 - 2026 edition",IDC_ABOUT_APPNAME,"Static",
+=1 8 17

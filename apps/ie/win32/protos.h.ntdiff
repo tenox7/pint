@@ -1,0 +1,6 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/protos.h
+=1 1 196
++unsigned char *ReadPNG(unsigned char *pMem, long len, long *w, long *h);
+=1 197 75
++#endif /* DISABLED_BY_DAN */
+=1 273 130

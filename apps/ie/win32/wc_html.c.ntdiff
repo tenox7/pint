@@ -1,0 +1,41 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/wc_html.c
+=1 1 39
++#define REFRESH_TIMER_ID 0xabc2 /* <META> refresh */
+=1 40 2752
++/*
++   <META HTTP-EQUIV="Refresh">: load url in this window after some
++   seconds (at least one, so a page that moves on at once still finishes
++   loading).  W3Doc_DisconnectFromWindow cancels it.
++ */
++void TW_SetRefresh(struct Mwin *tw, int seconds, CONST char *url)
++{
++    TW_CancelRefresh(tw);
++    if (!tw->win || !url || !*url)
++        return;
++    tw->szRefreshURL = GTR_strdup(url);
++    if (tw->szRefreshURL)
++        SetTimer(tw->win, REFRESH_TIMER_ID, (seconds > 0 ? seconds : 1) * 1000, NULL);
++}
++
++void TW_CancelRefresh(struct Mwin *tw)
++{
++    if (tw->szRefreshURL)
++    {
++        if (tw->win)
++            KillTimer(tw->win, REFRESH_TIMER_ID);
++        GTR_FREE(tw->szRefreshURL);
++        tw->szRefreshURL = NULL;
+=1 2789 8
++  if (id == REFRESH_TIMER_ID)
++  {
++    char *url;
++
++    (void)KillTimer(hWnd, REFRESH_TIMER_ID);
++    if (tw && tw->szRefreshURL)
++    {
++      url = tw->szRefreshURL;
++      tw->szRefreshURL = NULL;
++      TW_LoadDocument(tw, url, TRUE, FALSE, FALSE, FALSE, NULL, tw->w3doc ? tw->w3doc->szActualURL : NULL);
++      GTR_FREE(url);
+=1 1885 4 2
+=1 2797 428

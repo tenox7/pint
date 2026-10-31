@@ -1,0 +1,10 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/guitar.h
+=1 1 202
++    VIEWER_PNG,
+=1 203 306
++
++#ifdef WIN32
++    /* New fields go last, so the ones above keep their offsets */
++    char *szRefreshURL;         /* <META> refresh: page to load when the timer goes off */
+=1 185 3
+=1 511 135

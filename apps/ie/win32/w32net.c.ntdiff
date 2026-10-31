@@ -1,0 +1,86 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/w32net.c
+=1 1 429
++#ifdef FEATURE_SSL
++#define STATE_RECV_SSL      (STATE_OTHER + 1)
++
++/* Net_Recv_Async() on a TLS socket */
++static int x_RecvSSL(struct Params_Recv *pParams)
++{
++    int result;
++
++    result = SSL_Recv(pParams->socket, pParams->pBuf, pParams->nBufLen);
++    if (result == SSL_WOULDBLOCK)
++    {
++        WS_WSAASYNCSELECT(pParams->socket, wg.hWndHidden, SOCKET_MESSAGE, SSL_Events(pParams->socket));
+=1 246 1 -12
++        return STATE_RECV_SSL;
++    }
++    XX_DMsg(DBG_SOCK, ("Net_Recv_Async: TLS result = %d\n", result));
+=1 259 4 -12
++#endif /* FEATURE_SSL */
++
+=1 430 11
++#ifdef FEATURE_SSL
++        case STATE_RECV_SSL:
+=1 264 1
++            return x_RecvSSL(pParams);
++#endif /* FEATURE_SSL */
++
+=1 441 14
++#ifdef FEATURE_SSL
++            if (nState == STATE_INIT && SSL_IsSecure(pParams->socket))
++                return x_RecvSSL(pParams);
++#endif /* FEATURE_SSL */
+=1 455 40
++#ifdef FEATURE_SSL
++#define STATE_SEND_SSL      (STATE_OTHER + 1)
++
++/* Net_Send_Async() on a TLS socket: hands all the data to TLS (the first
++   time, this does the handshake), then sends it out */
++static int x_SendSSL(struct Params_Send *pParams)
++{
++    int result;
++
++    for (;;)
++    {
+=1 547 1 -8
++            result = SSL_Send(pParams->socket, (const char *) pParams->pBuf + pParams->nTotalSent, pParams->nBufLen - pParams->nTotalSent);
++        else
++            result = SSL_Flush(pParams->socket);
++        if (result == SSL_WOULDBLOCK)
++        {
++            WS_WSAASYNCSELECT(pParams->socket, wg.hWndHidden, SOCKET_MESSAGE, SSL_Events(pParams->socket));
+=1 246 1 -8
++            return STATE_SEND_SSL;
++        }
++        if (result < 0)
++        {
++            XX_DMsg(DBG_SOCK, ("Net_Send_Async: TLS on socket %d: %s\n", pParams->socket, SSL_ErrorText(pParams->socket)));
+=1 424 1
++            break;
++        }
++        if (pParams->nTotalSent == pParams->nBufLen)
+=1 554 2 -8
++            break;
++        }
+=1 546 1 -8
++    }
+=1 253 3 -16
++#endif /* FEATURE_SSL */
++
+=1 495 16
++#ifdef FEATURE_SSL
++            if (SSL_IsSecure(pParams->socket))
++                return x_SendSSL(pParams);
++#endif /* FEATURE_SSL */
+=1 511 3
++#ifdef FEATURE_SSL
++        case STATE_SEND_SSL:
+=1 264 1
++            return x_SendSSL(pParams);
++#endif /* FEATURE_SSL */
+=1 513 147
++#ifdef FEATURE_SSL
++    SSL_Close(socket);
++#endif /* FEATURE_SSL */
+=1 660 30

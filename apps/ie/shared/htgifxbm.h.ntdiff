@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htgifxbm.h
+=1 1 15
++
++HTStream *Image_PNG(struct Mwin *tw, HTRequest * request, void *param, HTFormat input_format, HTFormat output_format, HTStream * output_stream);

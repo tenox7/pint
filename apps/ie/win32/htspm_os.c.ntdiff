@@ -1,0 +1,18 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/htspm_os.c
+=1 1 33
++/* Basic authentication (sec\basic), built into the exe instead of BASIC.DLL */
++
++HTSPMStatusCode Basic_Load(F_UserInterface fpUI, void * pvOpaqueOS, HTSPM * htspm);
++BOOL WINAPI Basic_LibMain(HINSTANCE hInstDLL, DWORD fdwReason, LPVOID lpvReserved);
+=1 33 189
++    /* Basic is linked in: give it our instance, where its dialogs and
++       strings are, as Windows would have done for BASIC.DLL. */
++
++    (void)Basic_LibMain(wg.hInstance, DLL_PROCESS_ATTACH, NULL);
++    x_pl_LoadBuiltin(pvOpaqueOS, "Basic", Basic_Load);
++
++    /* Dynamically load other Security Protocol Modules using .INI */
+=1 223 25
++            /* skip "Basic=Basic_Load,BASIC.DLL" from older .INI files */
++            if (*p != ';' && GTR_strncmpi(p, "Basic=", 6) != 0)
+=1 249 495

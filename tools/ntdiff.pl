@@ -5,6 +5,7 @@
 # ("=SOURCE LINE COUNT", "=SOURCE LINE COUNT INDENT" moved by INDENT columns,
 # "=SOURCE LINE COUNT INDENT TAGS" with TAGS in front: the "@x:" tags of the setup INFs,
 # PRODFILT, after a negative INDENT cut the source's own) and adds the port's own ("+TEXT").
+# A binary file (a bitmap, an icon) is its one source byte for byte ("#raw").
 #
 #   ntdiff.pl apply  NTROOT DIR|FILE.ntdiff...   write each FILE that is missing or older than its script
 #   ntdiff.pl update NTROOT DIR|FILE.ntdiff...   rewrite each script from its FILE, over the same sources
@@ -44,6 +45,7 @@ sub generate {
     for (@cmds) {
         if (/^\+(.*)$/s) { $out .= $1 . $eol; next; }
         if (/^=(\d+) (\d+) (\d+)(?: (-?\d+)(?: (.+))?)?$/) { my ($d, $p) = ($4 // 0, $5 // ''); $out .= $p . indent($_, $d) . $eol for @{$src[$1 - 1]}[$2 - 1 .. $2 + $3 - 2]; next; }
+        if ($_ eq '#raw') { $out .= slurp("$root/$names[0]"); next; }
         if ($_ eq '#crlf') { $eol = "\r\n"; next; }
         if ($_ eq '#noeol') { $out =~ s/\r?\n\z//; next; }
         die "ntdiff: $script: bad line: $_\n";
@@ -54,6 +56,8 @@ sub generate {
 sub diff {
     my ($file, @names) = @_;
     my $d = slurp($file);
+    # (a binary file: its source as it is, else nothing an edit script can make)
+    if ($d =~ /\x00/) { die "ntdiff: $file: binary, not its source\n" unless @names == 1 && $d eq slurp("$root/$names[0]"); return "#ntdiff @names\n#raw\n"; }
     my $crlf = $d =~ /\r\n/;
     $d =~ s/\r\n/\n/g if $crlf;
     my $noeol = $d ne '' && $d !~ /\n\z/;

@@ -1,0 +1,8 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/ws_dll.c
+=1 1 756
++    //
++    // Don't FreeLibrary(hLibWinSock) here. On NT 3.1, WSACleanup leaves the
++    // WSOCK32 async thread to exit on its own, and it faults on exit in the
++    // unloaded DLL. The process exit unloads WSOCK32 after stopping it.
++    //
+=1 761 15

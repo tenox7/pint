@@ -1,0 +1,6 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htinit.c
+=1 1 20
++    HTSetConversion(c, "image/png", "www/inline_image", (HTConverter *) Image_PNG, (float) 1.0);
+=1 21 6
++    HTSetConversion(c, "image/png", "www/present", GTR_Present, (float) 1.0);
+=1 27 20

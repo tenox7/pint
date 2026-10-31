@@ -1,0 +1,27 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/oem/spy/make/emosaic.rc private/net/sockets/internet/ui/mosaic/sec/basic/win32/basic.rc
+=1 1 3
++/* Standard dialog control ids (stc*, edt*, psh*, ...) used by the .dlg files.
++   The fat windows.h pulls this in, but the resource compile is built lean. */
++#include "dlgs.h"
++
++#undef IDI_HAND
++#define IDI_HAND            32513
++#undef IDI_EXCLAMATION
++#define IDI_EXCLAMATION     32515
++
+=1 4 181
++/* Basic authentication (apps/ie/basic) is built into the exe, not BASIC.DLL.
++   Vendored: these are local copies of basic's resources (basic_* here), renamed
++   to avoid the dlg_conf name clash with win32\ and the cross-tree relative path. */
++#include "basic_rc.h"
++#include "basic_pw.h"
++#include "basic_pw.dlg"
++#include "basic_cf.h"
++#include "basic_cf.dlg"
++
++RES_BASIC_ICON		ICON	"basic.ico"
+=2 30 7
++
++/* Default iexplore.ini, written to the Windows directory on first run */
++RES_DEFAULT_INI		INIFILE	"iexplore.ini"
+=1 184 3

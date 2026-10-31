@@ -1,0 +1,360 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/html.c
+=1 1 30
++#define MAX_DIVS    32      /* nested <DIV>s whose ALIGN we remember */
++#define MAX_BUTTON_LABEL 100
+=1 31 29
++
++    BOOL                bTitle;         /* the page title is set */
++    BOOL                bRefresh;       /* a <META> refresh was seen */
++    int                 nDiv;           /* open <DIV>s */
++    unsigned char       divAlign[MAX_DIVS]; /* their ALIGN: 0, ALIGN_CENTER, ALIGN_RIGHT */
++
++    BOOL                bButton;        /* in a <BUTTON>: its text is the label */
++    BOOL                bButtonReset;
++    char*               szButtonName;
++    char*               szButtonValue;
++    HTChunk             button;         /* the label */
+=1 60 77
++    Text inside a <BUTTON> makes its label: spaces run together
+=1 20 1
++PRIVATE void x_ButtonChar(HTStructured* me, char c)
++{
+=1 151 4 -8
++    if (c == CH_SPACE && (me->button.size == 0 || me->button.data[me->button.size - 1] == CH_SPACE))
+=1 230 3 -16
++    if (me->button.size < MAX_BUTTON_LABEL)
++    {
++        HTChunkPutc(&me->button, c);
+=1 132 3
++PRIVATE void x_ButtonText(HTStructured* me, CONST char *s)
++{
++    for (; *s; s++)
++    {
++        x_ButtonChar(me, *s);
+=1 132 5
++    Frames are not shown, so each one becomes a link
+=1 20 1
++PRIVATE void x_FrameLink(HTStructured* me, CONST BOOL* present, CONST char** value)
++{
++    CONST char* src;
++    CONST char* label;
++    CONST char* w;
++    CONST char* h;
++    char*       href;
++
++    src = present[HTML_FRAME_SRC] ? value[HTML_FRAME_SRC] : NULL;
++    if (!src || !*src || 0 == GTR_strncmpi(src, "about:", 6) || 0 == GTR_strncmpi(src, "javascript:", 11))
+=1 230 3 -16
++
++    /* frames 0 or 1 pixel big only count visits */
++    w = present[HTML_FRAME_WIDTH] ? value[HTML_FRAME_WIDTH] : NULL;
++    h = present[HTML_FRAME_HEIGHT] ? value[HTML_FRAME_HEIGHT] : NULL;
++    if (   (w && isdigit((unsigned char) *w) && atoi(w) <= 1)
++        || (h && isdigit((unsigned char) *h) && atoi(h) <= 1))
+=1 230 3 -16
++
++    if (present[HTML_FRAME_TITLE] && value[HTML_FRAME_TITLE] && *value[HTML_FRAME_TITLE])
++        label = value[HTML_FRAME_TITLE];
++    else if (present[HTML_FRAME_NAME] && value[HTML_FRAME_NAME] && *value[HTML_FRAME_NAME])
++        label = value[HTML_FRAME_NAME];
++    else
++        label = src;
++
++    href = x_ExpandRelativeAnchor(src, me->base_url);
++    if (href)
++    {
++        UPDATE_STYLE;
++        HText_appendBlockBreak(me->text);
++        HText_appendText(me->text, "Frame: ");
++        HText_beginAnchor(me->text, href, NULL);
++        HText_appendText(me->text, label);
+=1 975 1 -4
++        HText_appendBlockBreak(me->text);
+=1 444 3 -12
+=1 23 3
++    <META HTTP-EQUIV="Refresh" CONTENT="5; URL=next.html">: go to the next
++    page after a while.  A refresh of the page itself is left out.
+=1 20 1
++PRIVATE void x_MetaRefresh(HTStructured* me, CONST char* content)
++{
++    CONST char* p;
++    CONST char* r;
++    char*       url;
++    char*       q;
++    char*       href;
++    int         seconds;
++
++    p = content;
++    while (IS_SPACE(*p))
++        p++;
++    for (seconds = 0; isdigit((unsigned char) *p); p++)
++    {
++        if (seconds < 86400)
++            seconds = seconds * 10 + (*p - '0');
++    }
++    if (seconds > 86400)
++        seconds = 86400;
++
++    while (*p && *p != ';' && *p != ',')    /* skip a fraction */
++        p++;
++    if (!*p)
++    {
++        return;                             /* no URL: just a reload */
++    }
++    for (p++; IS_SPACE(*p); p++)
++        ;
++    if (0 == GTR_strncmpi(p, "url", 3))
++    {
++        for (r = p + 3; IS_SPACE(*r); r++)
++            ;
++        if (*r == '=')
++        {
++            for (p = r + 1; IS_SPACE(*p); p++)
++                ;
+=1 132 3 4
++    url = GTR_strdup((*p == '"' || *p == '\'') ? p + 1 : p);
++    if (!url)
+=1 230 3 -16
++    if (*p == '"' || *p == '\'')
++    {
++        q = strchr(url, *p);
++        if (q)
++            *q = CH_NULL;
++    }
++    for (q = url + strlen(url); q > url && IS_SPACE(q[-1]); q--)
++        ;
++    *q = CH_NULL;
++
++    if (*url)
++    {
++        href = x_ExpandRelativeAnchor(url, me->base_url);
++        if (href)
++        {
++            if (0 != strcmp(href, me->szDocURL))
++            {
++                HText_setRefresh(me->text, seconds, href);
++            }
+=1 444 3 -8
++    GTR_FREE(url);
+=1 133 10
++/*  Text that would be shown goes to a <BUTTON>'s label instead */
++#define IS_BUTTON_TEXT(me)  ((me)->bButton \
++                             && (me)->sp[0].tag_number != HTML_COMMENT \
++                             && (me)->sp[0].tag_number != HTML_SCRIPT \
++                             && (me)->sp[0].tag_number != HTML_STYLE \
++                             && (me)->sp[0].tag_number != HTML_TITLE)
++
+=1 143 2
++    if (IS_BUTTON_TEXT(me))
++    {
++        x_ButtonChar(me, c);
++        return;
++    }
++
+=1 145 3
++        case HTML_SCRIPT:       /* JavaScript and CSS are not shown */
++        case HTML_STYLE:
+=1 148 57
++    if (IS_BUTTON_TEXT(me))
++    {
++        x_ButtonText(me, s);
++        return;
++    }
++
+=1 205 3
++        case HTML_SCRIPT:       /* JavaScript and CSS are not shown */
++        case HTML_STYLE:
+=1 208 68
++    Push an element on the style stack
+=1 20 1
++PRIVATE void x_PushElement(HTStructured* me, int element_number)
++{
+=1 844 24
+=1 276 11
++    if (me->bButton && element_number != HTML_BUTTON)
++    {
++        /* Inside a <BUTTON> only text counts (an image gives its ALT) */
++        if (   (element_number == HTML_IMG || element_number == HTML_IMAGE)
++            && present[HTML_IMG_ALT] && value[HTML_IMG_ALT])
++        {
++            x_ButtonText(me, value[HTML_IMG_ALT]);
++        }
++        x_PushElement(me, element_number);
++        return;
+=1 905 4
++        case HTML_ARTICLE:      /* blocks: on lines of their own */
++        case HTML_ASIDE:
++        case HTML_DETAILS:
++        case HTML_FIELDSET:
++        case HTML_FIGCAPTION:
++        case HTML_FIGURE:
++        case HTML_FOOTER:
++        case HTML_FRAMESET:
++        case HTML_HEADER:
++        case HTML_LEGEND:
++        case HTML_MAIN:
++        case HTML_NAV:
++        case HTML_NOFRAMES:
++        case HTML_SECTION:
++        case HTML_SUMMARY:
++            UPDATE_STYLE;
++            HText_appendBlockBreak(me->text);
++            break;
++
++        case HTML_DIV:
++            {
++                int align = 0;
++
++                UPDATE_STYLE;
++                HText_appendBlockBreak(me->text);
++                if (present[HTML_P_ALIGN] && value[HTML_P_ALIGN])
++                {
++                    if (0 == GTR_strcmpi(value[HTML_P_ALIGN], "center"))
++                    {
+=1 450 1 12
++                        align = ALIGN_CENTER;
++                    }
++                    else if (0 == GTR_strcmpi(value[HTML_P_ALIGN], "right"))
++                    {
++                        HText_beginRight(me->text);
++                        align = ALIGN_RIGHT;
++                    }
++                }
++                if (me->nDiv < MAX_DIVS)
++                {
++                    me->divAlign[me->nDiv] = (unsigned char) align;
++                }
++                me->nDiv++;
+=1 326 3
++        case HTML_SUP:
++        case HTML_SUB:
++            UPDATE_STYLE;
++            HText_beginSupSub(me->text, element_number == HTML_SUB);
++            break;
++
++        case HTML_BUTTON:
++            {
++                CONST char *type = present[HTML_BUTTON_TYPE] ? value[HTML_BUTTON_TYPE] : NULL;
++
++                /* type=button does nothing without scripts: its text just shows */
++                if (!type || 0 == GTR_strcmpi(type, "submit") || 0 == GTR_strcmpi(type, "reset"))
++                {
++                    UPDATE_STYLE;
++                    me->bButton = TRUE;
++                    me->bButtonReset = (type && 0 == GTR_strcmpi(type, "reset"));
++                    me->szButtonName = (present[HTML_BUTTON_NAME] && value[HTML_BUTTON_NAME])
++                                       ? GTR_strdup(value[HTML_BUTTON_NAME]) : NULL;
++                    me->szButtonValue = (present[HTML_BUTTON_VALUE] && value[HTML_BUTTON_VALUE])
++                                        ? GTR_strdup(value[HTML_BUTTON_VALUE]) : NULL;
++                    HTChunkClear(&me->button);
+=1 325 4
++        case HTML_FRAME:
++        case HTML_IFRAME:
++            x_FrameLink(me, present, value);
++            break;
++
++        case HTML_META:
++            if (   !me->bRefresh
++                && present[HTML_META_HTTP_EQUIV] && value[HTML_META_HTTP_EQUIV]
++                && 0 == GTR_strcmpi(value[HTML_META_HTTP_EQUIV], "refresh")
++                && present[HTML_META_CONTENT] && value[HTML_META_CONTENT])
++            {
++                me->bRefresh = TRUE;
++                x_MetaRefresh(me, value[HTML_META_CONTENT]);
+=1 326 3
+=1 289 555
++    x_PushElement(me, element_number);
+=1 864 43
++    if (me->bButton && element_number != HTML_BUTTON)
++    {
++        return;                 /* see HTML_start_element */
+=1 905 4
++        case HTML_ARTICLE:      /* blocks: on lines of their own */
++        case HTML_ASIDE:
++        case HTML_DETAILS:
++        case HTML_FIELDSET:
++        case HTML_FIGCAPTION:
++        case HTML_FIGURE:
++        case HTML_FOOTER:
++        case HTML_FRAMESET:
++        case HTML_HEADER:
++        case HTML_LEGEND:
++        case HTML_MAIN:
++        case HTML_NAV:
++        case HTML_NOFRAMES:
++        case HTML_SECTION:
++        case HTML_SUMMARY:
++            UPDATE_STYLE;
++            HText_appendBlockBreak(me->text);
++            break;
++
++        case HTML_DIV:
++            UPDATE_STYLE;
++            if (me->nDiv > 0)
++            {
++                me->nDiv--;
++                if (me->nDiv < MAX_DIVS)
++                {
++                    if (me->divAlign[me->nDiv] == ALIGN_CENTER)
+=1 980 1 12
++                    else if (me->divAlign[me->nDiv] == ALIGN_RIGHT)
++                        HText_endRight(me->text);
++                }
++            }
++            HText_appendBlockBreak(me->text);
++            break;
++
++        case HTML_SUP:
++        case HTML_SUB:
++            HText_endSupSub(me->text, element_number == HTML_SUB);
++            break;
++
++        case HTML_BUTTON:
++            if (me->bButton)
++            {
++                me->bButton = FALSE;
++                while (me->button.size && me->button.data[me->button.size - 1] == CH_SPACE)
++                {
++                    me->button.size--;
++                }
++                HTChunkTerminate(&me->button);
++                HText_addButton(me->text, me->bButtonReset, me->szButtonName, me->szButtonValue, me->button.data);
++                if (me->szButtonName)
++                {
++                    GTR_FREE(me->szButtonName);
++                    me->szButtonName = NULL;
++                }
++                if (me->szButtonValue)
++                {
++                    GTR_FREE(me->szButtonValue);
++                    me->szButtonValue = NULL;
++                }
++                HTChunkClear(&me->button);
+=1 326 3
+=1 909 95
++            if (!me->bTitle)    /* the first: icons drawn in the page have titles too */
++            {
++                me->bTitle = TRUE;
+=1 1004 2 4
+=1 326 3
+=1 1008 48
++    x_FreeButton: a <BUTTON> left open at the end
+=1 20 1
++PRIVATE void x_FreeButton(HTStructured * me)
++{
++    if (me->szButtonName)
++    {
++        GTR_FREE(me->szButtonName);
++    }
++    if (me->szButtonValue)
++    {
++        GTR_FREE(me->szButtonValue);
++    }
++    HTChunkClear(&me->button);
+=1 1052 23
++    x_FreeButton(me);
+=1 1075 24
++    x_FreeButton(me);
+=1 1099 73
++        me->button.growby   = 128;
+=1 1172 64

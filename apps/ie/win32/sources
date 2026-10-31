@@ -1,0 +1,86 @@
+MAJORCOMP=apps
+MINORCOMP=ie
+
+TARGETNAME=iew32
+TARGETPATH=obj
+TARGETTYPE=LIBRARY
+
+USE_LIBCMT=1
+
+# the Win32 GUI: the frame/MDI windows, dialogs (dlg_*), drawing, the toolbar,
+# DDE, sound, the network glue and w32ssl (the BearSSL TLS 1.2 client setup).
+# inline=__inline and the BearSSL headers are for w32ssl.c (harmless elsewhere).
+C_DEFINES=-DFEATURE_TOOLBAR -DFEATURE_JPEG -DFEATURE_SOUND_PLAYER \
+	-DFEATURE_IMAGE_VIEWER -DFEATURE_TABLES -DFEATURE_LOCAL_DIRECTORY \
+	-DFEATURE_ASYNC_IMAGES -DFEATURE_PROGRESSIVE_IMAGE -DFEATURE_MULTISCAN_JPEG \
+	-DFEATURE_SPM -DFEATURE_IAPI -DFEATURE_NO_EXIT_ON_SECONDARY_WINDOWS \
+	-DFEATURE_BROKEN_ATTRIBUTE_PARSER -DFEATURE_CLIENT_IMAGEMAP \
+	-DFEATURE_TABLE_WIDTH -DFEATURE_HTTP_COOKIES -DFEATURE_SSL \
+	-DWINVER=0x0400 -DSTRICT -DWIN32_BUFFERED -D_WINDOWS -DNO_GROUPS \
+	-DACCESS_AUTH -D_GIBRALTAR -Dinline=__inline -UWIN32_LEAN_AND_MEAN
+
+INCLUDES=..\xxdebug;..\shared;..\make;..\secinc;..\bearssl
+
+SOURCES=                \
+	bitmaps.c       \
+	btn_anim.c      \
+	btn_push.c      \
+	dlg_abou.c      \
+	dlg_clr.c       \
+	dlg_conf.c      \
+	dlg_csh.c       \
+	dlg_dir.c       \
+	dlg_edit.c      \
+	dlg_err.c       \
+	dlg_find.c      \
+	dlg_hot.c       \
+	dlg_logo.c      \
+	dlg_mime.c      \
+	dlg_open.c      \
+	dlg_pref.c      \
+	dlg_gate.c      \
+	dlg_prmp.c      \
+	dlg_prnt.c      \
+	dlg_save.c      \
+	dlg_selw.c      \
+	dlg_temp.c      \
+	dlg_unk.c       \
+	dlg_view.c      \
+	dlg_winf.c      \
+	draw.c          \
+	effect3d.c      \
+	gif.c           \
+	gwc_base.c      \
+	gwc_ddl.c       \
+	gwc_ed.c        \
+	gwc_html.c      \
+	gwc_menu.c      \
+	htspm_os.c      \
+	jpeg.c          \
+	main.c          \
+	mdft.c          \
+	prefs.c         \
+	tw_print.c      \
+	w32cmd.c        \
+	w32dde.c        \
+	w32error.c      \
+	w32forms.c      \
+	w32mdi.c        \
+	w32menu.c       \
+	w32net.c        \
+	w32sound.c      \
+	w32ssl.c        \
+	w32util.c       \
+	w32wait.c       \
+	wc_bhbar.c      \
+	wc_frame.c      \
+	wc_html.c       \
+	wc_tbar.c       \
+	winview.c       \
+	ws_dll.c        \
+	w_close.c       \
+	w_hidden.c      \
+	w_pal.c         \
+	w_splash.c      \
+	w_style.c       \
+	w_void.c        \

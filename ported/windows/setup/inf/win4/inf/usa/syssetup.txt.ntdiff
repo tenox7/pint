@@ -1,7 +1,10 @@
 #ntdiff private/windows/setup/inf/win4/inf/usa/syssetup.txt
 #crlf
-=1 1 71
+=1 1 16
++apps = "Apps"
+=1 17 55
 +tenoxvnc = "TenoxVNC"
++iexplore = "Internet Explorer"
 +game2048 = "2048"
 +breakout = "Breakout"
 +bubbles = "Bubble Breaker"

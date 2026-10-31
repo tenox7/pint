@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/present.c
+=1 1 278
++    PREF_InitMIMEType("image/png",              "PNG Images",               ".png",         "binary",   "", Viewer_Present,         "");
+=1 279 729

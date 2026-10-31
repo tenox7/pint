@@ -1,0 +1,105 @@
+MAJORCOMP=apps
+MINORCOMP=ie
+
+TARGETNAME=iesh
+TARGETPATH=obj
+TARGETTYPE=LIBRARY
+
+USE_LIBCMT=1
+
+# the Spyglass Mosaic engine: libwww (ht*), the JPEG decoder (jd*/j*), the
+# formatter (reformat, sgml, html*, present, styles) and the shared helpers
+C_DEFINES=-DFEATURE_TOOLBAR -DFEATURE_JPEG -DFEATURE_SOUND_PLAYER \
+	-DFEATURE_IMAGE_VIEWER -DFEATURE_TABLES -DFEATURE_LOCAL_DIRECTORY \
+	-DFEATURE_ASYNC_IMAGES -DFEATURE_PROGRESSIVE_IMAGE -DFEATURE_MULTISCAN_JPEG \
+	-DFEATURE_SPM -DFEATURE_IAPI -DFEATURE_NO_EXIT_ON_SECONDARY_WINDOWS \
+	-DFEATURE_BROKEN_ATTRIBUTE_PARSER -DFEATURE_CLIENT_IMAGEMAP \
+	-DFEATURE_TABLE_WIDTH -DFEATURE_HTTP_COOKIES -DFEATURE_SSL \
+	-DWINVER=0x0400 -DSTRICT -DWIN32_BUFFERED -D_WINDOWS -DNO_GROUPS \
+	-DHAVE_BOOLEAN -DACCESS_AUTH -D_GIBRALTAR -UWIN32_LEAN_AND_MEAN
+
+INCLUDES=..\xxdebug;..\win32;..\make;..\secinc
+
+SOURCES=                \
+	aiff.c          \
+	async.c         \
+	au.c            \
+	charstrm.c      \
+	cookie.c        \
+	cookiedb.c      \
+	dcache.c        \
+	gtrutil.c       \
+	guitar.c        \
+	guiterrs.c      \
+	guitfind.c      \
+	hash.c          \
+	htansi.c        \
+	htaccess.c      \
+	htalert.c       \
+	htanchor.c      \
+	htatom.c        \
+	htbtree.c       \
+	htchunk.c       \
+	htext.c         \
+	htfile.c        \
+	htformat.c      \
+	htftp.c         \
+	htfwrite.c      \
+	htghist.c       \
+	htgif.c         \
+	htgopher.c      \
+	htheader.c      \
+	hthotlst.c      \
+	htinit.c        \
+	htjpeg.c        \
+	htlist.c        \
+	html.c          \
+	htmlpdtd.c      \
+	htnews.c        \
+	htparse.c       \
+	htplain.c       \
+	htpng.c         \
+	htspm.c         \
+	htspmui.c       \
+	htstring.c      \
+	httcp.c         \
+	httelnet.c      \
+	http_spm.c      \
+	htxbm.c         \
+	imgcache.c      \
+	jcomapi.c       \
+	jdapi.c         \
+	jdapimin.c      \
+	jdapistd.c      \
+	jdatasrc.c      \
+	jdcoefct.c      \
+	jdcolor.c       \
+	jddctmgr.c      \
+	jdhuff.c        \
+	jdinput.c       \
+	jdmainct.c      \
+	jdmarker.c      \
+	jdmaster.c      \
+	jdmerge.c       \
+	jdphuff.c       \
+	jdpostct.c      \
+	jdsample.c      \
+	jerror.c        \
+	jidctfst.c      \
+	jidctred.c      \
+	jmemansi.c      \
+	jmemmgr.c       \
+	jquant1.c       \
+	jquant2.c       \
+	jutils.c        \
+	loaddoc.c       \
+	mapcache.c      \
+	plain.c         \
+	pool.c          \
+	present.c       \
+	reformat.c      \
+	sem.c           \
+	sgml.c          \
+	styles.c        \
+	tempfile.c      \
+	xbm.c           \

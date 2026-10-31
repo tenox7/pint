@@ -1,0 +1,32 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/winview.c
+=1 1 215
++
++        case VIEWER_PNG:
++            /* Made like a JPEG, transparent parts already filled in (htpng.c) */
++            pDIB = ReadPNG(pImage, imagesize, &imagewidth, &imageheight);
++            if (pDIB)
++            {
+=1 195 3 4
+=1 199 4 4
+=1 183 4
+=1 209 3 4
++            }
++
++            transparent = -1;
+=1 214 190
++        case VIEWER_PNG:
+=1 404 50
++    else if (input_format == HTAtom_for("image/png"))
++        format = VIEWER_PNG;
+=1 454 618
++                case VIEWER_PNG:
++                    /* saved as it came, or as a bitmap if the name ends in .BMP */
++                    x_get_good_filename(baseFile, pViewerInfo->szURL, HTAtom_for("image/png"));
+=1 1005 2
++                    if ((filter = DlgSaveAs_RunDialog(pViewerInfo->hwnd, NULL, tempFile, 2, SID_DLG_SAVE_AS_TITLE)) < 0)
++                        return TRUE;
+=1 1069 25
++                else if (pViewerInfo->format == VIEWER_PNG)
+=1 1091 1
++                else
+=1 1095 329

@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/rc_menu.h
+=1 1 178
++#define RES_DEFAULT_INI             0x0147  /* iexplore.ini, type "INIFILE" */
+=1 178 61

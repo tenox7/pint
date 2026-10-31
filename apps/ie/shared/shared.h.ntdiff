@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/shared.h
+=1 1 105
++#include "htansi.h"
+=1 106 38

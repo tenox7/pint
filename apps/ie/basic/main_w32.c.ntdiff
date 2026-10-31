@@ -1,0 +1,7 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/sec/basic/win32/main_w32.c
+=1 1 55
++   The name of this routine must match the ENTRY option in the makefile.
++   Now that Basic is built into iexplore.exe, htspm_os.c calls it instead,
++   so it is not __declspec(dllexport); see basic.h. */
++
+=1 59 47

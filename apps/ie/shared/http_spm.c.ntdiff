@@ -1,0 +1,616 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/http_spm.c
+=1 1 18
++#define HTTP_VERSION    "HTTP/1.1"
+=1 20 16
++static int x_AltUAFor(CONST char * url);
++static void x_AltUserAgent(int nAltUA, char * line);
+=1 36 73
++ * x_SetHostHeader() -- Create or update "Host: <host[:port]>" header.
++ *
++ * HTTP/1.1 requires it in every request.  It names the server in the
++ * URL, also when the request goes through a proxy.
++ *
++ */
++static BOOL x_SetHostHeader(HTHeader * h, CONST unsigned char * url)
++{
++    unsigned char * host;
++    unsigned char * at;
++    HTHeaderList * hl;
++    BOOL bResult;
++
+=1 98 1 -8
++    if (!host)
++        return FALSE;
++
++    at = strrchr(host, '@');            /* drop any "user:password@" */
++
++    hl = HTHeaderList_FindFirstHeader(h,"Host");
++    if (!hl)
+=1 302 1 4
++    bResult = HTHeaderList_SetNameValue(hl,"Host",(at ? at + 1 : host));
+=1 103 45
++                if (!HTHeaderSVList_SetNameValue(svl,"q", v, ";"))
+=1 149 28
++ * x_CreateConnectionHeader() -- Create "Connection: close" header.
++ *
++ * HTTP/1.1 connections stay open by default, so we ask the server to
++ * close each one after its response.  We don't keep HTTP connections:
++ * the per-window connection cache loses its input buffer when a
++ * response header fills more than one buffer, which is common with
++ * HTTP/1.1 servers.
++ *
++ */
++static BOOL x_CreateConnectionHeader(HTHeader * h)
+=1 256 4
++    if (!HTHeaderList_SetNameValue(hl,"Connection","close"))
+=1 315 5
+=1 224 5
++static BOOL x_CreateUserAgentHeader(HTHeader * h, CONST char * url)
++{
++    char line[256];
++    int nAltUA;
+=1 232 9
++    nAltUA = x_AltUAFor(url);
++    if (nAltUA)
++        x_AltUserAgent(nAltUA, line);   /* see x_ResendWithAltUA */
++    else
+=1 241 2 4
+=1 243 121
++                && x_SetHostAndPort(h,url_20,use_proxy)
++                && x_SetHostHeader(h,url_20));
+=1 365 44
++            Note that we send "Connection: close" on every HTTP request, so the
++            server closes the connection after the response.
+=1 412 8
++                     && x_CreateUserAgentHeader(h, request->destination->szActualURL)
+=1 421 1
++                     && x_CreateConnectionHeader(h)
+=1 423 74
++    BOOL                bAltUA;         /* sent again with another User-Agent, see x_ResendWithAltUA */
++    int                 nRefusalReads;  /* extra reads for x_RefusesUA */
++
++    BOOL                bChunked;       /* Transfer-Encoding: chunked */
++    int                 chunk_state;    /* CHUNK_* */
++    long                chunk_left;     /* bytes left in chunk, -1 before its size */
+=1 496 23
++#define STATE_HTTP_GOTMOREBODY      (STATE_OTHER + 13)
++
++/* chunk_state values, for Transfer-Encoding: chunked */
++#define CHUNK_SIZE          0       /* chunk-size hex digits */
++#define CHUNK_EXT           1       /* rest of the chunk-size line */
++#define CHUNK_DATA          2       /* chunk-data */
++#define CHUNK_DATA_END      3       /* CRLF after chunk-data */
++#define CHUNK_TRAILER       4       /* start of a trailer line */
++#define CHUNK_TRAILER_LINE  5       /* rest of a trailer line */
++#define CHUNK_DONE          6       /* last-chunk and trailer read */
+=1 519 492
++
++#ifdef FEATURE_SSL
+=1 691 1 -4
++    {
++        /* TLS with the host in the URL (https never goes through a proxy).
++           The handshake happens when the request is sent. */
++        char *pszHost;
++        BOOL bStarted;
++
++        pszHost = HTParse(pData->arg, "", PARSE_HOST);
++        bStarted = pszHost && SSL_Start(pData->s, pszHost);
++        if (pszHost)
++            GTR_FREE(pszHost);
++        if (!bStarted)
+=1 1817 6 -4
++#endif /* FEATURE_SSL */
++
+=1 1012 72
+=1 690 2
++            ERR_ReportError(tw, SID_ERR_SSL_FAILED_S_S, pData->request->destination->szRequestedURL, SSL_ErrorText(pData->s));
++#endif /* FEATURE_SSL */
+=1 1084 101
+=1 74 2
++ * x_HasToken() -- See if a header value contains a word, in any case.
++ *
++ */
++static BOOL x_HasToken(CONST char * value, CONST char * token)
++{
++    int len = strlen(token);
++
++    for ( ; *value; value++)
++        if (0 == GTR_strncmpi(value, token, len))
++            return TRUE;
++    return FALSE;
+=1 1183 368
++        We sent "Connection: close" (see x_CreateConnectionHeader), so we
++        never keep the connection, whatever the server sends back.
+=1 1557 2
++
++    pData->request->atomCharset = 0;    /* none named, see ANSI_ReadAsUTF8 */
+=1 1567 16
++
++        /* XHTML is HTML here (Google sends it to phones, see x_RefusesUA) */
++        if (format_in == HTAtom_for("application/xhtml+xml"))
++            format_in = WWW_HTML;
+=1 1585 28
++
++    /*
++        HTTP/1.1 servers may send the body in chunks.  The chunks give the
++        length, so any Content-Length must be ignored.
++    */
++    pData->bChunked = FALSE;
++    hl = HTHeaderList_FindFirstHeader(pData->hRes,"Transfer-Encoding");
++    if (hl && hl->value && x_HasToken(hl->value, "chunked"))
++    {
++        pData->bChunked = TRUE;
++        pData->chunk_state = CHUNK_SIZE;
++        pData->chunk_left = -1;
+=1 553 1 4
++        XX_DMsg(DBG_LOAD | DBG_WWW, ("HTTP_DoGotStatus: found transfer-encoding of [%s]\n",hl->value));
++    }
++
+=1 1614 746
+=1 74 2
++ * x_SkipInterimResponse() -- Skip a 1xx response (eg. "100 Continue").
++ *
++ * HTTP/1.1 servers may send these before the real response.  We throw
++ * away its header, then look for the end of the next header in what
++ * we have buffered.  Returns 1 if it is all there, 0 if we started
++ * reading the rest from the network, -1 on error.
++ *
++ */
++static int x_SkipInterimResponse(struct Data_LoadHTTP * pData)
++{
++    static CONST char eoh[4] = { CR, LF, CR, LF };     /* end-of-header */
++    struct Params_Isoc_GetHeader * pigh;
++    HTInputSocket * isoc;
++    HTHeader * h;
++    char * p;
++    int ndxEOH1 = 0;                /* how much of CR LF CR LF we have seen */
++    int ndxEOH2 = 0;                /* how much of LF LF we have seen */
++
++    XX_DMsg(DBG_WWW, ("HTTP: skipping interim response [%s]\n", pData->status_line));
++
+=1 549 2 -4
++
++    h = HTHeader_TranslateFromBuffer(pData->isoc);
++    if (h)
++        HTHeader_Delete(h);
++
++    for (isoc = pData->isoc; ; isoc = isoc->isocNext)
++    {
++        for (p = isoc->input_pointer; p < isoc->input_limit; p++)
++        {
++            ndxEOH1 = (*p == eoh[ndxEOH1]) ? ndxEOH1 + 1 : (*p == CR);
++            ndxEOH2 = (*p == LF) ? ndxEOH2 + 1 : 0;
++            if (ndxEOH1 == 4 || ndxEOH2 == 2)
++                return 1;
++        }
++        if (!isoc->isocNext)
+=1 99 3
++    /* Read the rest of the header into a new buffer at the end of the chain. */
++
++    isoc->isocNext = HTInputSocket_new(pData->s);
+=1 1108 1
++    if (!isoc->isocNext || !pigh)
++    {
++        if (pigh)
++            GTR_FREE(pigh);
++        return -1;
++    }
+=1 1109 1
++    pigh->isocChain = isoc->isocNext;
+=1 1111 1
++    pigh->ndxEOH1 = ndxEOH1;
++    pigh->ndxEOH2 = ndxEOH2;
+=1 1114 1
++    return 0;
+=1 72 4
++ * x_DoGotServerStatus() -- Act on the status of a full response.
++ *
++ */
++static int x_DoGotServerStatus(struct Mwin *tw, struct Data_LoadHTTP * pData, int server_status)
++{
+=1 2363 2
+=1 2394 16 -4
+=1 2410 1
+=1 2411 13 -4
++#endif
++
+=1 2426 18 -4
+=1 2444 1
+=1 2445 4 -4
++#else
+=1 2450 11 -4
+=1 2461 1
+=1 2462 6 -4
++#ifdef FEATURE_IAPI
+=1 2469 1 -4
++#endif
+=1 2471 16 -4
+=1 1991 4
+=1 74 2
++ * Two kinds of site refuse IE 1.5's "Mozilla/1.22" User-Agent.  Only
++ * when one does is the request sent once more with another name in its
++ * place (the rest stays), and later requests to that host use it
++ * straight away, until IE exits:
++ *
++ *   Cloudflare's browser check answers 403 "error code: 1010": sent
++ *   again as "Mozilla/4.0 (compatible; MSIE 1.5; Windows NT)".
++ *
++ *   Google answers "Update your browser" (200 from "Server: gws", with a
++ *   link to support.google.com/websearch/answer/16515119): sent again as
++ *   "Nokia6230/2.0 (compatible; MSIE 1.5; Windows NT)".  Google still
++ *   sends old phones its plain pages (XHTML, no JavaScript), while every
++ *   other browser has to run its JavaScript to search.
++ *
++ */
++#define MAX_ALTUA_HOSTS     16
++#define MAX_REFUSAL_READS   4       /* extra reads for the body of a refusal */
++#define REFUSAL_BODY        4096    /* how much of the body x_RefusesUA looks at */
++
++#define ALTUA_MOZILLA4      1       /* for Cloudflare */
++#define ALTUA_NOKIA         2       /* for Google */
++
++static char * x_aAltUAHosts[MAX_ALTUA_HOSTS];
++static int x_aAltUAKinds[MAX_ALTUA_HOSTS];     /* ALTUA_* for each host */
++static int x_nAltUAHosts = 0;
++
++static char * x_HostOf(CONST char * url)
++{
++    char * host;
++    char * at;
++
+=1 98 1 -8
++    if (host)
++    {
++        at = strrchr(host, '@');            /* drop any "user:password@" */
++        if (at)
++            memmove(host, at + 1, strlen(at + 1) + 1);
++    }
++    return host;
++}
++
++/* The ALTUA_* that this URL's host gets, or 0 for the original User-Agent */
++static int x_AltUAFor(CONST char * url)
++{
++    char * host;
++    int nAltUA = 0;
++    int i;
++
++    if (!x_nAltUAHosts || !url)
++        return 0;
++    host = x_HostOf(url);
++    if (host)
++    {
++        for (i = 0; i < x_nAltUAHosts && !nAltUA; i++)
++            if (0 == GTR_strcmpi(x_aAltUAHosts[i], host))
++                nAltUA = x_aAltUAKinds[i];
++        GTR_FREE(host);
++    }
++    return nAltUA;
++}
++
++static void x_RememberAltUA(CONST char * url, int nAltUA)
++{
++    char * host;
++
++    if (x_nAltUAHosts >= MAX_ALTUA_HOSTS || x_AltUAFor(url))
++        return;
++    host = x_HostOf(url);
++    if (host)
++    {
++        x_aAltUAKinds[x_nAltUAHosts] = nAltUA;
++        x_aAltUAHosts[x_nAltUAHosts++] = host;
+=1 1050 3
++static void x_AltUserAgent(int nAltUA, char * line)
++{
++    CONST char * rest = strchr(vv_UserAgentString, ' ');
++
++    sprintf(line, "%s%s", (nAltUA == ALTUA_NOKIA) ? "Nokia6230/2.0" : "Mozilla/4.0",
++            rest ? rest : "");
+=1 247 3
++    Is this reply one of the refusals above?  Looks at the header and the
++    start of the body (without chunk sizes) in what has been read so far,
++    without using it up.  Returns the ALTUA_* to send again with, 0 if it
++    is no refusal, and -1 if the header says Cloudflare or Google but the
++    body is not all here yet.
++*/
++static int x_RefusesUA(struct Data_LoadHTTP * pData, int server_status)
++{
++    HTInputSocket * isoc;
++    char * p;
++    char line[64];                  /* start of a header line */
++    char body[REFUSAL_BODY];        /* start of the body */
++    int nLine = 0;                  /* chars kept in line */
++    int nLineLen = 0;               /* length of the whole line */
++    int nBody = 0;
++    long lLength = -1;              /* Content-Length */
++    long lChunk = -1;               /* chunk bytes left, -1 in a chunk-size line */
++    long lChunkSize = 0;
++    BOOL bChunkExt = FALSE;         /* past the chunk size's hex digits */
++    BOOL bChunked = FALSE;
++    BOOL bBody = FALSE;
++    BOOL bAll = FALSE;              /* seen all of the body we look at */
++    int nAltUA = 0;                 /* the server is one of the two */
++
++    for (isoc = pData->isoc; isoc && !bAll; isoc = isoc->isocNext)
++    {
++        for (p = isoc->input_pointer; p < isoc->input_limit && !bAll; p++)
++        {
++            if (bBody)
++            {
++                if (!bChunked || lChunk > 0)
++                {
++                    body[nBody++] = *p;
++                    if (lChunk > 0)
++                        lChunk--;
++                    bAll = (nBody == (int) sizeof(body) - 1 || nBody == lLength);
++                }
++                else if (*p == LF)
++                {
++                    if (lChunk == 0)
++                        lChunk = -1;        /* the line end after a chunk */
++                    else if (lChunkSize == 0)
++                        bAll = TRUE;        /* the last chunk */
++                    else
++                        lChunk = lChunkSize;
++                    lChunkSize = 0;
++                    bChunkExt = FALSE;
++                }
++                else if (lChunk < 0 && !bChunkExt)
++                {
++                    if (isdigit((unsigned char) *p))
++                        lChunkSize = lChunkSize * 16 + (*p - '0');
++                    else if (isxdigit((unsigned char) *p))
++                        lChunkSize = lChunkSize * 16 + (tolower((unsigned char) *p) - 'a' + 10);
++                    else
++                        bChunkExt = TRUE;   /* ";name=value" or CR */
++                }
++            }
++            else if (*p == LF)
++            {
++                line[nLine] = 0;
++                if (!nLineLen)
++                {
++                    bBody = TRUE;   /* the empty line ends the header */
++                    bAll = (lLength == 0);
++                }
++                else if (0 == GTR_strncmpi(line, "server:", 7))
++                {
++                    for (nLine = 7; line[nLine] == ' ' || line[nLine] == '\t'; nLine++)
++                        ;
++                    if (server_status == 403 && 0 == GTR_strncmpi(line + nLine, "cloudflare", 10))
++                        nAltUA = ALTUA_MOZILLA4;
++                    else if (server_status == 200 && 0 == GTR_strcmpi(line + nLine, "gws"))
++                        nAltUA = ALTUA_NOKIA;
++                }
++                else if (0 == GTR_strncmpi(line, "content-length:", 15))
++                {
++                    lLength = atol(line + 15);
++                }
++                else if (0 == GTR_strncmpi(line, "transfer-encoding:", 18))
++                {
++                    bChunked = x_HasToken(line + 18, "chunked");
++                }
++                nLine = 0;
++                nLineLen = 0;
++            }
++            else if (*p != CR)
++            {
++                if (nLine < (int) sizeof(line) - 1)
++                    line[nLine++] = *p;
++                nLineLen++;
+=1 150 4
++    if (!nAltUA)
++        return 0;
++    body[nBody] = 0;
++    if (strstr(body, (nAltUA == ALTUA_NOKIA) ? "/websearch/answer/16515119" : "error code: 1010"))
++        return nAltUA;
++    return bAll ? 0 : -1;
++}
++
++/* Reads the next buffer of the reply onto the end of the chain */
++static int x_ReadMoreBody(struct Data_LoadHTTP * pData)
++{
++    HTInputSocket * isoc;
++    struct Params_Isoc_Fill * pif;
++
++    for (isoc = pData->isoc; isoc->isocNext; isoc = isoc->isocNext)
++        ;
++    isoc->isocNext = HTInputSocket_new(pData->s);
+=1 2578 1
++    if (!isoc->isocNext || !pif)
++    {
++        if (isoc->isocNext)
++        {
++            HTInputSocket_free(isoc->isocNext);
++            isoc->isocNext = NULL;
++        }
++        if (pif)
++            GTR_FREE(pif);
++        return -1;
++    }
++    pData->nRefusalReads++;
++    pif->isoc = isoc->isocNext;
+=1 2580 2
++    return STATE_HTTP_GOTMOREBODY;
++}
++
++/* Sends the same request again, with the other User-Agent */
++static int x_ResendWithAltUA(struct Mwin *tw, struct Data_LoadHTTP * pData,
++                             int nAltUA, int server_status)
++{
++    HTHeader * h = pData->hReq;
++    HTHeaderList * hl;
++    char line[256];
++
++    x_AltUserAgent(nAltUA, line);
++    hl = HTHeaderList_FindFirstHeader(h, "User-Agent");
++    if (!hl || !HTHeaderList_SetNameValue(hl, "User-Agent", line))
++        return x_DoGotServerStatus(tw, pData, server_status);
++
++    XX_DMsg(DBG_WWW, ("HTTP: User-Agent refused, sending again as [%s]\n", line));
++    x_RememberAltUA(pData->request->destination->szActualURL, nAltUA);
++    pData->bAltUA = TRUE;
++
++    pData->request->bKeepAlive = FALSE;     /* close this connection */
++    pData->hReq = NULL;                     /* keep the request */
+=1 2507 1
++    pData->hReq = h;
++    pData->htspm_status = HTSPM_STATUS_RESUBMIT_OLD;   /* just send it, see x_DoInitPart2 */
++    return x_DoInitPart2(tw, pData);
++}
++
++static int x_CheckRefusal(struct Mwin *tw, struct Data_LoadHTTP * pData, int server_status)
++{
++    int nAltUA = x_RefusesUA(pData, server_status);
++    int next;
++
++    if (nAltUA > 0)
++        return x_ResendWithAltUA(tw, pData, nAltUA, server_status);
++    if (nAltUA < 0 && pData->net_status > 0 && pData->nRefusalReads < MAX_REFUSAL_READS)
++    {
++        next = x_ReadMoreBody(pData);
++        if (next >= 0)
++            return next;
++    }
++    return x_DoGotServerStatus(tw, pData, server_status);
++}
++
++static int HTTP_DoGotMoreBody(struct Mwin *tw, void **ppInfo)
+=1 628 3
++    return x_CheckRefusal(tw, pData, x_ExtractServerStatus(pData->status_line));
+=1 370 3
+=1 2360 34
++
++        if (server_status >= 100 && server_status < 200)
++        {
++            switch (x_SkipInterimResponse(pData))
++            {
++            case 1:                     /* next header is already here */
+=1 2683 1 4
++            case 0:                     /* reading it */
+=1 1116 1 12
++            default:
+=1 1818 5
++
++        if (   (server_status == 403 || server_status == 200)
++            && !pData->bAltUA
++            && !x_AltUAFor(pData->request->destination->szActualURL))
++        {
++            return x_CheckRefusal(tw, pData, server_status);
++        }
++        return x_DoGotServerStatus(tw, pData, server_status);
+=1 2487 24
+=1 74 2
++ * x_PutChunked() -- Decode a block of "Transfer-Encoding: chunked"
++ *                   data and push the chunk data down the stream.
++ *
++ * Returns 0 when it wants more data, 1 when the body is complete (or
++ * the stream wants no more), -1 on bad chunked data.
++ *
++ */
++static int x_PutChunked(struct Data_LoadHTTP * pData, CONST char * p, int len)
++{
++    CONST char * end = p + len;
++    int c;
++    int n;
++
++    while (p < end)
++    {
++        switch (pData->chunk_state)
++        {
++        case CHUNK_SIZE:
++            c = *p++;
++            if (c >= '0' && c <= '9')
++                n = c - '0';
++            else if (c >= 'a' && c <= 'f')
++                n = c - 'a' + 10;
++            else if (c >= 'A' && c <= 'F')
++                n = c - 'A' + 10;
++            else
++                n = -1;
++
++            if (n >= 0)
++            {
++                if (pData->chunk_left < 0)
++                    pData->chunk_left = 0;
++                if (pData->chunk_left > 0x07FFFFFF)
++                    return -1;
++                pData->chunk_left = pData->chunk_left * 16 + n;
++            }
++            else if (pData->chunk_left < 0)
++            {
++                if (c != CR && c != LF)     /* allow blank lines before a size */
++                    return -1;
++            }
++            else if (c == LF)
++                pData->chunk_state = (pData->chunk_left ? CHUNK_DATA : CHUNK_TRAILER);
++            else
++                pData->chunk_state = CHUNK_EXT;     /* CR, ";extension" or white space */
++            break;
++
++        case CHUNK_EXT:
++            if (*p++ == LF)
++                pData->chunk_state = (pData->chunk_left ? CHUNK_DATA : CHUNK_TRAILER);
++            break;
++
++        case CHUNK_DATA:
++            n = end - p;
++            if (n > pData->chunk_left)
++                n = (int) pData->chunk_left;
++            if ( ! (*pData->target->isa->put_block)(pData->target, p, n))
++                return 1;
++            p += n;
++            pData->chunk_left -= n;
++            if (!pData->chunk_left)
++                pData->chunk_state = CHUNK_DATA_END;
++            break;
++
++        case CHUNK_DATA_END:
++            c = *p++;
++            if (c == LF)
++            {
++                pData->chunk_state = CHUNK_SIZE;
++                pData->chunk_left = -1;
++            }
++            else if (c != CR)
++                return -1;
++            break;
++
++        case CHUNK_TRAILER:
++            c = *p++;
++            if (c == LF)
++            {
++                pData->chunk_state = CHUNK_DONE;
++                return 1;
++            }
++            if (c != CR)
++                pData->chunk_state = CHUNK_TRAILER_LINE;
++            break;
++
++        case CHUNK_TRAILER_LINE:
++            if (*p++ == LF)
++                pData->chunk_state = CHUNK_TRAILER;
++            break;
++
++        default:                        /* CHUNK_DONE */
++            return 1;
+=1 151 3
++    return 0;
+=1 2509 41
++            if (pData->bChunked)
++            {
++                int chunk_status = x_PutChunked(pData,
+=1 2551 1 -4
++                                                amount_obtained);
++                if (chunk_status < 0)
++                {
++                    XX_DMsg(DBG_WWW|DBG_LOAD,("HTTP_DoCopying: bad chunked data\n"));
+=1 2521 6 12
++                if (chunk_status > 0)
+=1 2553 2 4
++            else if ( ! (*pData->target->isa->put_block)(pData->target,
+=1 2551 2 5
+=1 2553 135
++        case STATE_HTTP_GOTMOREBODY:
++            return HTTP_DoGotMoreBody(tw, ppInfo);
+=1 2687 79

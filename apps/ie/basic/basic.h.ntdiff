@@ -1,0 +1,5 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/sec/basic/shared/basic.h
+=1 1 39
++/* not __declspec(dllexport): Basic is built into iexplore.exe, and on the
++   Alpha a dllexport name does not match a plain reference from htspm_os.c */
+=1 43 5

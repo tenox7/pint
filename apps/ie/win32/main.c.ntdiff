@@ -1,0 +1,61 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/main.c
+=1 1 212
++// Write the default INI file built into the EXE (RES_DEFAULT_INI) to szIniFile.
++
++static void WriteDefaultIniFile(char *szIniFile)
++{
++    HRSRC hRes;
++    HGLOBAL hData;
++    char *pData;
++    DWORD cbData;
++    FILE *fp;
++
++    hRes = FindResource(wg.hInstance, MAKEINTRESOURCE(RES_DEFAULT_INI), "INIFILE");
++    if (!hRes)
++    {
++        return;
++    }
++    hData = LoadResource(wg.hInstance, hRes);
++    pData = hData ? LockResource(hData) : NULL;
++    cbData = SizeofResource(wg.hInstance, hRes);
++    if (!pData || !cbData)
++    {
+=1 346 3 4
++    fp = fopen(szIniFile, "wb");
++    if (fp)
++    {
++        fwrite(pData, 1, cbData, fp);
+=1 471 3 -12
+=1 212 433
++#if (WINVER >= 0x0400)
++    OSVERSIONINFO ovi;
++#else
++    DWORD dwVersion;
++#endif
+=1 646 10
++#if (WINVER >= 0x0400)
+=1 656 25
++#else
++    dwVersion = GetVersion();
++    wg.dwMajorVersion = LOBYTE(LOWORD(dwVersion));
++    wg.dwMinorVersion = HIBYTE(LOWORD(dwVersion));
++
++    if (!(dwVersion & 0x80000000))
++    {
+=1 676 2 -8
++    }
++    else if (wg.dwMajorVersion < 4)
++    {
+=1 666 4 -8
+=1 106 3
+=1 672 2 -8
++    }
++#endif // WINVER
+=1 681 72
++            /* this will fail if there is no INI file in the EXE dir, but that's ok:
++               then we write out the default one built into the EXE */
++            if (!CopyFile(otherIniFile, AppIniFile, TRUE))
++            {
++                WriteDefaultIniFile(AppIniFile);
++            }
+=1 754 189

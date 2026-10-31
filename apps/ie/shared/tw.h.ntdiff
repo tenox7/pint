@@ -1,0 +1,8 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/tw.h
+=1 1 436
++#define ELEFLAG_SUP             0x00001000  /* text in <SUP> */
++#define ELEFLAG_SUB             0x00002000  /* text in <SUB> */
+=1 437 181
++void TW_SetRefresh(struct Mwin *tw, int seconds, CONST char *url);
++void TW_CancelRefresh(struct Mwin *tw);
+=1 618 63

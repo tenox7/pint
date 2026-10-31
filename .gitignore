@@ -27,8 +27,18 @@ sdcard/root/APPS/
 # screen dumps
 *.ppm
 
-# Internet Explorer 1.x: the IE source of the NT tree (inet/ohnt/ie), not ours
-apps/ie/
+# Internet Explorer 1.5 (PINT 3.5's): the files made from their edit scripts over the Mosaic of the NT tree
+# (net/sockets/internet/ui/mosaic); kept are the scripts, the build files and the files of the port
+apps/ie/**
+!apps/ie/**/
+!apps/ie/**/*.ntdiff
+!apps/ie/*/sources
+!apps/ie/bearssl/**
+!apps/ie/shared/htansi.c
+!apps/ie/shared/htansi.h
+!apps/ie/shared/ssl.h
+!apps/ie/shared/stb_image.h
+!apps/ie/win32/w32ssl.c
 
 # the sources made from their edit scripts over the NT tree (*.ntdiff, tools/ntdiff.pl)
 arcfw/arm/fwio.c

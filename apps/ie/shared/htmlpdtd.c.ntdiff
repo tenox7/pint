@@ -1,0 +1,65 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htmlpdtd.c
+=1 1 245
++static attr button_attr[HTML_BUTTON_ATTRIBUTES + 1] =
++{
++    {"NAME"},
+=1 314 5
+=1 246 10
++static attr frame_attr[HTML_FRAME_ATTRIBUTES + 1] =
++{                               /* FRAME and IFRAME */
++    {"HEIGHT"},
++    {"NAME"},
++    {"SRC"},
++    {"TITLE"},
+=1 421 4
+=1 256 126
++static attr meta_attr[HTML_META_ATTRIBUTES + 1] =
++{
++    {"CHARSET"},
++    {"CONTENT"},
++    {"HTTP-EQUIV"},
+=1 378 104
++    {"ARTICLE", no_attr, 0, SGML_NEST},        /* blocks, see html.c */
++    {"ASIDE", no_attr, 0, SGML_NEST},
+=1 482 6
++    {"BUTTON", button_attr, HTML_BUTTON_ATTRIBUTES, SGML_MIXED},
+=1 488 7
++    {"DETAILS", no_attr, 0, SGML_NEST},
+=1 495 2
++    {"DIV", p_attr, HTML_P_ATTRIBUTES, SGML_NEST},
+=1 497 3
++    {"FIELDSET", no_attr, 0, SGML_NEST},
++    {"FIGCAPTION", no_attr, 0, SGML_NEST},
++    {"FIGURE", no_attr, 0, SGML_NEST},
+=1 500 1
++    {"FOOTER", no_attr, 0, SGML_NEST},
+=1 501 1
++    {"FRAME", frame_attr, HTML_FRAME_ATTRIBUTES, SGML_EMPTY},
++    {"FRAMESET", no_attr, 0, SGML_NEST},
+=1 502 8
++    {"HEADER", no_attr, 0, SGML_NEST},
+=1 510 4
++    {"IFRAME", frame_attr, HTML_FRAME_ATTRIBUTES, SGML_NEST},
+=1 514 6
++    {"LABEL", no_attr, 0, SGML_NEST},
++    {"LEGEND", no_attr, 0, SGML_NEST},
+=1 520 4
++    {"MAIN", no_attr, 0, SGML_NEST},
+=1 524 2
++    {"META", meta_attr, HTML_META_ATTRIBUTES, SGML_EMPTY},
++    {"NAV", no_attr, 0, SGML_NEST},
+=1 526 1
++    {"NOFRAMES", no_attr, 0, SGML_NEST},
+=1 527 8
++    {"SCRIPT", no_attr, 0, SGML_LITERAL},  /* not shown, see html.c */
++    {"SECTION", no_attr, 0, SGML_NEST},
+=1 535 1
++    {"SPAN", no_attr, 0, SGML_NEST},
+=1 536 2
++    {"STYLE", no_attr, 0, SGML_LITERAL},   /* not shown, see html.c */
++    {"SUB", no_attr, 0, SGML_NEST},
++    {"SUMMARY", no_attr, 0, SGML_NEST},
++    {"SUP", no_attr, 0, SGML_NEST},
+=1 538 3
++    {"TEMPLATE", no_attr, 0, SGML_MIXED},     /* never shown, see sgml.c */
+=1 541 61

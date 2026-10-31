@@ -1,0 +1,59 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htext.c
+=1 1 496
++
++        if (text->nSup || text->nSub)
++        {   /* smaller, and moved up or down when the line is laid out */
++            text->w3doc->aElements[text->iElement].lFlags |= (text->nSup ? ELEFLAG_SUP : ELEFLAG_SUB);
++            if (text->w3doc->aElements[text->iElement].portion.text.font_request.logical_font_size > 1)
++            {
++                text->w3doc->aElements[text->iElement].portion.text.font_request.logical_font_size--;
+=1 540 4 4
+=1 499 47
++    HText_appendBlockBreak
++
++    Ends the line before or after a block such as <DIV>, unless it is
++    empty (a list item's bullet alone counts as empty).
+=1 21 1
++void HText_appendBlockBreak(HText * text)
++{
++    if (text->bStartingListItem || text->bTextArea || text->bSelect)
+=1 1590 3
+=1 646 2 -16
+=1 543 835
++    HText_beginSupSub, HText_endSupSub: <SUP> and <SUB>
+=1 21 1
++void HText_beginSupSub(HText * text, BOOL bSub)
++{
++    if (bSub)
++        text->nSub++;
++    else
++        text->nSup++;
+=1 809 3
++void HText_endSupSub(HText * text, BOOL bSub)
++{
++    if (bSub)
++    {
++        if (text->nSub > 0)
++            text->nSub--;
++    }
++    else if (text->nSup > 0)
++    {
++        text->nSup--;
++    }
+=1 1373 211
++    HText_setRefresh
++
++    <META HTTP-EQUIV="Refresh">: load url after some seconds, unless the
++    window has moved on to another page by then.
+=1 21 1
++void HText_setRefresh(HText *text, int seconds, const char *url)
++{
++    if (text->w3doc->lFlags & W3DOC_FLAG_VIEWSOURCE)
+=1 1590 3
++#ifdef WIN32
++    if (text->tw)
++    {
++        TW_SetRefresh(text->tw, seconds, url);
++    }
++#endif
+=1 1580 1523

@@ -1,0 +1,440 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/sgml.c
+=1 1 105
++    BOOL bUTF8;                     /* page is decoded from UTF-8 (htansi.c) */
++    struct _ANSI_UTF8 utf8;
++    int depth;                      /* elements on element_stack */
++
++    /*  Elements with the hidden attribute or style="display:none" are not
++        shown: nothing inside them reaches the target. */
++    BOOL bHide;                     /* the tag being read asks to be hidden */
++    HTTag *hide_tag;                /* hidden element we are in, or NULL */
++    int hide_count;                 /* open elements of that kind in it */
++    int hide_depth;                 /* depth when it began */
++};
++
++#define STYLE_ATTRIBUTE (-2)        /* current_attribute_number for style= */
++
++PRIVATE void x_PutChar(HTStream * context, char c)
++{
++    if (!context->hide_tag)
++        (*context->actions->put_character)(context->target, c);
++}
++
++#define PUTC(ch) x_PutChar(context, (char) (ch))
++
++/*  Writes a Unicode character as the ANSI chars it maps to */
++PRIVATE void x_PutUnicode(HTStream * context, long cp)
++{
++    char buf[ANSI_MAX_CHARS];
++    int i, n;
++
++    if (cp <= 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
++        cp = 0xFFFD;                /* not a character */
++    n = ANSI_FromUnicode((unsigned long) cp, buf);
++    for (i = 0; i < n; i++)
++        PUTC(buf[i]);
++}
++
++/*  The value of a numeric character reference: "8217" or "x2019",
++    without the "&#".  Returns -1 if it is not one. */
++PRIVATE long x_CharRefValue(CONST char *s)
++{
++    long v = 0;
++    int base = 10;
++    int d;
++
++    if (*s == 'x' || *s == 'X')
++    {
++        base = 16;
++        s++;
++    }
++    if (!*s)
++        return -1;
++    for (; *s; s++)
++    {
++        if (*s >= '0' && *s <= '9')
++            d = *s - '0';
++        else if (base == 16 && *s >= 'a' && *s <= 'f')
++            d = *s - 'a' + 10;
++        else if (base == 16 && *s >= 'A' && *s <= 'F')
++            d = *s - 'A' + 10;
++        else
++            return -1;
++        if (v <= 0x10FFFF)
++            v = v * base + d;
++    }
++    return v;
++}
++
++/*  Does a style attribute say display:none? */
++PRIVATE BOOL x_StyleHides(CONST char *s)
++{
++    CONST char *p, *q;
++
++    for (p = s; *p; p++)
++    {
++        if ((p == s || p[-1] == ';' || WHITE(p[-1])) && 0 == GTR_strncmpi(p, "display", 7))
++        {
++            for (q = p + 7; *q && WHITE(*q); q++)
++                ;
++            if (*q != ':')
++                continue;
++            for (q++; *q && WHITE(*q); q++)
++                ;
++            if (0 == GTR_strncmpi(q, "none", 4) && !isalnum((unsigned char) q[4]) && q[4] != '-')
++                return TRUE;
+=1 331 5
+=1 111 82
++    /* hidden and style go with any element, see start_element */
++    if (0 == strcasecomp(s, "hidden"))
++    {
++        context->bHide = TRUE;
+=1 998 1 -12
++        return;
++    }
++    if (0 == strcasecomp(s, "style"))
++    {
++        context->current_attribute_number = STYLE_ATTRIBUTE;
+=1 476 3
+=1 193 32
++    if (context->current_attribute_number == STYLE_ATTRIBUTE)
++    {
++        if (x_StyleHides(s))
++        {
++            context->bHide = TRUE;
++        }
++    }
++    else if (context->current_attribute_number != INVALID)
+=1 226 84
++                    if (!context->hide_tag)
+=1 310 1 4
+=1 311 68
++   points to an entity, it replaces it with the fixed up value.
++   cTerm is the character that ended it. */
++PRIVATE BOOL SGML_HandleValueEntity(HTChunk *string, const SGML_dtd *dtd, int index, char cTerm)
++{
++    char buf[256];
++    char out[ANSI_MAX_CHARS];
++    long cp;
++    int i, n;
+=1 384 3
++    if (string->size <= index + 1 || string->size > index + 254)
+=1 388 5
++    /* the name or number, without the '&' */
++    memcpy(buf, string->data + index + 1, string->size - index - 1);
++    buf[string->size - index - 1] = '\0';
+=1 395 3
++        cp = x_CharRefValue(buf + 1);
++        if (cp < 0)
+=1 412 3 -4
++        if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
++        {
++            cp = 0xFFFD;
+=1 1289 4 -8
+=1 420 1
++        int high, low, diff;
++
++        /* "?a=1&copy=2" in a link is not a reference (as in HTML 5) */
++        if (cTerm == '=')
+=1 412 3 -4
++
++        cp = (cTerm == ';') ? ANSI_FindEntity(buf) : -1;
++        if (cp < 0)
++        {
+=1 427 5 4
++                diff = strcmp(entities[i], buf);  /* Csse sensitive! */
++                if (diff == 0)
++                {
++                    string->size = index;
++                    HTChunkPuts(string, dtd->entity_values[i]);
+=1 360 3 8
++            XX_DMsg(DBG_SGML, ("SGML: Unknown entity %s\n", buf));
+=1 413 3 -4
++
++    n = ANSI_FromUnicode((unsigned long) cp, out);
++    string->size = index;
++    for (i = 0; i < n; i++)
++    {
++        HTChunkPutc(string, out[i]);
+=1 1966 4
++/*  Elements that never have content (end tags for them are ignored) */
++PRIVATE BOOL x_IsVoid(HTStream * context, HTTag * tag)
++{
++    switch (tag - context->dtd->tags)
++    {
++        case HTML_AREA:
++        case HTML_BASE:
++        case HTML_BASEFONT:
++        case HTML_BR:
++        case HTML_FRAME:
++        case HTML_HR:
++        case HTML_IMAGE:
++        case HTML_IMG:
++        case HTML_INPUT:
++        case HTML_ISINDEX:
++        case HTML_LINK:
++        case HTML_META:
++        case HTML_NEXTID:
++            return TRUE;
+=1 332 4
++/*  Elements whose end tag may be left out: the next one ends them */
++PRIVATE BOOL x_EndsAtNext(HTStream * context, HTTag * tag)
++{
++    switch (tag - context->dtd->tags)
++    {
++        case HTML_DD:
++        case HTML_DT:
++        case HTML_LI:
++        case HTML_OPTION:
++        case HTML_P:
++        case HTML_TD:
++        case HTML_TH:
++        case HTML_TR:
++            return TRUE;
+=1 332 4
++/*  A start tag inside a hidden element.  Form fields still count when
++    the form is sent, so INPUTs go on as hidden ones. */
++PRIVATE void x_HiddenStart(HTStream * context, HTTag * tag)
++{
++    static char szHidden[] = "hidden";
++    static char szOn[] = "on";
++    CONST char *type;
++    BOOL bTypePresent, bValuePresent;
++    char *pType, *pValue;
++
++    if (tag - context->dtd->tags != HTML_INPUT)
++        return;
++
++    type = context->present[HTML_INPUT_TYPE] ? context->value[HTML_INPUT_TYPE] : NULL;
++    if (type && (0 == GTR_strcmpi(type, "checkbox") || 0 == GTR_strcmpi(type, "radio")))
++    {
++        if (!context->present[HTML_INPUT_CHECKED])
++            return;
++    }
++    else if (type && (   0 == GTR_strcmpi(type, "submit") || 0 == GTR_strcmpi(type, "reset")
++                      || 0 == GTR_strcmpi(type, "image") || 0 == GTR_strcmpi(type, "button")
++                      || 0 == GTR_strcmpi(type, "file")))
+=1 796 3 -4
++
++    bTypePresent = context->present[HTML_INPUT_TYPE];
++    bValuePresent = context->present[HTML_INPUT_VALUE];
++    pType = context->value[HTML_INPUT_TYPE];
++    pValue = context->value[HTML_INPUT_VALUE];
++
++    context->present[HTML_INPUT_TYPE] = YES;
++    context->value[HTML_INPUT_TYPE] = szHidden;
++    if (type && !bValuePresent && 0 == GTR_strcmpi(type, "checkbox"))
++    {
++        context->present[HTML_INPUT_VALUE] = YES;
++        context->value[HTML_INPUT_VALUE] = szOn;
++    }
++
++    (*context->actions->start_element) (context->target, HTML_INPUT,
++                                        context->present, (CONST char **) context->value);
++
++    context->present[HTML_INPUT_TYPE] = bTypePresent;
++    context->value[HTML_INPUT_TYPE] = pType;
++    context->present[HTML_INPUT_VALUE] = bValuePresent;
++    context->value[HTML_INPUT_VALUE] = pValue;
++}
++
++/*  The hidden element ends, and what was opened in it and is still open
++    ends with it: the target never saw those start, so must not see their
++    end either. */
++PRIVATE void x_EndHidden(HTStream * context)
++{
++    HTElement *N;
++
++    while (context->depth > context->hide_depth && context->element_stack)
++    {
+=1 502 1
++        context->element_stack = N->next;
++        GTR_FREE(N);
++        context->depth--;
++    }
++    context->hide_tag = NULL;
++}
++
++/*  An end tag of the hidden element's kind: is it the hidden one's?  For
++    <li> and the like only at its own level (a list in it has its own). */
++PRIVATE BOOL x_HiddenEnds(HTStream * context)
++{
++    if (x_EndsAtNext(context, context->hide_tag))
++        return context->depth == context->hide_depth;
++    return --context->hide_count == 0;
++}
++
++/*  Passes an end tag on, unless it is inside a hidden element */
++PRIVATE void x_EndElement(HTStream * context, HTTag * tag)
++{
++    if (context->hide_tag)
++    {
++        if (context->depth < context->hide_depth)
++        {
++            context->hide_tag = NULL;   /* what held the hidden element ended */
+=1 402 3
++            if (tag == context->hide_tag && x_HiddenEnds(context))
++                x_EndHidden(context);
++            return;
++        }
++    }
++    (*context->actions->end_element) (context->target, tag - context->dtd->tags);
+=1 448 23
++        if (old_tag == context->hide_tag && x_HiddenEnds(context))
++            x_EndHidden(context);       /* a hidden <li> ... </li> */
+=1 471 4
++        x_EndElement(context, old_tag);
+=1 476 50
++        context->depth--;
++        x_EndElement(context, t);
+=1 528 15
++    BOOL bHide = context->bHide;
+=1 543 3
++    context->bHide = FALSE;
++    if (new_tag - context->dtd->tags == HTML_TEMPLATE)
++    {
++        bHide = TRUE;                   /* never shown */
++    }
++
++    if (new_tag == context->hide_tag)
++    {
++        if (!x_EndsAtNext(context, new_tag))
++            context->hide_count++;
++        else if (context->depth == context->hide_depth)
++            x_EndHidden(context);       /* <li> after a hidden <li> ends it */
++    }
++    if (bHide && !context->hide_tag && !x_IsVoid(context, new_tag))
++    {
++        context->hide_tag = new_tag;
++        context->hide_count = 1;
++        context->hide_depth = context->depth;
++    }
++
++    if (bHide || context->hide_tag)
++    {
++        x_HiddenStart(context, new_tag);
+=1 232 3
+=1 546 1 4
+=1 547 4
++    }
+=1 551 8
++            context->depth++;
+=1 559 54
++    char buf[ANSI_MAX_CHARS];
++
++    /* the page may end in the middle of a UTF-8 sequence */
++    cbLength = ANSI_FlushUTF8(&context->utf8, buf);
++    for (cbChar = 0; cbChar < cbLength; cbChar++)
++    {
++        SGML_character(context, buf[cbChar]);
++    }
+=1 613 380
++                /*  If complete match, end literal.  (Not on "<>": with one
++                    char there is no name to have matched.) */
++                if (   string->size > 1
++                    && !context->element_stack->tag->name[string->size - 2]
++                    && (c == '>' || WHITE(c)))
+=1 995 4
++                    context->state = (c == '>') ? S_text : S_junk_tag;  /* "</script >" */
+=1 1000 3
++                for (i = 0; i < string->size - 1; i++)  /* recover */
+=1 1004 1
++                if (c == '<')
++                {
++                    string->size = 0;   /* this '<' may begin the end tag */
++                    break;
++                }
++                PUTC(c);
+=1 1005 22
++                long cp = -1;
++
+=1 1027 1
++                if (c == ';')
++                {
++                    cp = ANSI_FindEntity(string->data);     /* &mdash; &rsquo; ... */
++                }
++                if (cp >= 0)
++                {
++                    x_PutUnicode(context, cp);
++                    bStatus = TRUE;
+=1 1106 3
+=1 1028 1 4
+=1 1053 2
++
++                if (!bStatus || c != ';')
+=1 1032 2
++                       of an illegal entity, or one that is not ';' */
+=1 1035 12
++                long value;
++                CONST char *p;
++
+=1 1027 1
++                value = x_CharRefValue(string->data);   /* &#8217; or &#x2019; */
++                if (value >= 0)
++                {
++                    x_PutUnicode(context, value);
+=1 1106 3
++                    PUTC('&');                          /* not a number: show it */
++                    PUTC('#');
++                    for (p = string->data; *p; p++)
++                        PUTC(*p);
+=1 1053 2
++                if (value < 0 || c != ';')
+=1 1056 10
++            if (isalnum((unsigned char) c) && (string->size || isalpha((unsigned char) c)))
+=1 1067 3
++            else if (!string->size && c != '/' && c != '?')
++            {
++                /* "a < b" or "<3": a '<' that starts no tag is text */
++                PUTC('<');
+=1 944 1
+=1 1035 2 -4
+=1 1070 3
++                if (c == '/' && !string->size)
+=1 1074 4
++                /* a '/' after the name, as in <br/>, just ends the name */
+=1 1078 20
++                context->bHide = FALSE;
+=1 1098 18
++            if (WHITE(c) || c == '/')
++                break;          /* Gap between attributes, or <br /> */
+=1 1118 34
++            if (WHITE(c) || c == '/')
++                break;          /* Gap after attribute, or <input checked /> */
+=1 1154 139
++                bStatus = SGML_HandleValueEntity(string, context->dtd, context->extra, c);
+=1 1294 1
++                if (!bStatus || c != ';')
+=1 1032 2
++                       of an illegal entity, or one that is not ';' (such
++                       as the quote that ends the value) */
+=1 1299 644
++/*  One byte of the page as it came in: UTF-8 is decoded to ANSI first */
++PRIVATE BOOL SGML_putByte(HTStream * context, char c)
++{
++    char buf[ANSI_MAX_CHARS];
++    int i, n;
++
++    if (!context->bUTF8)
++        return SGML_character(context, c);
++
++    n = ANSI_PutUTF8(&context->utf8, (unsigned char) c, buf);
++    for (i = 0; i < n; i++)
++        SGML_character(context, buf[i]);
+=1 1950 4
+=1 1943 4
++        SGML_putByte(context, *p);
+=1 1948 11
++        SGML_putByte(context, *p);
+=1 1960 24
++    SGML_putByte,
+=1 1985 46
++
++    context->bUTF8 = ANSI_ReadAsUTF8(request);
++    memset(&context->utf8, 0, sizeof(context->utf8));
++    context->depth = 0;
++    context->bHide = FALSE;
++    context->hide_tag = NULL;
++    context->hide_count = 0;
++    context->hide_depth = 0;
+=1 2031 4

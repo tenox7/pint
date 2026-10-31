@@ -1,0 +1,38 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/shared/htplain.c
+=1 1 32
++
++    BOOL bUTF8;                 /* text is decoded from UTF-8 (htansi.c) */
++    struct _ANSI_UTF8 utf8;
+=1 33 11
++PRIVATE void HTPlain_append(HTStream * me, char c)
++{
++    char buf[ANSI_MAX_CHARS];
++    int i, n;
++
++    if (!me->bUTF8)
++    {
+=1 47 1 4
++        return;
++    }
++    n = ANSI_PutUTF8(&me->utf8, (unsigned char) c, buf);
++    for (i = 0; i < n; i++)
++        HText_appendCharacter(me->text, buf[i]);
++}
+=1 43 4
++    HTPlain_append(me, c);
+=1 48 14
++    for (; *s; s++)
++        HTPlain_append(me, *s);
+=1 63 12
++        HTPlain_append(me, *p);
+=1 76 16
++    char buf[ANSI_MAX_CHARS];
++    int i, n;
++
++    n = ANSI_FlushUTF8(&me->utf8, buf);     /* text may end inside a sequence */
++    for (i = 0; i < n; i++)
++        HText_appendCharacter(me->text, buf[i]);
+=1 92 68
++        me->bUTF8 = ANSI_ReadAsUTF8(request);
++        memset(&me->utf8, 0, sizeof(me->utf8));
+=1 160 6

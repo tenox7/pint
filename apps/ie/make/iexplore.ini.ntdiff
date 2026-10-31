@@ -1,0 +1,4 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/oem/spy/make/iexplore.ini
+=1 1 292
++; Basic authentication is built into iexplore.exe
+=1 294 16

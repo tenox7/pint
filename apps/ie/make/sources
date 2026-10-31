@@ -1,0 +1,44 @@
+MAJORCOMP=apps
+MINORCOMP=ie
+
+TARGETNAME=iexplore
+TARGETPATH=obj
+TARGETTYPE=LIBRARY
+
+USE_LIBCMT=1
+
+# The OEM glue (iexplore.c is a stub, toolbar.c lays out the toolbar, version.c
+# names the app) plus emosaic.rc, which builds the dialogs, menus, bitmaps,
+# icons and the default iexplore.ini into the exe. Built as a library (toolbar +
+# version) and linked, with the other IE libraries, into iexplore.exe (UMAPPL).
+C_DEFINES=-DFEATURE_TOOLBAR -DFEATURE_JPEG -DFEATURE_SOUND_PLAYER \
+	-DFEATURE_IMAGE_VIEWER -DFEATURE_TABLES -DFEATURE_LOCAL_DIRECTORY \
+	-DFEATURE_ASYNC_IMAGES -DFEATURE_PROGRESSIVE_IMAGE -DFEATURE_MULTISCAN_JPEG \
+	-DFEATURE_SPM -DFEATURE_IAPI -DFEATURE_NO_EXIT_ON_SECONDARY_WINDOWS \
+	-DFEATURE_BROKEN_ATTRIBUTE_PARSER -DFEATURE_CLIENT_IMAGEMAP \
+	-DFEATURE_TABLE_WIDTH -DFEATURE_HTTP_COOKIES -DFEATURE_SSL \
+	-DWINVER=0x0400 -DSTRICT -DWIN32_BUFFERED -D_WINDOWS -DNO_GROUPS \
+	-DACCESS_AUTH -D_GIBRALTAR -UWIN32_LEAN_AND_MEAN
+
+INCLUDES=..\xxdebug;..\shared;..\win32;..\secinc
+
+SOURCES=                \
+	iexplore.c      \
+	toolbar.c       \
+	version.c       \
+	emosaic.rc      \
+
+UMTYPE=windows
+UMAPPL=iexplore
+UMENTRY=winmain
+
+UMLIBS=                                         \
+	obj\*\iexplore.lib                      \
+	..\win32\obj\*\iew32.lib                \
+	..\basic\obj\*\iebasic.lib              \
+	..\shared\obj\*\iesh.lib                \
+	..\bearssl\obj\*\iebssl.lib             \
+	$(BASEDIR)\public\sdk\lib\*\wsock32.lib \
+	$(BASEDIR)\public\sdk\lib\*\comdlg32.lib \
+	$(BASEDIR)\public\sdk\lib\*\shell32.lib \
+	$(BASEDIR)\public\sdk\lib\*\winmm.lib

@@ -1,0 +1,9 @@
+#ntdiff private/net/sockets/internet/ui/mosaic/generic/win32/w32sound.c
+=1 1 564
++#if (WINVER >= 0x0400)
+=1 565 2
++#else
++    err = waveOutOpen((LPHWAVEOUT) &si->hwo, WAVE_MAPPER, (LPWAVEFORMAT) si->pwf,
+=1 566 1
++#endif
+=1 567 758
