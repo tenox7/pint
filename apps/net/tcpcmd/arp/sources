@@ -1,0 +1,20 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=arp
+
+TARGETNAME=arp
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+C_DEFINES=-DNT
+
+UMTYPE=console
+USE_CRTDLL=1
+
+INCLUDES=..\tcpinfo;$(BASEDIR)\private\inc
+
+SOURCES=newarp.c
+
+# (oldnames.lib: stricmp, strlwr)
+TARGETLIBS=..\tcpinfo\obj\*\tcpinfo.lib \
+           $(BASEDIR)\public\sdk\lib\*\oldnames.lib \
+           $(BASEDIR)\public\sdk\lib\*\ntdll.lib

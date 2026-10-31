@@ -14,7 +14,7 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT40="$(cd ../.. && pwd)"
 TYPE=${1:?usage: make-crt32.sh ST|MT|DLL}
 
-docker run --rm -e CJ="${CJ:-4}" -e TYPE="$TYPE" -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/crt \
+docker run --rm -e CJ="${CJ:-4}" -e TYPE="$TYPE" -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40/../XPSP1":/XPSP1:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/crt \
     --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/build/msvc.sh

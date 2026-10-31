@@ -38,6 +38,9 @@ portfile() {
 # build did not make, in a directory of the tree's MFC sources)
 src=$(cd "$(dirname "$1")" 2>/dev/null && pwd || realpath -m "$(dirname "$1")")/$(basename "$1")
 mk=$(ls "$(dirname "$src")" 2>/dev/null | grep -ix makefile | head -1) && mk=$(dirname "$src")/$mk || mk=
+# (or the port's, read as from the tree's directory, which the tree left empty: the parts of
+# adminapp of NET UI, whose makefile defines UI for the rules.mk of the tree it includes)
+[ -f "$mk" ] || { mk=$(bash "$(dirname "$0")/portdir.sh" "$(dirname "$src")")/makefile; [ -f "$mk" ] || mk=; }
 port=$(bash "$(dirname "$0")/portdir.sh" "$(dirname "$src")")/$(basename "$src" | tr A-Z a-z)
 [ -f "$port" ] || port=$src
 # (or the one the build made, in a directory the tree leaves empty: ntuser\kbd\tmp\kbdus)
@@ -191,7 +194,7 @@ BEGIN {
     mac["NTMAKEENV"] = "\\nt\\public\\oak\\bin"; mac["FREEBUILD"] = "1"
     n = split(ENVIRON["SRCMACROS"], pre, " ")
     for (i = 1; i <= n; i++) if ((j = index(pre[i], "=")) > 1) mac[substr(pre[i], 1, j - 1)] = substr(pre[i], j + 1)
-    if (mk != "") include(mk)
+    if (mk != "") include(mk, dirof(src))
     if (!sources) { depth = 0; include(port, dirof(src)); mfc() }
     if (k == "*") for (n in mac) print n "=" mac[n]
     else print (k in mac) ? mac[k] : ""

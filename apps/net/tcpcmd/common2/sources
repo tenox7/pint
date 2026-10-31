@@ -1,0 +1,15 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=common2
+
+TARGETNAME=common2
+TARGETPATH=obj
+TARGETTYPE=LIBRARY
+
+C_DEFINES=-DNT -DNO_TLI
+
+USE_CRTDLL=1
+
+INCLUDES=$(BASEDIR)\private\inc
+
+SOURCES=snmpinfo.c \
+        util.c

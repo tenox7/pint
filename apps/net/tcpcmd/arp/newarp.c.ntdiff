@@ -1,0 +1,8 @@
+#ntdiff ../nt35/PRIVATE/NTOS/TDI/TCPIP/UTILS/ARP/ARP/NEWARP.C
+=1 1 39
++#include    "..\tcpinfo\tcpinfo.h"
+=1 41 737
++								printf("%s: Unable to delete entry for ", testname);
+=1 779 186
++			for (i = 0; i < NumReturned; i++)
+=1 966 86

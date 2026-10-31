@@ -1,0 +1,8 @@
+#ntdiff ../XPSP1/net/tcpip/commands/common2/common2.h
+=1 1 46
++#define TYPE_MAX           TYPE_UDPCONN
+=1 54 41
+=1 101 10
+=1 116 10
+=1 131 8
+=1 140 3

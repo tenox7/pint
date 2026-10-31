@@ -1,0 +1,21 @@
+#ntdiff ../XPSP1/admin/netui/admin/common/src/adminapp/adminapp/adminapp.cxx ../nt35/PRIVATE/NET/UI/ADMIN/COMMON/SRC/ADMINAPP/ADMINAPP/ADMINAPP.CXX
+=1 1 198
+=2 190 197
+=1 396 49
+=1 446 3
++        if (!::TranslateCharsetInfo((DWORD *)dw, &csi, TCI_SRCCODEPAGE))
+=1 450 1
+=1 452 535
+=2 940 93
+=1 1080 702
+=2 1735 414
+=1 2192 9
++        ULONG retval = Command( WM_SETHOTKEY, vkeyHotkey );
+=1 2202 252
+=2 2397 6
+=1 2460 5
+=2 2408 722
+=1 3187 67
+=2 3197 92
+=1 3346 387
+=2 3676 29

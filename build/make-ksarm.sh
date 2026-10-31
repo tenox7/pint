@@ -9,7 +9,7 @@ set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NT40="$(cd ../.. && pwd)"
 
-docker run --rm -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/kernel --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40/../XPSP1":/XPSP1:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/kernel --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/build/msvc.sh
 SUBSYS="ke" bash $B/mkfarm.sh /tmp/f

@@ -1,0 +1,7 @@
+#ntdiff ../nt35/PRIVATE/NTOS/TDI/TCPIP/UTILS/IP/ROUTE/NEWROUTE.C
+=1 1 37
++#include    "..\tcpinfo\tcpinfo.h"
+=1 39 901
++				for (i = 0; i < NumReturned; i++)
++					PrintRouteEntry(RouteEntryPtr + i, AddrTable, NumAddrReturned);
+=1 942 16

@@ -1,0 +1,71 @@
+#ntdiff ../XPSP1/net/tcpip/commands/tracert/tracert.c
+=1 1 33
+=1 39 50
+=1 90 3
+=1 110 31
+=1 203 3
++    struct in_addr   inaddr;
++    struct hostent  *hostEntry;
+=1 172 2
++    inaddr.s_addr = ipv4Addr;
+=1 173 2
++        hostEntry = gethostbyaddr((char *) &ipv4Addr, sizeof(ipv4Addr),
++                                  AF_INET);
++
++        if (hostEntry != NULL) {
++            didReverse = TRUE;
++            NlsPutMsg(STDOUT, TRACERT_TARGET_NAME, hostEntry->h_name);
+=1 181 3
++    if (didReverse) {
++        NlsPutMsg( STDOUT, TRACERT_BRKT_IP_ADDRESS, inet_ntoa(inaddr) );
++    } else {
++        NlsPutMsg( STDOUT, TRACERT_IP_ADDRESS, inet_ntoa(inaddr) );
+=1 199 5
+=1 230 43
++    char         *TargetString,
++    IPAddr       *TargetAddress,
+=1 277 5
++    struct hostent  *hostEntry;
+=1 284 3
++    *TargetAddress = inet_addr(TargetString);
++    if (*TargetAddress != INADDR_NONE) {
+=1 294 2
++            hostEntry = gethostbyaddr((char *) TargetAddress,
++                                      sizeof(IPAddr), AF_INET);
++            if (hostEntry != NULL) {
++                strncpy(TargetName, hostEntry->h_name, TargetNameLen - 1);
++                TargetName[TargetNameLen - 1] = '\0';
+=1 856 3
+=1 267 3 4
++    hostEntry = gethostbyname(TargetString);
++    if (hostEntry != NULL) {
++        *TargetAddress = *(IPAddr UNALIGNED *) hostEntry->h_addr;
++        strncpy(TargetName, hostEntry->h_name, TargetNameLen - 1);
++        TargetName[TargetNameLen - 1] = '\0';
+=1 267 3 4
+=1 315 4
+=1 350 3
++    IPAddr                address;
+=1 355 1
+=1 357 4
++    char                  hostname[256], literal[16];
+=1 363 14
++
++    if (WSAStartup(MAKEWORD(1, 1), &WsaData)) {
+=1 386 4
+=1 392 34
+=1 431 49
+=1 513 10
++            if (!ResolveTarget(argv[i], &address, hostname, sizeof(hostname),
+=1 525 13
++    if (SRIndex != 0) {
++        *(ulong UNALIGNED *)&options.OptionsData[SRIndex] = address;
+=1 542 3 -4
+=1 575 7
++    strcpy(literal, inet_ntoa(*(struct in_addr *) &address));
+=1 584 30
++            numberOfReplies = IcmpSendEcho(
++                                  IcmpHandle,
++                                  address,
+=1 621 111 -4
+=1 857 20

@@ -1,0 +1,5 @@
+#ntdiff ../XPSP1/net/netbt/nbtstat/nbtstat.h
+=1 1 6
+=1 8 21
++#define MAX_NAME             256
+=1 29 197

@@ -21,7 +21,7 @@ NT40="$(cd ../.. && pwd)"
 COMP=${1:?usage: make-dll.sh COMPONENT}
 
 docker run --rm -e CJ="${CJ:-4}" -e COMP="$COMP" -e ROOT="${ROOT:-/work/private/ntos}" -e INSTALL="${INSTALL:-0}" -e DEST="${DEST:-WINNT/System32}" -e IMPLIB="${IMPLIB:-0}" \
-    -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
+    -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40/../XPSP1":/XPSP1:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . ./msvc.sh
 O=/work/RASPI/obj
@@ -205,10 +205,6 @@ for l in $(libs LINKLIBS) $TL $(libs TARGETLIBS); do
   a=$(bash libpath.sh $D "$l"); [ -n "$a" ] || a=$U/$b.lib
   # (else one of kernel mode, which the client links too: efloat.lib of gdi32 and win32k.sys)
   [ -f $a ] || [ ! -f $O/$b.lib ] || a=$O/$b.lib
-  # (uiadmin.lib of the NET UI admin tools has no source in the tree, its adminapp, colwidth and
-  # setfocus are empty: an image that lists it and uses none of it, rassapi, links the same without
-  # it; one that uses it fails to link)
-  [ -f $a ] || [ $b != uiadmin ] || { echo "   left out $b.lib (no source in the tree)"; continue; }
   [ -f $a ] || { echo "   missing library $b (build it first)"; exit 1; }
   # (each once: two of one name are two libraries, the util.lib of OLE com and of ole232)
   case " $seen " in *" $a "*) continue ;; esac; seen="$seen $a"

@@ -7,7 +7,7 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/stamp.sh"
 # the port's versions of NT files from their edit scripts first, so that their times count
-docker run --rm -v "$R/..":/work -v "$R/../../nt35":/nt35:ro -v "$R/../private":/work/private:ro -v "$R/../public":/work/public:ro --entrypoint perl tenox7/msvc-arm32 /work/RASPI/tools/ntdiff.pl apply /work /work/RASPI
+docker run --rm -v "$R/..":/work -v "$R/../../nt35":/nt35:ro -v "$R/../../XPSP1":/XPSP1:ro -v "$R/../private":/work/private:ro -v "$R/../public":/work/public:ro --entrypoint perl tenox7/msvc-arm32 /work/RASPI/tools/ntdiff.pl apply /work /work/RASPI
 
 GEN= step tools $R/tools/pe2img.c $R/tools/midl/midlcpp.c $R/ported/ntos/makefil0 $R/ported/windows/makefil0 $CRT \
     -- $R/tools/make-tools.sh

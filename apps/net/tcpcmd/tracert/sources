@@ -1,0 +1,20 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=tracert
+
+TARGETNAME=tracert
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+UMTYPE=console
+USE_CRTDLL=1
+
+INCLUDES=$(BASEDIR)\private\net\sockets\tcpcmd\common;$(BASEDIR)\private\inc
+
+SOURCES=tracert.c \
+        tracert.rc
+
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\icmp.lib \
+           $(BASEDIR)\public\sdk\lib\*\wsock32.lib \
+           $(BASEDIR)\public\sdk\lib\*\user32.lib
+
+NTTARGETFILE0=nlstxt.h

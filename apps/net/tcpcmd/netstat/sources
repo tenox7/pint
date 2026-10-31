@@ -1,0 +1,25 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=netstat
+
+TARGETNAME=netstat
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+C_DEFINES=-DNT -DNO_TLI
+
+UMTYPE=console
+USE_CRTDLL=1
+
+INCLUDES=..\common2;$(BASEDIR)\private\net\sockets\tcpcmd\common;$(BASEDIR)\private\inc
+
+SOURCES=netstat.c \
+        netstat.rc
+
+TARGETLIBS=..\common2\obj\*\common2.lib \
+           ..\nls\obj\*\nls.lib \
+           $(BASEDIR)\public\sdk\lib\*\snmpapi.lib \
+           $(BASEDIR)\public\sdk\lib\*\ntdll.lib \
+           $(BASEDIR)\public\sdk\lib\*\user32.lib \
+           $(BASEDIR)\public\sdk\lib\*\wsock32.lib
+
+NTTARGETFILE0=netstmsg.h

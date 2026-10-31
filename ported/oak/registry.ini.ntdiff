@@ -41,10 +41,7 @@
 +;  Commands for the start of winlogon.cmd, after its first line, which makes Program
 +;  Manager the shell: the shell of NT 4.0 is Explorer. With ! for its end: GUI setup ends
 +;  with RUNONCE -r, which runs the commands of RunOnce before the first logon.
-+;  ws2setup makes the protocol catalog of Winsock 2 from the transports of Winsock 1.1,
-+;  as setup does after the binding review of the network (MigrateWinsockConfiguration).
 +;
 +InsertScript
 +    ini winlogon.Shell = "Explorer.exe"
-+    ws2setup
 +    !runonce -r

@@ -1,0 +1,22 @@
+MAJORCOMP=tcpcmd
+MINORCOMP=nbtstat
+
+TARGETNAME=nbtstat
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+UMTYPE=console
+USE_CRTDLL=1
+
+INCLUDES=..\nls;$(BASEDIR)\private\inc
+
+SOURCES=nbtstat.c \
+        nbtinfo.rc
+
+TARGETLIBS=..\nls\obj\*\nls.lib \
+           $(BASEDIR)\public\sdk\lib\*\winstrm.lib \
+           $(BASEDIR)\public\sdk\lib\*\ntdll.lib \
+           $(BASEDIR)\public\sdk\lib\*\user32.lib \
+           $(BASEDIR)\public\sdk\lib\*\wsock32.lib
+
+NTTARGETFILE0=nlstxt.h

@@ -1,0 +1,57 @@
+#ntdiff ../XPSP1/net/netbt/nbtstat/nbtstat.c
+=1 1 36
+=1 38 62
+=1 151 118
++                        display = RESYNC;
+=1 278 73
++                             pDeviceInfo[index]);
+=1 352 20
++                nls_printf ("\n%s:\n", pDeviceInfo[index]);
+=1 373 37
+=1 414 885
+=1 1349 103
++    NTSTATUS            status;
++    PCHAR               pExport;
++    PCHAR               pName;
+=1 1459 8
++    ULONG                   index=0;
++
++    //
++    // The devices NetBT is bound to are those it exports
++    //
+=1 1576 1
++                 NETBT_LINKAGE_KEY,
+=1 1578 4
++    if (status != ERROR_SUCCESS)
++    {
+=1 899 2 -4
++
++    size = 0;
++    status = RegQueryValueEx(Key, WINS_EXPORT, NULL, &Type, NULL, &size);
++    if ((status != ERROR_SUCCESS) || (Type != REG_MULTI_SZ) ||
++        (!(pExport = LocalAlloc(LMEM_FIXED,size))))
++    {
++        RegCloseKey(Key);
+=1 899 2 -4
++
++    status = RegQueryValueEx(Key, WINS_EXPORT, NULL, &Type, pExport, &size);
++    RegCloseKey(Key);
++    if (status != ERROR_SUCCESS)
++    {
++        LocalFree(pExport);
+=1 899 2 -4
++
++    for (pName = pExport;
++         (*pName != '\0') && (index < NBT_MAXIMUM_BINDINGS);
++         pName += strlen(pName) + 1)
++    {
++        size = (strlen(pName) > MAX_NAME) ? MAX_NAME : strlen(pName);
++
++        strncpy(pDeviceInfo[index], pName, size);
+=1 1552 1 -4
++
++        index++;
++    }
++
++    LocalFree(pExport);
+=1 1560 540

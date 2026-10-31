@@ -1,0 +1,416 @@
+#ntdiff ../XPSP1/net/tcpip/commands/common2/snmpinfo.c private/net/sockets/tcpcmd/dhcp/client/newnt/ioctl.c
+=1 1 26
+=1 28 5
++#include <winsock.h>
+=1 35 7
++#include "ntddtcp.h"
++#include "tdiinfo.h"
++#include "tdistat.h"
+=1 45 7
++#define TABLE_SLACK             8       // entries added while we read
+=1 232 7
++BOOL FindEntity( ulong Entity, ulong EntityType, ulong *pIndex,
++                 TDIEntityID *pId );
++NTSTATUS QueryInfo( TDIEntityID *pId, ulong InfoId, void *Buffer,
++                    ulong *pSize );
++ulong ReadEntry( GenericTable *pList, ulong Size, TDIEntityID *pId,
++                 ulong InfoId, ulong InfoSize );
++ulong ReadEntries( GenericTable *pList, ulong Size, TDIEntityID *pId,
++                   ulong InfoId, ulong InfoSize, ulong Count );
++NTSTATUS TCPQueryInformationEx( HANDLE TCPHandle, TDIObjectID FAR *ID,
++                                void FAR *Buffer, DWORD FAR *BufferSize,
++                                BYTE FAR *Context );
++DWORD OpenDriver( HANDLE *Handle, LPWSTR DriverName );
+=1 275 5
++HANDLE        TcpHandle;                        // the TCP driver
++TDIEntityID   EntityList[MAX_TDI_ENTITIES];     // what the stack exports
++ulong         EntityCount;
+=1 320 10
++// Description: Open the TCP driver and read the list of entities it exports.
++//              The tables are read from these entities.
+=1 332 6
+=1 341 4
++    TDIObjectID  ID;
++    uchar        Context[CONTEXT_SIZE];
++    ulong        Size;
++    ulong        Result;
++    NTSTATUS     Status;
++
++    Result = OpenDriver( &TcpHandle, DD_TCP_DEVICE_NAME );
+=1 525 2
++        DEBUG_PRINT(("InitSnmp: cannot open the TCP driver\n"));
++        return ( Result );
++    }
+=2 1190 7
++    Size = sizeof( EntityList );
++    RtlZeroMemory( Context, CONTEXT_SIZE );
++
++    Status = TCPQueryInformationEx( TcpHandle, &ID, EntityList, &Size,
++                                    Context );
++    if ( Status != TDI_SUCCESS )
++    {
++        return ( RtlNtStatusToDosError( Status ) );
++    }
++
++    EntityCount = Size / sizeof( TDIEntityID );
+=1 408 4
+=1 413 46
+=1 460 19
++    case TYPE_TCP:
+=1 485 7
++    case TYPE_UDP:
+=1 498 7
+=1 509 64
+=1 615 6
++// Name:        FindEntity
++//
++// Description: Finds the next entity of a class that implements a given
++//              protocol, eg the IP entity or the next ARP entity.
++//
++// Parameters:  ulong Entity: class of the entity, eg CL_NL_ENTITY.
++//              ulong EntityType: its protocol, eg CL_NL_IP.
++//              ulong *pIndex: where to start in the entity list; on return,
++//                      where to go on looking.
++//              TDIEntityID *pId: where to return the entity.
++//
++// Returns:     BOOL: TRUE if one was found, FALSE if there are no more.
+=1 12 3
++BOOL FindEntity( ulong Entity, ulong EntityType, ulong *pIndex,
++                 TDIEntityID *pId )
++{
++    TDIObjectID  ID;
++    uchar        Context[CONTEXT_SIZE];
++    ulong        Type;
++    ulong        Size;
++    NTSTATUS     Status;
++
++    while ( *pIndex < EntityCount )
++    {
++        ID.toi_entity = EntityList[(*pIndex)++];
++
++        if ( ID.toi_entity.tei_entity != Entity )
+=1 877 3 -4
++
++        ID.toi_class = INFO_CLASS_GENERIC;
++        ID.toi_type  = INFO_TYPE_PROVIDER;
++        ID.toi_id    = ENTITY_TYPE_ID;
++
++        Size = sizeof( Type );
++        Type = 0;
++        RtlZeroMemory( Context, CONTEXT_SIZE );
++
++        Status = TCPQueryInformationEx( TcpHandle, &ID, &Type, &Size,
++                                        Context );
++        if ( ( Status == TDI_SUCCESS ) && ( Type == EntityType ) )
++        {
++            *pId = ID.toi_entity;
++            return ( TRUE );
+=1 376 3
++    return ( FALSE );
+=1 410 5
++// Name:        QueryInfo
++//
++// Description: Reads a MIB object of an entity.
++//
++// Parameters:  TDIEntityID *pId: the entity.
++//              ulong InfoId: the object, eg IP_MIB_STATS_ID.
++//              void *Buffer: where to return the object.
++//              ulong *pSize: size of Buffer; on return, the size read.
++//
++// Returns:     NTSTATUS: TDI_SUCCESS, TDI_BUFFER_OVERFLOW if a table does
++//                      not fit into Buffer, or some error.
+=1 12 3
++NTSTATUS QueryInfo( TDIEntityID *pId, ulong InfoId, void *Buffer,
++                    ulong *pSize )
++{
++    TDIObjectID  ID;
++    uchar        Context[CONTEXT_SIZE];
++
++    ID.toi_entity = *pId;
+=2 1244 1 -8
++    ID.toi_type   = INFO_TYPE_PROVIDER;
++    ID.toi_id     = InfoId;
++
++    RtlZeroMemory( Context, CONTEXT_SIZE );
++
++    return ( TCPQueryInformationEx( TcpHandle, &ID, Buffer, pSize, Context ) );
+=1 410 5
++// Name:        ReadEntry
++//
++// Description: Reads a MIB object of fixed size into a new entry at the end
++//              of the list.
++//
++// Parameters:  GenericTable *pList: head of the list.
++//              ulong Size: size of a list entry.
++//              TDIEntityID *pId: the entity.
++//              ulong InfoId: the object.
++//              ulong InfoSize: size of the object.
++//
++// Returns:     ulong: NO_ERROR or some error code.
+=1 12 3
++ulong ReadEntry( GenericTable *pList, ulong Size, TDIEntityID *pId,
++                 ulong InfoId, ulong InfoSize )
++{
++    GenericTable  *pTable;
++    NTSTATUS       Status;
++
+=1 930 3 -8
+=1 934 4 -8
++
++    // In every type of entry the data follows the list links.
++
++    Status = QueryInfo( pId, InfoId, pTable + 1, &InfoSize );
++    if ( Status != TDI_SUCCESS )
++    {
++        return ( RtlNtStatusToDosError( Status ) );
++    }
+=1 408 7
++// Name:        ReadEntries
++//
++// Description: Reads a MIB table, adding one entry to the end of the list
++//              for each row.  The buffer starts with room for the rows the
++//              entity reported and doubles until the whole table fits.
++//
++// Parameters:  GenericTable *pList: head of the list.
++//              ulong Size: size of a list entry.
++//              TDIEntityID *pId: the entity.
++//              ulong InfoId: the table.
++//              ulong InfoSize: size of a row.
++//              ulong Count: number of rows the entity reported.
++//
++// Returns:     ulong: NO_ERROR or some error code.
+=1 12 3
++ulong ReadEntries( GenericTable *pList, ulong Size, TDIEntityID *pId,
++                   ulong InfoId, ulong InfoSize, ulong Count )
++{
++    GenericTable  *pTable;
++    uchar         *pBuffer;
++    ulong          BufferSize;
++    ulong          i;
++    NTSTATUS       Status;
++
++    Count += TABLE_SLACK;
++
++    while ( TRUE )
++    {
++        BufferSize = InfoSize * Count;
++
++        pBuffer = (uchar *)SNMP_malloc( BufferSize );
++        if ( pBuffer == NULL )
+=1 712 4 4
++        Status = QueryInfo( pId, InfoId, pBuffer, &BufferSize );
++        if ( Status != TDI_BUFFER_OVERFLOW )
+=1 847 4
++        SNMP_free( pBuffer );
++        Count <<= 1;
++    }
++
++    if ( Status != TDI_SUCCESS )
++    {
++        SNMP_free( pBuffer );
++        return ( RtlNtStatusToDosError( Status ) );
++    }
++
++    for ( i = 0; i + InfoSize <= BufferSize; i += InfoSize )
++    {
+=1 930 3 -4
++            SNMP_free( pBuffer );
+=1 713 3 4
++        RtlCopyMemory( pTable + 1, pBuffer + i, InfoSize );
+=1 937 2 -4
++
++    SNMP_free( pBuffer );
+=1 408 7
+=1 621 12
+=1 636 4
++    TDIEntityID    Entity;
++    ulong          Index = 0;
++    ulong          InfoSize;
++    ulong          Result;
++    NTSTATUS       Status;
++    IPSNMPInfo     IpInfo;
++    AddrXlatInfo   XlatInfo;
++    TCPStats       TcpInfo;
++    UDPStats       UdpInfo;
++    IfEntry       *pIf;
++    TcpConnEntry  *pTcp;
++    UdpConnEntry  *pUdp;
+=1 558 2
+=1 654 4
+=1 452 3
++
++        // One entry per interface.  A description too long for the entry
++        // is left out.
++
++        while ( FindEntity( IF_ENTITY, IF_MIB, &Index, &Entity ) )
++        {
++            pIf = (IfEntry *)SNMP_malloc( Size );
++            if ( pIf == NULL )
+=1 712 4 8
++            InsertTailList( &pList->ListEntry, &pIf->ListEntry );
++
++            InfoSize = Size - FIELD_OFFSET( IfEntry, Info ) - 1;
++            Status = QueryInfo( &Entity, IF_MIB_STATS_ID, &pIf->Info,
++                                &InfoSize );
++            if ( Status == TDI_BUFFER_OVERFLOW )
++            {
++                pIf->Info.if_descrlen = 0;
++            }
++            else if ( Status != TDI_SUCCESS )
++            {
++                return ( RtlNtStatusToDosError( Status ) );
++            }
++
++            pIf->Info.if_descr[pIf->Info.if_descrlen] = '\0';
++        }
++        return ( NO_ERROR );
++
++    case TYPE_IP:
++        if ( !FindEntity( CL_NL_ENTITY, CL_NL_IP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++        return ( ReadEntry( pList, Size, &Entity, IP_MIB_STATS_ID,
++                            sizeof( IPSNMPInfo ) ) );
++
++    case TYPE_IPADDR:
++    case TYPE_ROUTE:
++
++        // The IP statistics tell how many rows the tables have.
++
++        if ( !FindEntity( CL_NL_ENTITY, CL_NL_IP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++
++        InfoSize = sizeof( IpInfo );
++        Status = QueryInfo( &Entity, IP_MIB_STATS_ID, &IpInfo, &InfoSize );
++        if ( Status != TDI_SUCCESS )
++        {
++            return ( RtlNtStatusToDosError( Status ) );
++        }
++
++        if ( Type == TYPE_IPADDR )
++        {
++            return ( ReadEntries( pList, Size, &Entity,
++                                  IP_MIB_ADDRTABLE_ENTRY_ID,
++                                  sizeof( IPAddrEntry ),
++                                  IpInfo.ipsi_numaddr ) );
++        }
++
++        return ( ReadEntries( pList, Size, &Entity, IP_MIB_RTTABLE_ENTRY_ID,
++                              sizeof( IPRouteEntry ),
++                              IpInfo.ipsi_numroutes ) );
++
++    case TYPE_ARP:
++
++        // Each interface has an ARP table of its own.
++
++        while ( FindEntity( AT_ENTITY, AT_ARP, &Index, &Entity ) )
++        {
++            InfoSize = sizeof( XlatInfo );
++            Status = QueryInfo( &Entity, AT_MIB_ADDRXLAT_INFO_ID, &XlatInfo,
++                                &InfoSize );
++            if ( Status != TDI_SUCCESS )
++            {
++                return ( RtlNtStatusToDosError( Status ) );
++            }
++
++            Result = ReadEntries( pList, Size, &Entity,
++                                  AT_MIB_ADDRXLAT_ENTRY_ID,
++                                  sizeof( IPNetToMediaEntry ),
++                                  XlatInfo.axi_count );
+=1 525 2 8
++                return ( Result );
++            }
++        }
++        return ( NO_ERROR );
++
++    case TYPE_ICMP:
++        if ( !FindEntity( ER_ENTITY, ER_ICMP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++        return ( ReadEntry( pList, Size, &Entity, ICMP_MIB_STATS_ID,
++                            sizeof( ICMPSNMPInfo ) ) );
++
++    case TYPE_TCP:
++        if ( !FindEntity( CO_TL_ENTITY, CO_TL_TCP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++        return ( ReadEntry( pList, Size, &Entity, TCP_MIB_STAT_ID,
++                            sizeof( TCPStats ) ) );
++
++    case TYPE_TCPCONN:
++        if ( !FindEntity( CO_TL_ENTITY, CO_TL_TCP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++
++        InfoSize = sizeof( TcpInfo );
++        Status = QueryInfo( &Entity, TCP_MIB_STAT_ID, &TcpInfo, &InfoSize );
++        if ( Status != TDI_SUCCESS )
++        {
++            return ( RtlNtStatusToDosError( Status ) );
++        }
++
++        Result = ReadEntries( pList, Size, &Entity, TCP_MIB_TABLE_ID,
++                              sizeof( TCPConnTableEntry ),
++                              TcpInfo.ts_numconns );
+=1 525 2 4
++            return ( Result );
++        }
++
++        // The stack keeps ports in network byte order, the MIB in host order.
++
++        for ( pTmpList = pList->ListEntry.Flink;
++              pTmpList != &pList->ListEntry;
++              pTmpList = pTmpList->Flink )
++        {
++            pTcp = CONTAINING_RECORD( pTmpList, TcpConnEntry, ListEntry );
++            pTcp->Info.tct_localport =
++                ntohs( (ushort)pTcp->Info.tct_localport );
++            pTcp->Info.tct_remoteport =
++                ntohs( (ushort)pTcp->Info.tct_remoteport );
++        }
++        return ( NO_ERROR );
++
++    case TYPE_UDP:
++        if ( !FindEntity( CL_TL_ENTITY, CL_TL_UDP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++        return ( ReadEntry( pList, Size, &Entity, UDP_MIB_STAT_ID,
++                            sizeof( UDPStats ) ) );
++
++    case TYPE_UDPCONN:
++        if ( !FindEntity( CL_TL_ENTITY, CL_TL_UDP, &Index, &Entity ) )
++        {
++            return ( ERROR_NOT_SUPPORTED );
++        }
++
++        InfoSize = sizeof( UdpInfo );
++        Status = QueryInfo( &Entity, UDP_MIB_STAT_ID, &UdpInfo, &InfoSize );
++        if ( Status != TDI_SUCCESS )
++        {
++            return ( RtlNtStatusToDosError( Status ) );
++        }
++
++        Result = ReadEntries( pList, Size, &Entity, UDP_MIB_TABLE_ID,
++                              sizeof( UDPEntry ), UdpInfo.us_numaddrs );
+=1 525 2 4
++            return ( Result );
++        }
++
++        for ( pTmpList = pList->ListEntry.Flink;
++              pTmpList != &pList->ListEntry;
++              pTmpList = pTmpList->Flink )
++        {
++            pUdp = CONTAINING_RECORD( pTmpList, UdpConnEntry, ListEntry );
++            pUdp->Info.ue_localport = ntohs( (ushort)pUdp->Info.ue_localport );
++        }
+=1 409 3 4
+=1 611 4
+=2 65 100
+=2 256 61

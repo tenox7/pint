@@ -6,7 +6,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-docker run --rm -e CJ="${CJ:-4}" -v "$ROOT/../../nt35/msvc":/opt/msvc -v "$ROOT/../../nt35":/nt35:ro -v "$ROOT/..":/work -v "$ROOT/../private":/work/private:ro -v "$ROOT/../public":/work/public:ro -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -e CJ="${CJ:-4}" -v "$ROOT/../../nt35/msvc":/opt/msvc -v "$ROOT/../../nt35":/nt35:ro -v "$ROOT/../../XPSP1":/XPSP1:ro -v "$ROOT/..":/work -v "$ROOT/../private":/work/private:ro -v "$ROOT/../public":/work/public:ro -w /work/RASPI/build --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/build/msvc.sh
 A=/work/RASPI/arcfw D=/work/RASPI/drivers

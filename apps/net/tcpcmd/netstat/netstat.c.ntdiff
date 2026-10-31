@@ -1,0 +1,147 @@
+#ntdiff ../XPSP1/net/tcpip/commands/netstat/netstat.c
+=1 1 31
+=1 35 9
+=1 63 10
+=1 77 51
++ulong DoIP( ulong VerboseFlag );
++ulong DoTCP( ulong VerboseFlag );
++ulong DoUDP( ulong VerboseFlag );
++ulong DoICMP( ulong VerboseFlag );
+=1 132 4
+=1 140 2
++void  DisplayIP( IpEntry *pEntry, ulong VerboseFlag, IpEntry *ListHead );
++void  DisplayTCP( TcpEntry *pEntry, ulong VerboseFlag, TcpEntry *ListHead );
++void  DisplayUDP( UdpEntry *pEntry, ulong VerboseFlag, UdpEntry *ListHead );
+=1 145 1
++void  DisplayTcpConnEntry( TCPConnTableEntry *pTcp, ulong NumFlag );
++void  DisplayUdpConnEntry( UDPEntry *pUdp, ulong NumFlag );
+=1 151 34
++    ulong   ProtoVal = PROTO_TCP | PROTO_UDP | PROTO_IP | PROTO_ICMP;
+=1 187 1
+=1 189 43
+=1 236 4
+=1 244 4
+=1 252 4
+=1 260 23
++                    ProtoVal = PROTO_TCP | PROTO_UDP | PROTO_ICMP | PROTO_IP;
+=1 285 5
+=1 294 3
++                    ProtoVal = PROTO_TCP | PROTO_UDP | PROTO_IP | PROTO_ICMP;
+=1 299 76
++                DoIP( VerboseFlag );
+=1 380 3
++                DoICMP( VerboseFlag );
+=1 388 3
++                DoTCP( VerboseFlag );
+=1 396 3
++                DoUDP( VerboseFlag );
+=1 404 8
++               ( ( ProtoVal & PROTO_TCP ) || ( ProtoVal & PROTO_UDP ) ) ) ||
+=1 414 4
+=1 424 1 -4
+=1 426 117
++ulong DoIP( ulong VerboseFlag )
+=1 544 7
++    ListHead = (IpEntry *)GetTable( TYPE_IP, &Result );
+=1 552 9
++    DisplayIP( pIpList, VerboseFlag, ListHead );
+=1 562 25
++ulong DoTCP( ulong VerboseFlag )
+=1 588 7
++    ListHead = (TcpEntry *)GetTable( TYPE_TCP, &Result );
+=1 596 9
++    DisplayTCP( pTcpList, VerboseFlag, ListHead );
+=1 606 25
++ulong DoUDP( ulong VerboseFlag )
+=1 632 7
++    ListHead = (UdpEntry *)GetTable( TYPE_UDP, &Result );
+=1 640 9
++    DisplayUDP( pUdpList, VerboseFlag, ListHead );
+=1 650 25
++ulong DoICMP( ulong VerboseFlag )
+=1 676 7
++    ListHead = (IcmpEntry *)GetTable( TYPE_ICMP, &Result );
+=1 684 9
+=1 694 1 -4
+=1 698 59
++                DisplayTcpConnEntry( &pTcp->Info, NumFlag );
+=1 759 12
+=1 809 24
++                DisplayUdpConnEntry( &pUdp->Info, NumFlag );
+=1 834 12
+=1 883 5
+=1 1061 172
++void DisplayIP( IpEntry *pEntry, ulong VerboseFlag, IpEntry *ListHead )
++{
++    PutMsg( STDOUT, MSG_IP_HDR );
+=1 1241 104
++void DisplayTCP( TcpEntry *pEntry, ulong VerboseFlag, TcpEntry *ListHead )
++{
++    PutMsg( STDOUT, MSG_TCP_HDR );
+=1 1353 94
++void DisplayUDP( UdpEntry *pEntry, ulong VerboseFlag, UdpEntry *ListHead )
++{
++    PutMsg( STDOUT, MSG_UDP_HDR );
+=1 1455 108
+=1 1642 6
++   IN  const char * pszProtocol,
+=1 1802 3
+=1 1652 37
++    struct hostent * pHostEnt;
++    struct servent * pServEnt;
++    struct in_addr  inAddress;
++    int             Result;
++
++    // the local host name, cached on first use
+=1 1695 10
+=1 1720 29
++    if (!pszHostName && !fNumFlag) {
++        pHostEnt = gethostbyaddr( (char *)&uAddress, sizeof( uAddress ),
++                                  PF_INET );
++        if ( pHostEnt != NULL) {
++            strncpy( LocalBuffer, pHostEnt->h_name, sizeof( LocalBuffer ) - 1 );
++            LocalBuffer[sizeof( LocalBuffer ) - 1] = '\0';
+=1 1757 2 4
++    }
++    if (!pszHostName) {
++        inAddress.s_addr = uAddress;
++        strcpy( LocalBuffer, inet_ntoa( inAddress ));
+=1 1757 2
++
++    pServEnt = fNumFlag ? NULL : getservbyport( htons( (ushort)uPort ),
++                                                pszProtocol );
++    if ( pServEnt != NULL) {
++        pszServiceName = pServEnt->s_name;
++    } else {
++        sprintf( LocalServiceEntry, "%lu", uPort );
+=1 1773 1 4
++    }
+=1 1774 9
+=1 1785 10
+=1 1851 7
+=1 1860 10
++void DisplayTcpConnEntry( TCPConnTableEntry *pTcp, ulong NumFlag )
+=1 1871 16
++    dwErr = GenerateHostNameServiceString( LocalStr,
++                                           &BufLen,
++                                           NumFlag != 0, TRUE, "tcp",
+=1 1890 2 -2
+=1 1892 62
++    dwErr = GenerateHostNameServiceString( RemoteStr,
++                                           &BufLen,
++                                           NumFlag != 0, FALSE, "tcp",
+=1 1957 2 -2
+=1 1959 10
+=1 1977 1 -4
+=1 1979 7
+=1 2110 5
+=1 2117 9
++void DisplayUdpConnEntry( UDPEntry *pUdp, ulong NumFlag )
+=1 2127 15
++    dwErr = GenerateHostNameServiceString( LocalStr,
++                                           &BufLen,
++                                           NumFlag != 0, TRUE, "udp",
+=1 2145 2 -2
+=1 2147 10
+=1 2165 1 -4
+=1 2214 29

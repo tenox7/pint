@@ -39,7 +39,7 @@ NT40="$(cd ../.. && pwd)"
 TYPE=${1:-NT}
 case $TYPE in NT|DLL|DLLLIB|DLL40|POSIX|MT|ST|OLDNAMES) ;; *) echo "usage: make-crt.sh [NT|DLL|DLLLIB|DLL40|POSIX|MT|ST|OLDNAMES]"; exit 1 ;; esac
 
-docker run --rm -e CJ="${CJ:-4}" -e UM="${UM:-0}" -e TYPE="$TYPE" -e INSTALL="${INSTALL:-0}" -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/crt --entrypoint bash tenox7/msvc-arm32 -c '
+docker run --rm -e CJ="${CJ:-4}" -e UM="${UM:-0}" -e TYPE="$TYPE" -e INSTALL="${INSTALL:-0}" -v "$NT40/../nt35/msvc":/opt/msvc -v "$NT40/../nt35":/nt35:ro -v "$NT40/../XPSP1":/XPSP1:ro -v "$NT40":/work -v "$NT40/private":/work/private:ro -v "$NT40/public":/work/public:ro -w /work/RASPI/crt --entrypoint bash tenox7/msvc-arm32 -c '
 set -u
 . /work/RASPI/build/msvc.sh
 V=/work/private/sdktools/vctools/crt

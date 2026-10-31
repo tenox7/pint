@@ -1,0 +1,7 @@
+#ntdiff ../XPSP1/net/tcpip/commands/common/common.mc ../XPSP1/net/netbt/nbtstat/localmsg.mc
+=1 1 112
+=2 1 222
++        [-r] [-R] [-s] [-S] [interval] ]
+=2 224 11
+=2 236 56
+=2 309 9
