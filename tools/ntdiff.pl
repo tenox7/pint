@@ -2,8 +2,9 @@
 # The sources of the port that are NT's own with ARM changes are kept as edit scripts
 # (FILE.ntdiff) over the NT tree (PRIVATE, PUBLIC), which this repository does not carry.
 # An edit script names its NT sources on the first line, then copies their lines
-# ("=SOURCE LINE COUNT", "=SOURCE LINE COUNT INDENT" moved by INDENT columns) and adds
-# the port's own ("+TEXT").
+# ("=SOURCE LINE COUNT", "=SOURCE LINE COUNT INDENT" moved by INDENT columns,
+# "=SOURCE LINE COUNT INDENT TAGS" with TAGS in front: the "@x:" tags of the setup INFs,
+# PRODFILT, after a negative INDENT cut the source's own) and adds the port's own ("+TEXT").
 #
 #   ntdiff.pl apply  NTROOT DIR|FILE.ntdiff...   write each FILE that is missing or older than its script
 #   ntdiff.pl update NTROOT DIR|FILE.ntdiff...   rewrite each script from its FILE, over the same sources
@@ -29,6 +30,8 @@ sub scripts {
     return @s;
 }
 sub indent { my ($l, $d) = @_; return $l if $l eq '' || $d == 0; return (' ' x $d) . $l if $d > 0; return length($l) >= -$d ? substr($l, -$d) : "\0"; }
+# the INF tags a line starts with (PRODFILT: "@x:", one or more) and the rest of it
+sub untag { my ($t) = $_[0] =~ /^((?:\@.:)*)/s; return ($t, substr($_[0], length $t)); }
 
 sub generate {
     my ($script) = @_;
@@ -40,7 +43,7 @@ sub generate {
     my ($out, $eol) = ('', "\n");
     for (@cmds) {
         if (/^\+(.*)$/s) { $out .= $1 . $eol; next; }
-        if (/^=(\d+) (\d+) (\d+)(?: (-?\d+))?$/) { my $d = $4 // 0; $out .= indent($_, $d) . $eol for @{$src[$1 - 1]}[$2 - 1 .. $2 + $3 - 2]; next; }
+        if (/^=(\d+) (\d+) (\d+)(?: (-?\d+)(?: (.+))?)?$/) { my ($d, $p) = ($4 // 0, $5 // ''); $out .= $p . indent($_, $d) . $eol for @{$src[$1 - 1]}[$2 - 1 .. $2 + $3 - 2]; next; }
         if ($_ eq '#crlf') { $eol = "\r\n"; next; }
         if ($_ eq '#noeol') { $out =~ s/\r?\n\z//; next; }
         die "ntdiff: $script: bad line: $_\n";
@@ -57,8 +60,13 @@ sub diff {
     my @t = split /\n/, $d, -1;
     pop @t if @t && $t[-1] eq '';
     my @src = map { source($_) } @names;
-    my %at;
-    for my $s (0 .. $#src) { for (0 .. $#{$src[$s]}) { (my $k = $src[$s][$_]) =~ s/^\s+//; push @{$at{$k}}, [$s, $_]; } }
+    my (%at, %body);
+    for my $s (0 .. $#src) {
+        for (0 .. $#{$src[$s]}) {
+            (my $k = $src[$s][$_]) =~ s/^\s+//; push @{$at{$k}}, [$s, $_];
+            my ($g, $b) = untag($src[$s][$_]); push @{$body{$b}}, [$s, $_, $g] if $b =~ /\S/;
+        }
+    }
     my @out = ("#ntdiff @names");
     push @out, '#crlf' if $crlf;
     my ($ps, $pe) = (-1, -1);
@@ -80,6 +88,20 @@ sub diff {
             push @out, sprintf('=%d %d %d', $bs + 1, $bi + 1, $bl) . ($bd ? " $bd" : '');
             ($ps, $pe) = ($bs, $bi + $bl);
             $i += $bl;
+            next;
+        }
+        # a line of a source under other INF tags: copied without them, the line's own in front
+        # (the same source line again first, as a line copied for each CPU)
+        my ($g, $b) = untag($t[$i]);
+        my @c = grep { $_->[2] ne $g } @{$body{$b} || []};
+        if (@c) {
+            my ($c) = (grep({ $_->[0] == $ps && $_->[1] == $pe - 1 } @c), grep({ $_->[0] == $ps && $_->[1] == $pe } @c), @c);
+            my ($s, $j, $cut) = ($c->[0], $c->[1], -length $c->[2]);
+            my $l = 1;
+            $l++ while $i + $l < @t && $j + $l < @{$src[$s]} && $g . indent($src[$s][$j + $l], $cut) eq $t[$i + $l];
+            push @out, sprintf('=%d %d %d %d', $s + 1, $j + 1, $l, $cut) . ($g ne '' ? " $g" : '');
+            ($ps, $pe) = ($s, $j + $l);
+            $i += $l;
             next;
         }
         push @out, "+$t[$i]";

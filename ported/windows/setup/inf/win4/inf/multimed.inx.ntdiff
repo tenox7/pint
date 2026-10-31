@@ -1,26 +1,26 @@
 #ntdiff private/windows/setup/inf/win4/inf/multimed.inx
 #crlf
 =1 1 220
-+@a:cdplayer.cnt
-+@i:cdplayer.cnt
-+@m:cdplayer.cnt
-+@p:cdplayer.cnt
-+@a:cdplayer.hlp
-+@i:cdplayer.hlp
-+@m:cdplayer.hlp
-+@p:cdplayer.hlp
+=1 221 1 0 @a:
+=1 221 1 0 @i:
+=1 221 1 0 @m:
+=1 221 1 0 @p:
+=1 222 1 0 @a:
+=1 222 1 0 @i:
+=1 222 1 0 @m:
+=1 222 1 0 @p:
 =1 223 32
-+@a:mplayer.cnt
-+@i:mplayer.cnt
-+@m:mplayer.cnt
-+@p:mplayer.cnt
+=1 255 1 0 @a:
+=1 255 1 0 @i:
+=1 255 1 0 @m:
+=1 255 1 0 @p:
 =1 256 28
-+@a:sndvol32.cnt
-+@i:sndvol32.cnt
-+@m:sndvol32.cnt
-+@p:sndvol32.cnt
-+@a:sndvol32.hlp
-+@i:sndvol32.hlp
-+@m:sndvol32.hlp
-+@p:sndvol32.hlp
+=1 284 1 0 @a:
+=1 284 1 0 @i:
+=1 284 1 0 @m:
+=1 284 1 0 @p:
+=1 285 1 0 @a:
+=1 285 1 0 @i:
+=1 285 1 0 @m:
+=1 285 1 0 @p:
 =1 286 9

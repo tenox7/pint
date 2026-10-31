@@ -1,67 +1,67 @@
 #ntdiff private/windows/setup/inf/win4/inf/accessor.inx
 #crlf
 =1 1 50
-+@a:Templates       ; Document Templates
-+@i:Templates       ; Document Templates
-+@m:Templates       ; Document Templates
-+@p:Templates       ; Document Templates
+=1 51 1 0 @a:
+=1 51 1 0 @i:
+=1 51 1 0 @m:
+=1 51 1 0 @p:
 =1 52 444
-+@a:HKLM,%KEY_OPTIONAL%,"Templates",,"Templates"
-+@i:HKLM,%KEY_OPTIONAL%,"Templates",,"Templates"
-+@m:HKLM,%KEY_OPTIONAL%,"Templates",,"Templates"
-+@p:HKLM,%KEY_OPTIONAL%,"Templates",,"Templates"
-+@a:HKLM,%KEY_OPTIONAL%\Templates,INF,,"accessor.inf"
-+@i:HKLM,%KEY_OPTIONAL%\Templates,INF,,"accessor.inf"
-+@m:HKLM,%KEY_OPTIONAL%\Templates,INF,,"accessor.inf"
-+@p:HKLM,%KEY_OPTIONAL%\Templates,INF,,"accessor.inf"
-+@a:HKLM,%KEY_OPTIONAL%\Templates,Section,,"Templates"
-+@i:HKLM,%KEY_OPTIONAL%\Templates,Section,,"Templates"
-+@m:HKLM,%KEY_OPTIONAL%\Templates,Section,,"Templates"
-+@p:HKLM,%KEY_OPTIONAL%\Templates,Section,,"Templates"
-+@a:HKLM,%KEY_OPTIONAL%\Templates,Installed,,"0"
-+@i:HKLM,%KEY_OPTIONAL%\Templates,Installed,,"0"
-+@m:HKLM,%KEY_OPTIONAL%\Templates,Installed,,"0"
-+@p:HKLM,%KEY_OPTIONAL%\Templates,Installed,,"0"
+=1 496 1 0 @a:
+=1 496 1 0 @i:
+=1 496 1 0 @m:
+=1 496 1 0 @p:
+=1 497 1 0 @a:
+=1 497 1 0 @i:
+=1 497 1 0 @m:
+=1 497 1 0 @p:
+=1 498 1 0 @a:
+=1 498 1 0 @i:
+=1 498 1 0 @m:
+=1 498 1 0 @p:
+=1 499 1 0 @a:
+=1 499 1 0 @i:
+=1 499 1 0 @m:
+=1 499 1 0 @p:
 =1 500 7
-+@a:calc.cnt
-+@i:calc.cnt
-+@m:calc.cnt
-+@p:calc.cnt
-+@a:calc.hlp
-+@i:calc.hlp
-+@m:calc.hlp
-+@p:calc.hlp
+=1 507 1 0 @a:
+=1 507 1 0 @i:
+=1 507 1 0 @m:
+=1 507 1 0 @p:
+=1 508 1 0 @a:
+=1 508 1 0 @i:
+=1 508 1 0 @m:
+=1 508 1 0 @p:
 =1 509 15
-+@a:charmap.cnt
-+@i:charmap.cnt
-+@m:charmap.cnt
-+@p:charmap.cnt
+=1 524 1 0 @a:
+=1 524 1 0 @i:
+=1 524 1 0 @m:
+=1 524 1 0 @p:
 =1 525 16
-+@a:clipbrd.cnt
-+@i:clipbrd.cnt
-+@m:clipbrd.cnt
-+@p:clipbrd.cnt
+=1 541 1 0 @a:
+=1 541 1 0 @i:
+=1 541 1 0 @m:
+=1 541 1 0 @p:
 =1 542 267
-+@a:packager.cnt
-+@i:packager.cnt
-+@m:packager.cnt
-+@p:packager.cnt
-+@a:packager.hlp
-+@i:packager.hlp
-+@m:packager.hlp
-+@p:packager.hlp
+=1 809 1 0 @a:
+=1 809 1 0 @i:
+=1 809 1 0 @m:
+=1 809 1 0 @p:
+=1 810 1 0 @a:
+=1 810 1 0 @i:
+=1 810 1 0 @m:
+=1 810 1 0 @p:
 =1 811 16
-+@a:mspaint.cnt
-+@i:mspaint.cnt
-+@m:mspaint.cnt
-+@p:mspaint.cnt
-+@a:mspaint.hlp
-+@i:mspaint.hlp
-+@m:mspaint.hlp
-+@p:mspaint.hlp
+=1 827 1 0 @a:
+=1 827 1 0 @i:
+=1 827 1 0 @m:
+=1 827 1 0 @p:
+=1 828 1 0 @a:
+=1 828 1 0 @i:
+=1 828 1 0 @m:
+=1 828 1 0 @p:
 =1 829 48
-+@a:vsqp6.dll
-+@i:vsqp6.dll
-+@m:vsqp6.dll
-+@p:vsqp6.dll
+=1 877 1 0 @a:
+=1 877 1 0 @i:
+=1 877 1 0 @m:
+=1 877 1 0 @p:
 =1 878 122

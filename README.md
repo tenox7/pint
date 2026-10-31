@@ -84,10 +84,27 @@ In QEMU: `IMG=copy-of-nt-setup-sd.img build/run.sh -device usb-kbd`. For the net
 ## Networking
 
 TCP/IP with DHCP and NetBIOS over TCP/IP, also to DNS names (`net use \\host.example.com\share`), the server and
-workstation services, ping, ipconfig and hostname (the other TCP/IP tools, such as ftp and telnet, are not in the
-NT 4.0 source tree, so ARM setup leaves them out). It uses the onboard Ethernet
+workstation services, ping, tracert, netstat, nbtstat, arp, route, ipconfig and hostname (ftp, telnet and the other
+TCP/IP tools are in no source tree, so ARM setup leaves them out). It uses the onboard Ethernet
 (LAN9514 on the Pi 2/3B, LAN7800 on the 3B+, the BCM2711's GENET on the Pi 4), in QEMU a USB Ethernet adapter
 (`NONET=1 build/run.sh`: none).
+
+## Games
+
+Start > Programs > Accessories > Games has the games of PINT 3.5 (`apps/games`, in `\GAMES`): 2048, Breakout, Bubble
+Breaker, Moon Lander, Missile Command, Snake, Tankz, NT Rigue, RISCque, Sokoban, RISCoban and WiNTown, a port of
+Micropolis. WiNTown and the Micropolis simulator are under the GPL 3.0 with Electronic Arts' additional terms
+(`apps/games/wintown/LICENSE`); the other games are public domain.
+
+## VNC viewer
+
+`\APPS\TENOXVNC.EXE` (TenoxVNC in Accessories) is the Win32 build of TenoxVNC (`apps/tenoxvnc`, from
+github.com/tenox7/tenoxvnc), a VNC viewer. Run without a server, it asks for one (`host`, `host:display` or
+`host::port`), with the password, encoding and colors; F8 opens its menu (full screen, Ctrl+Alt+Del, clipboard,
+settings). It is under the GPL 2.0 (`apps/tenoxvnc/LICENCE.TXT`), its zlib and IJG JPEG decoders under their own terms
+(`LICENSE.zlib`, `README.jpeg`).
+
+The games and TenoxVNC are on the SD image; the setup card does not install them.
 
 ## Roadmap
 

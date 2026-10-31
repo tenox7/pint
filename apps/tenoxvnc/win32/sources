@@ -10,7 +10,9 @@ INCLUDES=..
 # vncauth.c names chmod, which NT 3.5 has in io.h only (as _chmod), and the Unix permission bits
 C_DEFINES=-Dchmod=_chmod -DS_IRUSR=0400 -DS_IWUSR=0200
 
-TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib
+# (oldnames.lib: strdup, isatty)
+TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\wsock32.lib \
+           $(BASEDIR)\public\sdk\lib\*\oldnames.lib
 
 # the viewer (rfbproto.c includes its decoders) and its Win32 side
 SOURCES=..\vncviewer.c ..\argsresources.c ..\rfbproto.c ..\sockets.c ..\misc.c ..\caps.c \

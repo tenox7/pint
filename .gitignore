@@ -355,6 +355,7 @@ ported/windows/setup/inf/win4/inf/multimed.inx
 ported/windows/setup/inf/win4/inf/optional.inx
 ported/windows/setup/inf/win4/inf/syssetup.inx
 ported/windows/setup/inf/win4/inf/usa/games.txt
+ported/windows/setup/inf/win4/inf/usa/syssetup.txt
 ported/windows/setup/inf/win4/inf/usa/txtsetup.txt
 ported/windows/setup/textmode/kernel/spsetup.c
 ported/windows/setup/textmode/kernel/sources

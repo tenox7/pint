@@ -1,40 +1,40 @@
 #ntdiff private/windows/setup/inf/win4/inf/communic.inx
 #crlf
 =1 1 182
-+@a:winchat.cnt
-+@i:winchat.cnt
-+@m:winchat.cnt
-+@p:winchat.cnt
+=1 183 1 0 @a:
+=1 183 1 0 @i:
+=1 183 1 0 @m:
+=1 183 1 0 @p:
 =1 184 16
-+@a:dialer.cnt
-+@i:dialer.cnt
-+@m:dialer.cnt
-+@p:dialer.cnt
-+@a:dialer.hlp
-+@i:dialer.hlp
-+@m:dialer.hlp
-+@p:dialer.hlp
+=1 200 1 0 @a:
+=1 200 1 0 @i:
+=1 200 1 0 @m:
+=1 200 1 0 @p:
+=1 201 1 0 @a:
+=1 201 1 0 @i:
+=1 201 1 0 @m:
+=1 201 1 0 @p:
 =1 202 25
-+@a:hypertrm.cnt
-+@i:hypertrm.cnt
-+@m:hypertrm.cnt
-+@p:hypertrm.cnt
-+@a:hypertrm.hlp
-+@i:hypertrm.hlp
-+@m:hypertrm.hlp
-+@p:hypertrm.hlp
+=1 227 1 0 @a:
+=1 227 1 0 @i:
+=1 227 1 0 @m:
+=1 227 1 0 @p:
+=1 228 1 0 @a:
+=1 228 1 0 @i:
+=1 228 1 0 @m:
+=1 228 1 0 @p:
 =1 229 3
-+@a:AT&T Mail.ht,           att.ht,,    16
-+@i:AT&T Mail.ht,           att.ht,,    16
-+@m:AT&T Mail.ht,           att.ht,,    16
-+@p:AT&T Mail.ht,           att.ht,,    16
-+@a:CompuServe.ht,          cis.ht,,    16
-+@i:CompuServe.ht,          cis.ht,,    16
-+@m:CompuServe.ht,          cis.ht,,    16
-+@p:CompuServe.ht,          cis.ht,,    16
+=1 232 1 0 @a:
+=1 232 1 0 @i:
+=1 232 1 0 @m:
+=1 232 1 0 @p:
+=1 233 1 0 @a:
+=1 233 1 0 @i:
+=1 233 1 0 @m:
+=1 233 1 0 @p:
 =1 234 1
-+@a:MCI Mail.ht,            mci.ht,,    16
-+@i:MCI Mail.ht,            mci.ht,,    16
-+@m:MCI Mail.ht,            mci.ht,,    16
-+@p:MCI Mail.ht,            mci.ht,,    16
+=1 235 1 0 @a:
+=1 235 1 0 @i:
+=1 235 1 0 @m:
+=1 235 1 0 @p:
 =1 236 31

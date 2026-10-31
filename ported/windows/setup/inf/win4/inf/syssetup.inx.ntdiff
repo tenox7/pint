@@ -1,136 +1,154 @@
 #ntdiff private/windows/setup/inf/win4/inf/syssetup.inx
 #crlf
-=1 1 487
-+@@:@a:AVICAP.DLL
-+@@:@i:AVICAP.DLL
-+@@:@m:AVICAP.DLL
-+@@:@p:AVICAP.DLL
-+@@:@a:AVIFILE.DLL
-+@@:@i:AVIFILE.DLL
-+@@:@m:AVIFILE.DLL
-+@@:@p:AVIFILE.DLL
-+@@:@a:COMMDLG.DLL
-+@@:@i:COMMDLG.DLL
-+@@:@m:COMMDLG.DLL
-+@@:@p:COMMDLG.DLL
-+@@:@a:LZEXPAND.DLL
-+@@:@i:LZEXPAND.DLL
-+@@:@m:LZEXPAND.DLL
-+@@:@p:LZEXPAND.DLL
-+@@:@a:KEYBOARD.DRV
-+@@:@i:KEYBOARD.DRV
-+@@:@m:KEYBOARD.DRV
-+@@:@p:KEYBOARD.DRV
-+@@:@a:MCIAVI.DRV
-+@@:@i:MCIAVI.DRV
-+@@:@m:MCIAVI.DRV
-+@@:@p:MCIAVI.DRV
-+@@:@a:MCISEQ.DRV
-+@@:@i:MCISEQ.DRV
-+@@:@m:MCISEQ.DRV
-+@@:@p:MCISEQ.DRV
-+@@:@a:MCIWAVE.DRV
-+@@:@i:MCIWAVE.DRV
-+@@:@m:MCIWAVE.DRV
-+@@:@p:MCIWAVE.DRV
-+@@:@a:MMSYSTEM.DLL
-+@@:@i:MMSYSTEM.DLL
-+@@:@m:MMSYSTEM.DLL
-+@@:@p:MMSYSTEM.DLL
-+@@:@a:MMTASK.TSK
-+@@:@i:MMTASK.TSK
-+@@:@m:MMTASK.TSK
-+@@:@p:MMTASK.TSK
-+@@:@a:MOUSE.DRV
-+@@:@i:MOUSE.DRV
-+@@:@m:MOUSE.DRV
-+@@:@p:MOUSE.DRV
-+@@:@a:MSVIDEO.DLL
-+@@:@i:MSVIDEO.DLL
-+@@:@m:MSVIDEO.DLL
-+@@:@p:MSVIDEO.DLL
-+@@:@a:OLECLI.DLL
-+@@:@i:OLECLI.DLL
-+@@:@m:OLECLI.DLL
-+@@:@p:OLECLI.DLL
-+@@:@a:OLESVR.DLL
-+@@:@i:OLESVR.DLL
-+@@:@m:OLESVR.DLL
-+@@:@p:OLESVR.DLL
-+@@:@a:SHELL.DLL
-+@@:@i:SHELL.DLL
-+@@:@m:SHELL.DLL
-+@@:@p:SHELL.DLL
-+@@:@a:SOUND.DRV
-+@@:@i:SOUND.DRV
-+@@:@m:SOUND.DRV
-+@@:@p:SOUND.DRV
-+@@:@a:SYSTEM.DRV
-+@@:@i:SYSTEM.DRV
-+@@:@m:SYSTEM.DRV
-+@@:@p:SYSTEM.DRV
-+@@:@a:TAPI.DLL
-+@@:@i:TAPI.DLL
-+@@:@m:TAPI.DLL
-+@@:@p:TAPI.DLL
-+@@:@a:TIMER.DRV
-+@@:@i:TIMER.DRV
-+@@:@m:TIMER.DRV
-+@@:@p:TIMER.DRV
-+@@:@a:VER.DLL
-+@@:@i:VER.DLL
-+@@:@m:VER.DLL
-+@@:@p:VER.DLL
-+@@:@a:VGA.DRV
-+@@:@i:VGA.DRV
-+@@:@m:VGA.DRV
-+@@:@p:VGA.DRV
-+@@:@a:WFWNET.DRV
-+@@:@i:WFWNET.DRV
-+@@:@m:WFWNET.DRV
-+@@:@p:WFWNET.DRV
-+@@:@a:WINSPOOL.DRV
-+@@:@i:WINSPOOL.DRV
-+@@:@m:WINSPOOL.DRV
-+@@:@p:WINSPOOL.DRV
+=1 1 376
++Games = %accessories_games%,0
+=1 377 34
++%tenoxvnc% = %24%\apps\tenoxvnc.exe,%24%\apps\tenoxvnc.exe,,0
++
++[Games]
++%game2048% = %24%\games\2048.exe,%24%\games\2048.exe,,0
++%breakout% = %24%\games\breakout.exe,%24%\games\breakout.exe,,0
++%bubbles% = %24%\games\bubbles.exe,%24%\games\bubbles.exe,,0
++%lander% = %24%\games\lander.exe,%24%\games\lander.exe,,0
++%missile% = %24%\games\misl.exe,%24%\games\misl.exe,,0
++%snake% = %24%\games\ntsnake.exe,%24%\games\ntsnake.exe,,0
++%tankz% = %24%\games\tankz.exe,%24%\games\tankz.exe,,0
++%ntrigue% = %24%\games\ntrigue.exe,%24%\games\ntrigue.exe,,0
++%riscque% = %24%\games\riscque.exe,%24%\games\riscque.exe,,0
++%sokoban% = %24%\games\sokoban.exe,%24%\games\sokoban.exe,,0
++%riscoban% = %24%\games\riscoban.exe,%24%\games\riscoban.exe,,0
++%wintown% = %24%\games\wintown.exe,%24%\games\wintown.exe,,0
+=1 411 77
+=1 488 1 0 @@:@a:
+=1 488 1 0 @@:@i:
+=1 488 1 0 @@:@m:
+=1 488 1 0 @@:@p:
+=1 489 1 0 @@:@a:
+=1 489 1 0 @@:@i:
+=1 489 1 0 @@:@m:
+=1 489 1 0 @@:@p:
+=1 490 1 0 @@:@a:
+=1 490 1 0 @@:@i:
+=1 490 1 0 @@:@m:
+=1 490 1 0 @@:@p:
+=1 491 1 0 @@:@a:
+=1 491 1 0 @@:@i:
+=1 491 1 0 @@:@m:
+=1 491 1 0 @@:@p:
+=1 492 1 0 @@:@a:
+=1 492 1 0 @@:@i:
+=1 492 1 0 @@:@m:
+=1 492 1 0 @@:@p:
+=1 493 1 0 @@:@a:
+=1 493 1 0 @@:@i:
+=1 493 1 0 @@:@m:
+=1 493 1 0 @@:@p:
+=1 494 1 0 @@:@a:
+=1 494 1 0 @@:@i:
+=1 494 1 0 @@:@m:
+=1 494 1 0 @@:@p:
+=1 495 1 0 @@:@a:
+=1 495 1 0 @@:@i:
+=1 495 1 0 @@:@m:
+=1 495 1 0 @@:@p:
+=1 496 1 0 @@:@a:
+=1 496 1 0 @@:@i:
+=1 496 1 0 @@:@m:
+=1 496 1 0 @@:@p:
+=1 497 1 0 @@:@a:
+=1 497 1 0 @@:@i:
+=1 497 1 0 @@:@m:
+=1 497 1 0 @@:@p:
+=1 498 1 0 @@:@a:
+=1 498 1 0 @@:@i:
+=1 498 1 0 @@:@m:
+=1 498 1 0 @@:@p:
+=1 499 1 0 @@:@a:
+=1 499 1 0 @@:@i:
+=1 499 1 0 @@:@m:
+=1 499 1 0 @@:@p:
+=1 500 1 0 @@:@a:
+=1 500 1 0 @@:@i:
+=1 500 1 0 @@:@m:
+=1 500 1 0 @@:@p:
+=1 501 1 0 @@:@a:
+=1 501 1 0 @@:@i:
+=1 501 1 0 @@:@m:
+=1 501 1 0 @@:@p:
+=1 502 1 0 @@:@a:
+=1 502 1 0 @@:@i:
+=1 502 1 0 @@:@m:
+=1 502 1 0 @@:@p:
+=1 503 1 0 @@:@a:
+=1 503 1 0 @@:@i:
+=1 503 1 0 @@:@m:
+=1 503 1 0 @@:@p:
+=1 504 1 0 @@:@a:
+=1 504 1 0 @@:@i:
+=1 504 1 0 @@:@m:
+=1 504 1 0 @@:@p:
+=1 505 1 0 @@:@a:
+=1 505 1 0 @@:@i:
+=1 505 1 0 @@:@m:
+=1 505 1 0 @@:@p:
+=1 506 1 0 @@:@a:
+=1 506 1 0 @@:@i:
+=1 506 1 0 @@:@m:
+=1 506 1 0 @@:@p:
+=1 507 1 0 @@:@a:
+=1 507 1 0 @@:@i:
+=1 507 1 0 @@:@m:
+=1 507 1 0 @@:@p:
+=1 508 1 0 @@:@a:
+=1 508 1 0 @@:@i:
+=1 508 1 0 @@:@m:
+=1 508 1 0 @@:@p:
+=1 509 1 0 @@:@a:
+=1 509 1 0 @@:@i:
+=1 509 1 0 @@:@m:
+=1 509 1 0 @@:@p:
+=1 510 1 0 @@:@a:
+=1 510 1 0 @@:@i:
+=1 510 1 0 @@:@m:
+=1 510 1 0 @@:@p:
 =1 511 3
-+@@:@a:WINHELP.EXE
-+@@:@i:WINHELP.EXE
-+@@:@m:WINHELP.EXE
-+@@:@p:WINHELP.EXE
+=1 514 1 0 @@:@a:
+=1 514 1 0 @@:@i:
+=1 514 1 0 @@:@m:
+=1 514 1 0 @@:@p:
 +WIN.INI
 +WINFILE.INI
-+@@:@a:WINHELP.EXE
-+@@:@i:WINHELP.EXE
-+@@:@m:WINHELP.EXE
-+@@:@p:WINHELP.EXE
+=1 514 1 0 @@:@a:
+=1 514 1 0 @@:@i:
+=1 514 1 0 @@:@m:
+=1 514 1 0 @@:@p:
 =1 518 5
-+@@:@a:REGEDIT.CNT
-+@@:@i:REGEDIT.CNT
-+@@:@m:REGEDIT.CNT
-+@@:@p:REGEDIT.CNT
-+@@:@a:REGEDIT.HLP
-+@@:@i:REGEDIT.HLP
-+@@:@m:REGEDIT.HLP
-+@@:@p:REGEDIT.HLP
+=1 523 1 0 @@:@a:
+=1 523 1 0 @@:@i:
+=1 523 1 0 @@:@m:
+=1 523 1 0 @@:@p:
+=1 524 1 0 @@:@a:
+=1 524 1 0 @@:@i:
+=1 524 1 0 @@:@m:
+=1 524 1 0 @@:@p:
 =1 525 29
-+@@:@a:imagevue.inf
-+@@:@i:imagevue.inf
-+@@:@m:imagevue.inf
-+@@:@p:imagevue.inf
+=1 554 1 0 @@:@a:
+=1 554 1 0 @@:@i:
+=1 554 1 0 @@:@m:
+=1 554 1 0 @@:@p:
 +mmopt.inf
-+@@:@a:msmail.inf
-+@@:@i:msmail.inf
-+@@:@m:msmail.inf
-+@@:@p:msmail.inf
+=1 556 1 0 @@:@a:
+=1 556 1 0 @@:@i:
+=1 556 1 0 @@:@m:
+=1 556 1 0 @@:@p:
 =1 557 2
-+@@:@a:pinball.inf
-+@@:@i:pinball.inf
-+@@:@m:pinball.inf
-+@@:@p:pinball.inf
+=1 559 1 0 @@:@a:
+=1 559 1 0 @@:@i:
+=1 559 1 0 @@:@m:
+=1 559 1 0 @@:@p:
 =1 560 7
-+@@:@a:iexplore.inf,DefaultInstall
-+@@:@i:iexplore.inf,DefaultInstall
-+@@:@m:iexplore.inf,DefaultInstall
-+@@:@p:iexplore.inf,DefaultInstall
+=1 567 1 0 @@:@a:
+=1 567 1 0 @@:@i:
+=1 567 1 0 @@:@m:
+=1 567 1 0 @@:@p:
 =1 568 114

@@ -1,9 +1,9 @@
 #ntdiff private/windows/setup/inf/win4/inf/usa/games.txt
 #crlf
 =1 1 4
-+@a:Games_TIP		= "Includes Freecell, Minesweeper, Pinball, and Solitaire games.
-+@i:Games_TIP		= "Includes Freecell, Minesweeper, Pinball, and Solitaire games.
-+@m:Games_TIP		= "Includes Freecell, Minesweeper, Pinball, and Solitaire games.
-+@p:Games_TIP		= "Includes Freecell, Minesweeper, Pinball, and Solitaire games.
+=1 5 1 0 @a:
+=1 5 1 0 @i:
+=1 5 1 0 @m:
+=1 5 1 0 @p:
 +@r:Games_TIP		= "Includes Freecell, Minesweeper, and Solitaire games.
 =1 6 11

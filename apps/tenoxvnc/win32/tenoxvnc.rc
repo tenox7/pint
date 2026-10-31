@@ -1,9 +1,11 @@
 /*
- * tenoxvnc.rc - the dialogs.
+ * tenoxvnc.rc - the icon and the dialogs.
  */
 
 #include <windows.h>
 #include "w32res.h"
+
+IDI_TENOXVNC ICON "tenoxvnc.ico"
 
 IDD_CONNECT DIALOG 0, 0, 220, 230
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU

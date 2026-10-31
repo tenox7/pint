@@ -1,0 +1,17 @@
+#ntdiff private/windows/setup/inf/win4/inf/usa/syssetup.txt
+#crlf
+=1 1 71
++tenoxvnc = "TenoxVNC"
++game2048 = "2048"
++breakout = "Breakout"
++bubbles = "Bubble Breaker"
++lander = "Moon Lander"
++missile = "Missile Command"
++snake = "Snake"
++tankz = "Tankz"
++ntrigue = "NT Rigue"
++riscque = "RISCque"
++sokoban = "Sokoban"
++riscoban = "RISCoban"
++wintown = "WiNTown"
+=1 72 47
