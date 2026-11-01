@@ -4,14 +4,38 @@
 +    nonvolatile RAM, so the environment is an ARC style environment area in
 +    memory: a list of "name=value" strings, each NUL terminated, ended by an
 +    empty string. It starts as the firmware's, which the loader hands over in
-+    the loader block, and its contents last until the system restarts.
++    the loader block, and each change is written to the SD card, where the
++    firmware keeps it.
 =1 16 5
 =1 23 4
 +
 +#define LENGTH_OF_ENVIRONMENT 1024
 +
+=1 30 5
++
++//
++// The sectors of the environment on the SD card, which the firmware reads at
++// power on (arcfw\arm\jxenvir.c): the three that follow the master boot record
++// of its disk, scsi(0)disk(0)rdisk(0), hold the environment, then its checksum,
++// the one's complement of the sum of its bytes (low byte first).
++//
++
++#define ENVIRONMENT_DISK L"\\ArcName\\scsi(0)disk(0)rdisk(0)"
++#define ENVIRONMENT_OFFSET 512
++#define ENVIRONMENT_SECTORS_SIZE (3 * 512)
++
 +static UCHAR HalpEnvironment[LENGTH_OF_ENVIRONMENT];
 +static KSPIN_LOCK HalpEnvironmentLock;
++
++//
++// A worker thread writes the sectors, at passive level: NtSetSystemEnvironmentValue
++// calls at APC level, under its fast mutex, where the completion of an I/O request
++// cannot run. The mutex keeps one write at a time.
++//
++
++static KMUTEX HalpEnvironmentMutex;
++static KEVENT HalpEnvironmentWritten;
++static WORK_QUEUE_ITEM HalpEnvironmentWorkItem;
 +
 +//
 +// Find a variable in the environment: return the address of its string and,
@@ -31,7 +55,7 @@
 +
 +    for (Entry = HalpEnvironment; *Entry != 0; Entry += strlen((PCHAR)Entry) + 1) {
 +        for (Name = (PUCHAR)Variable, Next = Entry; *Name != 0; Name += 1, Next += 1) {
-+            if (*Next == 0 || *Next == '=' || RtlUpperChar(*Name) != RtlUpperChar(*Next)) {
++            if (*Next == 0 || *Next == '=' || UpCase(*Name) != UpCase(*Next)) {
 =1 504 4 4
 +        if (*Name == 0 && *Next == '=') {
 +            *Value = Next + 1;
@@ -53,6 +77,99 @@
 +    return Entry - HalpEnvironment;
 +}
 +
++static VOID
++HalpWriteEnvironment (
++    IN PVOID Context
+=1 39 6
++    This function, the routine of the work item HalSetEnvironmentVariable
++    queues, writes the environment and its checksum to the SD card, then
++    signals HalpEnvironmentWritten.
+=1 46 3
++    Context - Unused.
+=1 103 8
++    PUCHAR Sectors;
++    ULONG Checksum;
++    ULONG Index;
++    UNICODE_STRING DiskName;
++    PFILE_OBJECT FileObject;
++    PDEVICE_OBJECT DeviceObject;
++    LARGE_INTEGER Offset;
++    KEVENT Event;
++    IO_STATUS_BLOCK IoStatus;
++    PIRP Irp;
++    NTSTATUS Status;
++    KIRQL OldIrql;
++
++    Sectors = ExAllocatePool(NonPagedPool, ENVIRONMENT_SECTORS_SIZE);
++    if (Sectors == NULL) {
++        Status = STATUS_INSUFFICIENT_RESOURCES;
++
++    } else {
++        RtlZeroMemory(Sectors, ENVIRONMENT_SECTORS_SIZE);
++        KeAcquireSpinLock(&HalpEnvironmentLock, &OldIrql);
++        RtlMoveMemory(Sectors, HalpEnvironment, LENGTH_OF_ENVIRONMENT);
++        KeReleaseSpinLock(&HalpEnvironmentLock, OldIrql);
++
+=1 222 2 4
++            Checksum += Sectors[Index];
++        }
++
++        Checksum = ~Checksum;
++        Sectors[LENGTH_OF_ENVIRONMENT] = (UCHAR)Checksum;
++        Sectors[LENGTH_OF_ENVIRONMENT + 1] = (UCHAR)(Checksum >> 8);
++        Sectors[LENGTH_OF_ENVIRONMENT + 2] = (UCHAR)(Checksum >> 16);
++        Sectors[LENGTH_OF_ENVIRONMENT + 3] = (UCHAR)(Checksum >> 24);
++
++        //
++        // Write the sectors to the disk, partition 0 (the whole disk), as the I/O
++        // system reads its master boot record.
++        //
++
++        RtlInitUnicodeString(&DiskName, ENVIRONMENT_DISK);
++        Status = IoGetDeviceObjectPointer(&DiskName,
++                                          FILE_READ_ATTRIBUTES,
++                                          &FileObject,
++                                          &DeviceObject);
++
++        if (NT_SUCCESS(Status)) {
++            KeInitializeEvent(&Event, NotificationEvent, FALSE);
++            Offset.QuadPart = ENVIRONMENT_OFFSET;
++            Irp = IoBuildSynchronousFsdRequest(IRP_MJ_WRITE,
++                                               DeviceObject,
++                                               Sectors,
++                                               ENVIRONMENT_SECTORS_SIZE,
++                                               &Offset,
++                                               &Event,
++                                               &IoStatus);
++
++            if (Irp == NULL) {
++                Status = STATUS_INSUFFICIENT_RESOURCES;
++
++            } else {
++                IoGetNextIrpStackLocation(Irp)->Flags |= SL_OVERRIDE_VERIFY_VOLUME;
++                Status = IoCallDriver(DeviceObject, Irp);
++                if (Status == STATUS_PENDING) {
++                    KeWaitForSingleObject(&Event,
++                                          Executive,
++                                          KernelMode,
++                                          FALSE,
++                                          NULL);
++
++                    Status = IoStatus.Status;
+=1 430 3 8
++            ObDereferenceObject(FileObject);
++        }
++
++        ExFreePool(Sectors);
++    }
++
++    if (!NT_SUCCESS(Status)) {
++        DbgPrint("HAL: the environment was not written to the SD card (%lx)\n", Status);
++    }
++
++    KeSetEvent(&HalpEnvironmentWritten, 0, FALSE);
++}
++
 +VOID
 +HalpInitializeEnvironment (
 +    IN PLOADER_PARAMETER_BLOCK LoaderBlock
@@ -67,6 +184,8 @@
 +    ULONG Used = 0;
 +
 +    KeInitializeSpinLock(&HalpEnvironmentLock);
++    KeInitializeMutex(&HalpEnvironmentMutex, 0);
++    KeInitializeEvent(&HalpEnvironmentWritten, NotificationEvent, FALSE);
 +    Entry = LoaderBlock->u.Arm.Environment;
 +    if (Entry != NULL) {
 +        for (; *Entry != 0; Entry += Length) {
@@ -99,11 +218,15 @@
 +}
 +
 =1 442 11
-+    An empty value deletes the variable.
++    An empty value deletes the variable. Called at or below APC level, it
++    writes the new environment to the SD card before it returns; the variable
++    is set even when that write fails (the environment then lasts until the
++    system restarts).
 =1 453 15
 +    ARC_STATUS Status = ESUCCESS;
 +    PUCHAR Entry;
 +    PUCHAR OldValue;
++    ULONG Index;
 +    ULONG Size;
 +    ULONG Used;
 +    KIRQL OldIrql;
@@ -120,7 +243,8 @@
 +        Used = HalpEnvironmentLength();
 +        RtlMoveMemory(Entry, Entry + Size, Used + 1 - (Entry + Size - HalpEnvironment));
 =1 162 3
-+    // Append the new definition.
++    // Append the new definition, the name in upper case, as the firmware keeps
++    // it and looks for it (arcfw\arm\jxenvir.c).
 +    //
 +
 +    if (*Value != 0) {
@@ -130,11 +254,39 @@
 +            Status = ENOMEM;
 +        } else {
 +            Entry = HalpEnvironment + Used;
-+            strcpy((PCHAR)Entry, Variable);
-+            strcat((PCHAR)Entry, "=");
-+            strcat((PCHAR)Entry, Value);
++            for (Index = 0; Variable[Index] != 0; Index += 1) {
++                Entry[Index] = UpCase(Variable[Index]);
++            }
++
++            Entry[Index] = '=';
++            strcpy((PCHAR)Entry + Index + 1, Value);
 +            Entry[Size] = 0;
 =1 430 3
 +    KeReleaseSpinLock(&HalpEnvironmentLock, OldIrql);
++
++    //
++    // Have a worker thread write the new environment to the SD card, and wait
++    // until it has.
++    //
++
++    if ((Status == ESUCCESS) && (KeGetCurrentIrql() <= APC_LEVEL)) {
++        KeWaitForSingleObject(&HalpEnvironmentMutex,
++                              Executive,
++                              KernelMode,
++                              FALSE,
++                              NULL);
++
++        KeClearEvent(&HalpEnvironmentWritten);
++        ExInitializeWorkItem(&HalpEnvironmentWorkItem, HalpWriteEnvironment, NULL);
++        ExQueueWorkItem(&HalpEnvironmentWorkItem, DelayedWorkQueue);
++        KeWaitForSingleObject(&HalpEnvironmentWritten,
++                              Executive,
++                              KernelMode,
++                              FALSE,
++                              NULL);
++
++        KeReleaseMutex(&HalpEnvironmentMutex, FALSE);
++    }
++
 +    return Status;
 +}

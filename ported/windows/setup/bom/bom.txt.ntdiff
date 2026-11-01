@@ -2,7 +2,8 @@
 #crlf
 =1 1 13
 +BCMETH.SYS	armbins	\		NET NDIS driver: ARM (built-in on the Raspberry Pi)		x	arm	\arm	arm\oemnadbc.inf	[Files-BCMETH]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32\drivers		2
-=1 14 101
+=1 14 57
+=1 73 42
 +FINGER.EXE	alphabins	\				x	alpha	\alpha	alpha\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		15
 +FINGER.EXE	mipsbins	\				x	mips	\mips	mips\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		15
 +FINGER.EXE	x86bins	\				x	x86	\i386	i386\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		15
@@ -12,7 +13,8 @@
 +FTP.EXE	mipsbins	\		"TCP/IP utility, ships"		x	mips	\mips	mips\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
 +FTP.EXE	x86bins	\		"TCP/IP utility, ships"		x	x86	\i386	i386\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
 +FTP.EXE	ppcbins	\		"TCP/IP utility, ships"		x	ppc	\ppc	ppc\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
-=1 118 20
+=1 118 6
+=1 128 10
 +INETMIB1.DLL	alphabins	\		part of snmp component		x	alpha	\alpha	alpha\oemnxps1.inf	[Files-SNMP]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
 +INETMIB1.DLL	mipsbins	\		part of snmp component		x	mips	\mips	mips\oemnxps1.inf	[Files-SNMP]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
 +INETMIB1.DLL	x86bins	\		part of snmp component		x	x86	\i386	i386\oemnxps1.inf	[Files-SNMP]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
@@ -21,7 +23,9 @@
 +INETMIB1.DLL	mipsbins	\		part of snmp component		x	mips	\mips	mips\oemnxptc.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
 +INETMIB1.DLL	x86bins	\		part of snmp component		x	x86	\i386	i386\oemnxptc.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
 +INETMIB1.DLL	ppcbins	\		part of snmp component		x	ppc	\ppc	ppc\oemnxptc.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				999	2*15*10*17	2*15*17	.\system32		0
-=1 140 116
+=1 140 23
+=1 164 2
+=1 171 85
 +NSLOOKUP.EXE	alphabins	\				x	alpha	\alpha	alpha\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		15
 +NSLOOKUP.EXE	mipsbins	\				x	mips	\mips	mips\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		15
 +NSLOOKUP.EXE	x86bins	\				x	x86	\i386	i386\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		15
@@ -41,7 +45,8 @@
 +RSH.EXE	mipsbins	\		"TCP/IP utility, ships"		x	mips	\mips	mips\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		16
 +RSH.EXE	x86bins	\		"TCP/IP utility, ships"		x	x86	\i386	i386\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		16
 +RSH.EXE	ppcbins	\		"TCP/IP utility, ships"		x	ppc	\ppc	ppc\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		16
-=1 387 85
+=1 387 22
+=1 410 62
 +TELNET.CNT	alphabins	\					alpha	\alpha	alpha\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				120	2*15*10*17	2*15*17	.\system32		0
 +TELNET.CNT	mipsbins	\					mips	\mips	mips\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				120	2*15*10*17	2*15*17	.\system32		0
 +TELNET.CNT	x86bins	\					x86	\i386	i386\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				120	2*15*10*17	2*15*17	.\system32		0
@@ -58,6 +63,6 @@
 +TFTP.EXE	mipsbins	\		"TCP/IP utility, ships"		x	mips	\mips	mips\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		16
 +TFTP.EXE	x86bins	\		"TCP/IP utility, ships"		x	x86	\i386	i386\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		16
 +TFTP.EXE	ppcbins	\		"TCP/IP utility, ships"		x	ppc	\ppc	ppc\oemnsvcu.inf	[Files-TCPIPEXE]	"[d],[n] , SIZE=[s]"				0	2*15*10*17	2*15*17	.\system32		16
-=1 476 105
+=1 476 45
 +
 #noeol

@@ -137,7 +137,7 @@ nmk_cpp() {
         *) s=$(locate "$1") || { echo "nttarget: no $1" >&2; return 1; }; shift ;;
         esac
     done
-    tr -d '\032\r' < "$s" > /tmp/nmkcpp.src
+    tr -d '\032\r' < "$s" > /tmp/nmkcpp.src && mkdir -p "$(dirname "$o")"
     cl -nologo -I"$(dirname "$s")" "${args[@]}" -D_ARM_ $t/tmp/nmkcpp.src > "$o" 2> /tmp/nmkcpp.log || { cat /tmp/nmkcpp.log >&2; return 1; }
 }
 # riscdef [-x string]... [-r from to]... def > file: the module definition file of a RISC machine
@@ -269,10 +269,11 @@ nmk_run() {
 }
 # the files NT placed in its release (binplace), the disk image places (make-sd-image.sh); with
 # NTTARGET_PLACE (make-dll.sh INSTALL=1), those placefil.txt lists as retail go there with the image,
-# as the disk has them (the .acm of a codec). (-B: a subdirectory of the release; B D I O P R S Y
-# take a value.)
+# as the disk has them (the .acm of a codec), an image with the misc record of its own name, as binplace
+# split the symbols of the copy it placed (acm\msg711.dbg). (-B: a subdirectory of the release;
+# B D I O P R S Y take a value.)
 nmk_binplace() {
-    local f n s
+    local f n s p
     [ -n "${NTTARGET_PLACE:-}" ] || return 0
     while [ $# -gt 0 ]; do
         case $1 in
@@ -284,7 +285,9 @@ nmk_binplace() {
         n=$(basename "$f" | tr A-Z a-z)
         tr -d '\r' < /work/public/sdk/lib/placefil.txt | awk -v n="$n" 'tolower($1) == n && tolower($2) == "retail" {f = 1} END {exit !f}' || continue
         s=$(out "$f"); [ -f "$s" ] || s=$(locate "$f") || { echo "nttarget: no $f" >&2; return 1; }
-        cp "$s" "$NTTARGET_PLACE/$(echo "$n" | tr a-z A-Z)" && echo "$n" >> /tmp/nttarget.placed || return 1
+        p=$NTTARGET_PLACE/$(echo "$n" | tr a-z A-Z)
+        cp "$s" "$p" && echo "$n" >> /tmp/nttarget.placed || return 1
+        [ "$(head -c 2 "$p")" != MZ ] || bash /work/RASPI/tools/host.sh pe2img -misc "$p" || return 1
     done
 }
 nmk_del() { local f; for f; do rm -f "$(out $f)"; done; }

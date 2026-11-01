@@ -1,12 +1,13 @@
 #!/usr/bin/perl
-# inputs.pl RASPI ROOT COMPONENT [link]: the inputs of the build step of a component (stamp.sh). One of the port
+# inputs.pl RASPI ROOT COMPONENT [link|exe]: the inputs of the build step of a component (stamp.sh). One of the port
 # (ROOT under /work/RASPI) is its directory and what it shares in the directories of the port its SOURCES INCLUDES
 # names: their files and the directories in them that are no component (apps/games: arch.h, the levels of
 # Sokoban). One of the NT tree is the port's versions of its sources and of its
 # parent's (ported, or apps for the applications: portdir.sh) and its ARM sources (kernel/<component>.arm
-# or the sources.arm of its port directory, and the files it lists). With link, also
-# the libraries it links, as the linker finds them: those of its SOURCES and the system and C run-time ones, of obj
-# (kernel mode) or obj/um.
+# or the sources.arm of its port directory, and the files it lists). With link (a DLL, a driver) or exe (a
+# program), also the libraries it links, as the linker finds them: those of its SOURCES (of a DLL or driver the
+# LINKLIBS and TARGETLIBS, make-dll.sh and make-driver.sh; of a program its UMLIBS, LINKLIBS and the TARGETLIBS of
+# a PROGRAM, make-exe.sh) and the system and C run-time ones, of obj (kernel mode) or obj/um.
 use strict; use warnings;
 my ($r, $root, $comp, $link) = @ARGV;
 sub host { return $_[0] =~ s{^/work/RASPI/}{$r/}r =~ s{^/work/}{$r/../}r; }
@@ -47,14 +48,18 @@ if ($root =~ m{^/work/RASPI/}) {
     print "$r/kernel/dll/armdef.src\n$r/kernel/ke/services.stb\n$r/kernel/ke/table.stb\n" if $comp eq "dll/daytona";
 }
 exit 0 unless $link;
-my ($s) = grep { -f } map { "$dir/$_" } qw(up/sources sources);
+# (the port's version of a SOURCES first, which srcmacro.sh reads in place of the tree's)
+my $pd = $root =~ m{^/work/RASPI/} ? "" : port(lc "$root/$comp" =~ s{^/work/private/}{}r);
+my ($s) = grep { -f } map { ($pd ? "$pd/$_" : ()), "$dir/$_" } qw(up/sources sources);
+exit 0 unless $s;
 open(my $h, '<', $s) or exit 0;
 my $t = do { local $/; <$h> } =~ s/\r//gr =~ s/\\\n/ /gr;
 my $km = $t =~ /^\s*TARGETTYPE\s*=\s*(DRIVER|EXPORT_DRIVER|MINIPORT|HAL)\b/mi;
 my $o = $km ? "$r/obj" : "$r/obj/um";
 my @lib = map { "$o/$_.lib" } $km ? qw(ntoskrnl hal libcntpr) : qw(libc libcmt crtdll kernel32 user32 gdi32 advapi32 ntdll);
+my $m = $link ne "exe" ? "LINKLIBS|TARGETLIBS" : $t =~ /^\s*TARGETTYPE\s*=\s*PROGRAM\b/mi ? "UMLIBS|LINKLIBS|TARGETLIBS" : "UMLIBS|LINKLIBS";
 for (split /\n/, $t) {
-    next unless /^\s*(?:UMLIBS|TARGETLIBS|LINKLIBS)\s*=(.*)/;
+    next unless /^\s*(?:$m)\s*=(.*)/;
     for my $l (map { tr{\\}{/}r } grep { /\.lib$/i } split " ", $1) {
         my @d = dirlib($l);
         push @lib, @d ? @d : "$o/" . lc($l =~ s{.*/}{}r);

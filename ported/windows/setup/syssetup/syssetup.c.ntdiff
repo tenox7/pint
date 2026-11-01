@@ -5,4 +5,23 @@
 +    // (ARM has no Microsoft Base Cryptographic Provider to install.)
 =1 570 4
 +#endif // ndef _ARM_
-=1 574 1393
+=1 574 349
++#ifndef _ARM_
+=1 923 2
++    // (ARM has no spooler.)
+=1 925 7
++#endif // ndef _ARM_
+=1 932 38
++#ifndef _ARM_
+=1 970 2
++    // (ARM has no spooler.)
+=1 972 4
++#endif // ndef _ARM_
+=1 976 320
++#ifndef _ARM_
++    //
++    // (ARM has no spooler; the data block is for the printer upgrade.)
+=1 925 4
+=1 1299 6
++#endif // ndef _ARM_
+=1 1305 662

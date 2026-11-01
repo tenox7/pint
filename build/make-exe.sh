@@ -108,8 +108,15 @@ comp() {
 o=$DIR/lobj; [ "$TTYPE" = PROGRAM ] && o=$DIR/obj
 # (and the object of the precompiled include, ntpchobj, which the program links)
 for f in $prog $(ntpchobj $D /tmp/f/pchobj); do par comp $DIR/obj $f; done
-for f in $srcs; do par comp $o $f; done
+# (the source of the program among the SOURCES of an UMAPPL_NOLIB once, as NT made its obj\*\<program>.obj
+# once: ssflwbox.c of the flower box)
+dup=
+for f in $srcs; do
+  [ -n "$prog" ] && [ "$(basename "${f%.*}" | tr A-Z a-z)" = "$(echo $PROG | tr A-Z a-z)" ] && { dup=1; continue; }
+  par comp $o $f
+done
 pwait; [ $PARFAIL -eq 0 ] || exit 1
+[ -z "$dup" ] || [ $o = $DIR/obj ] || cp $DIR/obj/$(echo $PROG | tr A-Z a-z).obj $o/
 # the objects of a PROGRAM as those of its directory, which another image links (sfmapi.dll:
 # ..\server\obj\*\validate.obj of the AFP service, make-dll.sh)
 [ "$TTYPE" != PROGRAM ] || { mkdir -p $U/dir/${D#/work/} && cp $DIR/obj/*.obj $U/dir/${D#/work/}/; }
@@ -137,9 +144,13 @@ set +f
 BASE=$(tr -d "\r" < /work/public/sdk/lib/coffbase.txt | awk -v n=$PROG "tolower(\$1) == n {print \$2; exit}")
 [ -n "$BASE" ] || BASE=$(tr -d "\r" < /work/public/sdk/lib/coffbase.txt | awk "tolower(\$1) == \"usermode\" {print \$2; exit}")
 STACK=$(echo "$(macro LINKER_FLAGS) $(amacro MIPS_LNKFLAGS)" | grep -oiE "stack:[0-9a-fx,]+" | tail -1 | cut -d: -f2)
-# the MS-DOS stub, in the component directory
+# the MS-DOS stub, in the component directory, or in the port directory when the tree
+# lacks it (winver31.exe, from NT 3.5)
 STUB=$(macro LINKER_FLAGS | grep -oiE "stub:[^ ]+" | tail -1 | cut -d: -f2)
-[ -z "$STUB" ] || STUB=$D/$(ls $D | grep -ix "$STUB")
+if [ -n "$STUB" ]; then
+  s=$(bash portdir.sh $D)/$(echo $STUB | tr A-Z a-z)
+  [ -f $s ] && STUB=$s || STUB=$D/$(ls $D | grep -ix "$STUB")
+fi
 # the resource scripts of the SOURCES and those of the resource files UMRES (that
 # of the program, $(@R).res: bind.res) and the libraries name (obj\*\name.res; the
 # TARGETLIBS of a PROGRAM, those of another program are of its DLL: imagehlp.res), in the

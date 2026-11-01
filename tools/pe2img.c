@@ -187,16 +187,28 @@ static void writepe(const char *name)
  * names a module by it (MapDebugInformation), and Dr. Watson the modules of its log.
  * It takes the place of the records no tool of 1996 knows (types above
  * IMAGE_DEBUG_TYPE_OMAP_FROM_SRC: VC_FEATURE, POGO). An image linked without debug
- * information (no CodeView record: a type library), or with a misc record, stays
- * as it is.
+ * information (no CodeView record: a type library) stays as it is; one with a misc
+ * record gets the name of the file it now is, as binplace split the symbols of the
+ * copy it placed (the .acm a codec copies from its .dll: acm\msg711.dbg).
  */
+static void miscname(uint8_t *m, const char *name)
+{
+    const char *b = name, *e;
+    char *c;
+
+    for (e = name; *e; e++)
+        if (*e == '\\' || *e == '/' || *e == ':') b = e + 1;
+    if (!(e = strrchr(b, '.')) || e == b) die("the image has no extension");
+    memset(m + 12, 0, MISC_SIZE - 12);
+    snprintf((char *)m + 12, MISC_SIZE - 12, "%s\\%.*s.dbg", e + 1, (int)(e - b), b);
+    for (c = (char *)m + 12; *c; c++) *c = tolower(*c);
+}
+
 static void misc(const char *name)
 {
     uint32_t dbg = rd32(opt + 96 + 6 * 8), n = rd32(opt + 96 + 6 * 8 + 4) / 28, i, k = 0, cv = 0;
     long o = nt - pe;
     uint8_t *d = 0, *s, *m;
-    const char *b = name, *e;
-    char *c;
 
     if (rd32(opt + 96 + 4 * 8 + 4)) die("the image has a certificate");
     if (!(pe = realloc(pe, pesize + MISC_SIZE))) die("out of memory");
@@ -208,7 +220,12 @@ static void misc(const char *name)
             d = pe + rd32(s + 20) + dbg - rd32(s + 12);
     if (!d) return;
     for (i = 0; i < n; i++) {
-        if (rd32(d + i * 28 + 12) == 4) return;
+        if (rd32(d + i * 28 + 12) == 4) {
+            uint32_t raw = rd32(d + i * 28 + 24);
+            if (rd32(d + i * 28 + 16) == MISC_SIZE && raw + MISC_SIZE <= (uint32_t)pesize && rd32(pe + raw) == 1)
+                miscname(pe + raw, name);
+            return;
+        }
         cv |= rd32(d + i * 28 + 12) == 2;
     }
     if (!cv) return;
@@ -222,15 +239,11 @@ static void misc(const char *name)
     wr32(m + 16, MISC_SIZE);
     wr32(m + 24, pesize);
     wr32(opt + 96 + 6 * 8 + 4, k * 28);
-    for (e = name; *e; e++)
-        if (*e == '\\' || *e == '/' || *e == ':') b = e + 1;
-    if (!(e = strrchr(b, '.')) || e == b) die("the image has no extension");
     m = pe + pesize;
     memset(m, 0, MISC_SIZE);
     wr32(m, 1);                                 /* IMAGE_DEBUG_MISC_EXENAME */
     wr32(m + 4, MISC_SIZE);
-    snprintf((char *)m + 12, MISC_SIZE - 12, "%s\\%.*s.dbg", e + 1, (int)(e - b), b);
-    for (c = (char *)m + 12; *c; c++) *c = tolower(*c);
+    miscname(m, name);
     pesize += MISC_SIZE;
 }
 

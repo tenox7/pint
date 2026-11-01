@@ -1,9 +1,0 @@
-#ntdiff private/windows/spooler/splsetup/util.c
-=1 1 53
-+    { TEXT("Windows NT ARM") },
-=1 54 13
-+    { TEXT("arm") },
-=1 67 11
-+#elif defined(_ARM_)
-+        PlatformARM;
-=1 78 1693

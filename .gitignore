@@ -179,6 +179,7 @@ ported/windows/shell/msctls/toolbar.c
 ported/windows/shell/progman/convgrp.c
 ported/windows/shell/version/diamond.c
 ported/windows/shell/winfile/wfext.c
+ported/windows/shell/winver/winver31.exe
 ported/windows/spooler/spoolss/client/browse.c
 ported/windows/spooler/spoolss/client/winspool.c
 ported/windows/user/client/clmsg.c
@@ -258,6 +259,7 @@ apps/sdktools/imagehlp/walk.c
 apps/sdktools/imagehlp/walkarm.c
 apps/sdktools/imagehlp/debug.c
 apps/sdktools/imagehlp/symbolsp.c
+apps/sdktools/imagehlp/sources
 ported/windows/setup/setupdll/detect1.c
 ported/net/ui/ncpa/tcpip/src/ipaddr.c
 ported/windows/setup/src/diamond.c
@@ -293,6 +295,8 @@ ported/windows/setup/inf/beta/partial.inf
 ported/windows/setup/inf/beta/printer.inf
 ported/windows/setup/inf/beta/update.inf
 ported/windows/setup/inf/beta/oemnxptc.inf
+ported/windows/setup/inf/beta/oemnxpdl.inf
+ported/windows/setup/inf/beta/oemnxpsm.inf
 ported/net/ui/ncpa/ncpa/busdlg.cxx
 kernel/netdetect/detarm.c
 ported/net/detect/dll/msncdet.c
@@ -310,7 +314,6 @@ ported/windows/base/client/daytona/datetime.c
 ported/windows/media/winmm/time.c
 apps/sdktools/vctools/mc/mc.c
 ported/ntos/w32/ntcon/server/stream.c
-ported/ntos/w32/ntgdi/printers/lib/km/str.c
 ported/ntos/w32/ntuser/client/dmmnem.c
 ported/ntos/w32/ntuser/kernel/createw.c
 ported/ntos/w32/ntuser/kernel/ntinput.c
@@ -382,22 +385,7 @@ ported/windows/shell/shelldll/bitbuck.c
 ported/windows/shell/shelldll/defviewx.c
 ported/windows/shell/shelldll/fstreex.c
 ported/windows/spooler/inc/splcom.h
-ported/windows/spooler/localspl/version.c
-ported/windows/spooler/printui/compinfo.cxx
-ported/windows/spooler/printui/compinfo.hxx
-ported/windows/spooler/printui/drvver.cxx
-ported/windows/spooler/printui/instarch.cxx
-ported/windows/spooler/printui/prids.h
-ported/windows/spooler/printui/pridsfix.h
-ported/windows/spooler/printui/printui.rc
-ported/windows/spooler/printui/prtlibp.hxx
-ported/windows/spooler/printui/setup.cxx
-ported/windows/spooler/splsetup/splsetup.h
-ported/windows/spooler/splsetup/upgrade.c
-ported/windows/spooler/splsetup/util.c
 ported/windows/spooler/spoolss/client/winspool.c
-ported/windows/spooler/spoolss/server/kmspool.c
-ported/windows/spooler/spoolss/win32/win32.c
 ported/windows/win4help/winhelp/binding.c
 ported/posix/psxss/srvtask.c
 ported/posix/client/dllproc.c

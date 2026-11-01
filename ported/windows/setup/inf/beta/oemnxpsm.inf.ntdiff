@@ -1,0 +1,15 @@
+#ntdiff private/windows/setup/inf/beta/oemnxpsm.inf
+#crlf
+=1 1 535
++      ifstr(i) $(!STF_PLATFORM) != $(!PlatformID_Arm)        ; (ARM has no spooler)
+=1 536 1 4
++      endif
+=1 537 407
++   ifstr(i) $(!STF_PLATFORM) != $(!PlatformID_Arm)        ; (ARM has no spooler)
+=1 944 1 4
++   endif
+=1 945 54
++         ifstr(i) $(!STF_PLATFORM) != $(!PlatformID_Arm)        ; (ARM has no spooler)
+=1 536 1 7
++         endif
+=1 1000 570

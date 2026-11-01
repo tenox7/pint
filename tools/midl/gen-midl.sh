@@ -37,8 +37,11 @@ real() {
     done
     echo $p
 }
-# Mirror a directory of the tree, lower case, with all its subdirectories.
+# Mirror a directory of the tree, lower case, with all its subdirectories. None outside the
+# tree: no recipe reaches one through $W, and the parent of an include directory the tree has
+# not (..\..\..\..\inc of nw\svcdlls\nwwks) is all of /work.
 mirror() {
+    case $1 in $P/*) ;; *) return ;; esac
     local m=$W/$(lower "${1#$P/}") f
     [ -e $m/.mirrored ] && return
     mkdir -p $m

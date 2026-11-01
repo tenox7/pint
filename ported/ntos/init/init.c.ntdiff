@@ -1,0 +1,12 @@
+#ntdiff private/ntos/init/init.c
+=1 1 32
++//
++// The release name of the Raspberry Pi port, in the version banner and as the
++// CSDVersion the about boxes show.
++//
++
++#if defined(_ARM_)
++#undef VER_PRODUCTBETA_STR
++#define VER_PRODUCTBETA_STR         "Raspberry PI Edition"
++#endif
+=1 32 2036

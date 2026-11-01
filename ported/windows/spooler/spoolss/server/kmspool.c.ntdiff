@@ -1,5 +1,0 @@
-#ntdiff private/windows/spooler/spoolss/server/kmspool.c
-=1 1 59
-+#elif defined(_ARM_)
-+LPWSTR szEnvironment = L"Windows NT ARM";
-=1 60 1205

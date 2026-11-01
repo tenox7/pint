@@ -1,4 +1,4 @@
-# Windows NT 3.5 ARC loader (ARM32) on a real Raspberry Pi 2, 3 or 4 - HDMI console.
+# Windows NT 4.0 ARC loader (ARM32) on a real Raspberry Pi 2, 3 or 4 - HDMI console.
 #
 # The GPU firmware (bootcode.bin -> start.elf) reads this file, then loads the
 # kernel image into RAM and runs it. Our loader is a raw ARM binary linked at the

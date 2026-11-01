@@ -6,11 +6,12 @@
 # headers of the SDK of Microsoft C, as NT took them from the SDK of the machine it
 # was built on. Then the header pass (build/mkgen.sh), ksarm.h, NT's C run-time (each
 # made when missing) and the import libraries of kernel32, user32 and advapi32; then GENSRV, GENERR (and
-# rtl\error.h), RC, RCPP, MIDL with its parser tools, SOLIDPP, UIXPORT, MAPMSG, GUIDLIB and MIBCC,
+# rtl\error.h), RC, RCPP, MIDL with its parser tools, SOLIDPP, UIXPORT, MAPMSG and GUIDLIB,
 # NT console programs of NT's headers and static C run-time (RC is its front end and RCDLL
-# in one program), and the import library of ntdll the registry tools take.
+# in one program), and the import library of ntdll the registry tools take. MIBCC links
+# snmp.lib, the import library of snmpapi.dll, which the build makes: it is made alone, after it.
 #
-# Usage:  tools/make-tools.sh            # all the tools
+# Usage:  tools/make-tools.sh            # all the tools but MIBCC
 #         tools/make-tools.sh headers    # the tools of the headers and the header pass
 #         tools/make-tools.sh mibcc      # those and MIBCC alone
 set -euo pipefail
@@ -215,9 +216,11 @@ fi
 
 # MIBCC, the MIB compiler of the SDK (net\snmp\mibs\makefile.inc: mib.bin): the library of
 # agent\mibcc, its program and the MIB writer of mgmtapi (oidconv.c), as its sources link it
+if [ "$ONLY" = mibcc ]; then
 D=/work/private/net/snmp/agent
 ntc $T/mibcc $D/mibcc $(bash incdirs.sh $D/mgmtapi "$(bash srcmacro.sh $D/mgmtapi/sources INCLUDES)") -- $(srcs $D/mibcc) $D/mibcc/mibcc.c $D/mgmtapi/oidconv.c
 prog mibcc libc $T/mibcc/*.obj $U/snmp.lib
+fi
 '
 
 # the import library of ntdll for the registry tools (its exports take GENSRV's list)

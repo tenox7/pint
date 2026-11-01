@@ -1,6 +1,0 @@
-#ntdiff private/windows/spooler/printui/pridsfix.h
-=1 1 98
-+#define IDS_DRIVER_ARM_1                (IDS_DRIVER_BASE + DRIVER_ARM_1)
-=1 99 4
-+#define IDS_DRIVER_ARM_2                (IDS_DRIVER_BASE + DRIVER_ARM_2)
-=1 103 23

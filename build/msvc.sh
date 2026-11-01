@@ -78,8 +78,22 @@ ntgen() {
     esac
     bash $B/incdirs.sh --gen "$1" "$d"
 }
+# The data of #pragma data_seg(".CRT$X?") (the run-time: its initializer tables and their bounds,
+# cinitexe.c __xc_a ... __xc_z) was in writable sections, as Microsoft C 2.0 put the C++
+# initializers (.CRT$XCU); the compiler of today makes those read-only, and the link keeps
+# sections of other attributes apart: the bounds then held none and no static constructor ran
+# (ole32, rpcss). crtseg (of the source SOURCE) declares each read-only before its pragma, with
+# read no macro: io.h of NT defines read as _read, an attribute the compiler ignores (C4109),
+# so crt32 fflush.c's _endstdio stayed writable, outside the terminators, and nothing was
+# flushed at exit. #line goes on with the line of the pragma.
+crtseg() {
+    awk -v f="$1" 'match($0, /^[ \t]*#[ \t]*pragma[ \t]+data_seg[ \t]*\([ \t]*"\.CRT\$X[A-Z]*"/) {
+        s = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", s); sub(/"$/, "", s)
+        printf "#pragma push_macro(\"read\")\n#undef read\n#pragma section(\"%s\", long, read)\n#pragma pop_macro(\"read\")\n#line %d \"%s\"\n", s, NR, f
+    } { print }'
+}
 ntsrc() {
-    { echo "#line 1 \"$1\""; ntgen "$1" | tr -d '\032\r' | sed -E -f $B/riscgate.sed -f $B/msvcgate.sed -f $B/incfix.sed | sed -f $B/armport.sed -f $B/msc2.sed; } > "$2" || return 1
+    { echo "#line 1 \"$1\""; ntgen "$1" | tr -d '\032\r' | sed -E -f $B/riscgate.sed -f $B/msvcgate.sed -f $B/incfix.sed | sed -f $B/armport.sed -f $B/msc2.sed | crtseg "$1"; } > "$2" || return 1
     # A source that includes the source of its own name in another directory (crt32\small\
     # timeset.c: "..\time\timeset.c") would include itself by the name incfix.sed leaves: it
     # includes that source (the port's version, if any) as ntsrc makes it, from a directory

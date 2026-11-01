@@ -83,7 +83,7 @@ sed "s/\$/\r/" /nt/private/windows/shell/fontfldr/fontext/bld/desktop.inx > /tmp
 # the MIDI instrument definitions (\WINNT\Config) and the modem, PAD and switch lists of RAS
 W=/nt/private/windows
 cp /nt/public/oak/bin/_default.pif $W/win.ini $W/winfile.ini /nt/private/mvdm/bin86/system.ini \
-   $W/setup/readme/networkw.wri $W/setup/readme/printer.wri $W/shell/control/bitmaps/winnt.bmp \
+   $W/setup/readme/networkw.wri $W/shell/control/bitmaps/winnt.bmp \
    $W/shell/control/bitmaps/winnt256.bmp /tmp/sd/WINNT/
 cp $W/setup/readme/readme.wri $W/setup/readme/probrep.txt $W/setup/bom/wdl.trm /nt/private/net/netcmd/net.hlp \
    /nt/private/utils/help/doshelp.hlp /tmp/sd/WINNT/System32/
@@ -96,9 +96,6 @@ cp ../obj/gen/hives/SYSTEM ../obj/gen/hives/SOFTWARE ../obj/gen/hives/DEFAULT ..
 # the counter names and explain texts of the performance counters, which the build of perfmon
 # places from sdktools\cntrtext\perfini (perfmon\makefile.inc)
 cp /nt/private/sdktools/cntrtext/perfini/perfc009.dat /nt/private/sdktools/cntrtext/perfini/perfh009.dat /tmp/sd/WINNT/System32/
-# the separator pages of the spooler, which text setup copies to System32 (layout.inx)
-S=/nt/private/windows/spooler/localspl
-cp $S/pcl.sep $S/pscript.sep $S/sysprint.sep /tmp/sd/WINNT/System32/
 # and the patches of the synthesizer (synth.dll) and the MIDI mapper configuration; the sounds
 # in \WINNT\Media and the clock video in \WINNT
 M=/nt/private/windows/media

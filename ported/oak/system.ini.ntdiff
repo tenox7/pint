@@ -45,7 +45,8 @@
 +//
 +                ProductType = WinNT
 +#endif // !defined(RASPI)
-=1 609 254
+=2 535 43
+=1 653 210
 +#if defined(RASPI)
 +                    //
 +                    // What text setup writes from the [nls] section of TXTSETUP.SIF (USA):
@@ -80,26 +81,7 @@
 +                    ExcludedProviders = REG_MULTI_SZ
 +                    ProviderOrder = REG_MULTI_SZ "Tcpip"
 +#endif // defined(RASPI)
-=1 1257 16
-+                   Windows NT ARM
-+                       Directory = REG_SZ W32ARM
-=1 1267 2
-+#if defined(RASPI)
-+//
-+// The print processor GUI setup adds (printer.c, MiscSpoolerInit: AddPrintProcessor).
-+//
-+                           winprint
-+                               Driver = REG_SZ winprint.dll
-+#endif // defined(RASPI)
-=1 1273 13
-+#if defined(RASPI)
-+//
-+// The local port monitor GUI setup adds (printer.c, MiscSpoolerInit: AddMonitor).
-+//
-+                    Local Port
-+                       Driver = REG_SZ localmon.dll
-+#endif // defined(RASPI)
-=1 1286 343
+=1 1257 372
 +#if defined(RASPI)
 +//
 +// What GUI setup writes for the fonts of the current profile with small fonts (font.inx,
@@ -111,15 +93,14 @@
 +                        FONTS.FON=vgasys.fon
 +                        OEMFONT.FON=vgaoem.fon
 +#endif // defined(RASPI)
-=1 1629 21
-+#if !defined(RASPI)
-=2 1210 2
+=1 1629 19
 +//
-+// GUI setup starts the spooler automatically (syssetup.c, MyChangeServiceStart).
++// No spooler on the Raspberry Pi (developer and setup hives): no printing.
 +//
-=2 1212 1
-+#endif // !defined(RASPI)
-=1 1651 112
++#if !defined(BCMEMMC)
+=1 1648 8
++#endif // !defined(BCMEMMC)
+=1 1656 107
 +#if !defined(RASPI)
 =2 1227 2
 +//
@@ -151,7 +132,11 @@
 +//
 =1 1672 1
 +#endif // !defined(RASPI)
-=1 1874 390
+=1 1874 300
++#if !defined(BCMEMMC)
+=1 2174 3
++#endif // !defined(BCMEMMC)
+=1 2177 87
 +#if defined(RASPI)
 +                  //
 +                  // The sources the network INFs add (CreateService of UTILITY.INF).
@@ -218,7 +203,14 @@
 +#if !defined(RASPI)
 =1 3343 27
 +#endif // !defined(RASPI)
-=1 3370 16
++
++//
++// No SCSI printer class driver on the Raspberry Pi (developer and setup hives): no printing.
++//
++#if !defined(BCMEMMC)
+=1 3371 7
++#endif // !defined(BCMEMMC)
+=1 3378 8
 +#if !defined(RASPI)
 =1 3386 195
 +#endif // !defined(RASPI)

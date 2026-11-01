@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ready-to-run QEMU package obj/pint-qemu.tar.gz: the system disk, the ARC firmware, run.sh and
+# Ready-to-run QEMU package obj/pint40-qemu.tar.gz: the system disk, the ARC firmware, run.sh and
 # run.cmd (build/portable: the HDMI window with a USB keyboard and mouse) and qemu-system-arm for
 # macOS arm64 (Homebrew's, its libraries bundled with dylibbundler), Linux x86_64 and aarch64
 # (AlmaLinux 9, GTK 3 of the host) and Windows x86_64 (Fedora MinGW, GTK 3 bundled), the last
@@ -117,9 +117,9 @@ if [[ -n ${FORCE:-} || ! -e $o ]]; then
     ! otool -L $o/qemu-system-arm $o/lib/* | grep -E '/opt/homebrew|@rpath' || { echo "unbundled libraries left"; exit 1; }
 fi
 
-echo ">> packing obj/pint-qemu.tar.gz"
+echo ">> packing obj/pint40-qemu.tar.gz"
 ! lsof -a -c qemu "$IMG" >/dev/null 2>&1 || { echo "a QEMU has $IMG open"; exit 1; }
-s=$P/stage r=$P/stage/pint-qemu
+s=$P/stage r=$P/stage/pint40-qemu
 rm -rf $s && mkdir -p $r
 cp "$IMG" $r/nt-arcfw-sd.img
 cp obj/arcfw.elf build/portable/run.sh $r/
@@ -127,6 +127,6 @@ sed "s/@V@/$V/g" build/portable/README.txt >$r/README.txt
 sed 's/$/\r/' build/portable/run.cmd >$r/run.cmd
 cp -R $P/bin $r/bin
 COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs --uid 0 --gid 0 --uname root --gname root \
-    -C $s -cf - pint-qemu | gzip -9 >obj/pint-qemu.tar.gz
+    -C $s -cf - pint40-qemu | gzip -9 >obj/pint40-qemu.tar.gz
 rm -rf $s
-echo ">> built obj/pint-qemu.tar.gz ($(du -h obj/pint-qemu.tar.gz | cut -f1))"
+echo ">> built obj/pint40-qemu.tar.gz ($(du -h obj/pint40-qemu.tar.gz | cut -f1))"

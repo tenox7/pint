@@ -79,11 +79,6 @@ s/^const static token_t (\*action\[\])(void) = {$/static token_t (*action[])(voi
 # CM_Add_Empty_Log_Conf makes it; the compiler of today rejects the read (C4700). None yet: 0.
 /^pSetupProcessLogConfigSection($/,/^}$/s/^    LOG_CONF LogConfig;$/    LOG_CONF LogConfig = 0;/
 
-# A local stepped before it is set (rasprint\rasddui\readres.c): bGetPaperSources steps a pointer
-# through the paper sources of the GPC data with its loop, and never reads it: the sources come
-# from aFMBin, which GetResPtrs fills. The compiler of today rejects the read (C4700). Nothing: NULL.
-/^bGetPaperSources($/,/^}$/s/^    short \*psrc;    /    short *psrc = NULL;/
-
 # A local read before it is set (shell\control\joy\joycpl.c): regUserValsFini deletes the user
 # values for the Reset button through a key it never opens; the RegDeleteValue of the 1996
 # compilers failed on what the stack held, as it does on no key. The compiler of today rejects
@@ -189,13 +184,6 @@ s/^\(    case ChangeGroupMembership:\)[[:space:]]*+$/\1/
 # of today rejects it (C2137). The null character.
 s/^\(        psz\(Domain\|Workgroup\)\[0\] = \)L'';$/\1L'\\0';/
 
-# The data of #pragma data_seg(".CRT$X?") (the run-time: its initializer tables and their bounds,
-# cinitexe.c __xc_a ... __xc_z) was in writable sections, as Microsoft C 2.0 put the C++
-# initializers (.CRT$XCU); the compiler of today makes those read-only, and the link keeps
-# sections of other attributes apart: the bounds then held none and no static constructor ran
-# (ole32, rpcss). Read-only for all of them, on the same line.
-s/^[[:space:]]*#[[:space:]]*pragma[[:space:]]\{1,\}data_seg[[:space:]]*([[:space:]]*\("\.CRT[$]X[A-Z]*"\)[[:space:]]*)/__pragma(section(\1, long, read)) __pragma(data_seg(\1))/
-
 # A section name of #pragma data_seg in TEXT() (rover\filesync\syncui\port32.h DATASEG_READONLY):
 # with UNICODE a wide string, which the 1996 compiler took as the name and the compiler of today
 # rejects (C2002). The narrow string.
@@ -270,11 +258,6 @@ s/^\([[:space:]]*\)m_clsf\.Initial;$/\1;/
 # (shell\accesory\wordpad\doctype.cpp: file.Close; before the converter of Write opens the file, which
 # stays open, tested with Visual C++ 4.2)
 s/^\([[:space:]]*\)file\.Close;$/\1;/
-
-# A member function named without a call in a condition (windows\spooler\printui\setup.hxx: return
-# MGenericProp::bValid && _PortsLV.bValid();): the 1996 compiler took its address, never null (tested
-# with Visual C++ 4.2), the compiler of today refuses it (C3867). Its address.
-s/^\([[:space:]]*return \)MGenericProp::bValid && _PortsLV\.bValid();$/\1\&MGenericProp::bValid \&\& _PortsLV.bValid();/
 
 # A member function named as a pointer to a member function (richedit\src\tomsel.cpp: Homer(...,
 # End) and Homer(..., Home)): the 1996 compiler took its address (tested with Visual C++ 4.2), the

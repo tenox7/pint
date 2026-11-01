@@ -7,7 +7,8 @@
 # tools/hive/make-hives.sh SETUP) and SETUPREG.HIV among them; LAYOUT.INF gets the file sizes (bom\infsize).
 # In the firmware, "Run a program" arm\setupldr starts text setup. Its source is this partition
 # (txtsetup.sif SetupSourceDevice = \device\harddisk0\partition1); installed on it, in \WINNT,
-# the system boots with the firmware's own boot selection (OSLOADER in \os\winnt40).
+# the system boots with the boot selection text setup adds to the environment of the firmware,
+# which the card keeps (arcenv.pl: the system partition and the search path, no boot selection).
 #
 # Usage:  cd RASPI/sdcard && ./make-setup-image.sh      # -> ../obj/nt-setup-sd.img
 # Needs the build of the system disk (../build/build-update.sh) and the INFs (../tools/inf/make-infs.sh).
@@ -63,6 +64,7 @@ dd if=/dev/zero of=/tmp/part.img bs=512 count="$psect" status=none
 mkfs.vfat -F 16 -n NTSETUP /tmp/part.img >/dev/null
 mcopy -s -i /tmp/part.img /tmp/sd/* ::
 dd if=/tmp/part.img of="$IMG" bs=512 seek=2048 conv=notrunc status=none
+perl arcenv.pl "$IMG" "SYSTEMPARTITION=scsi(0)disk(0)rdisk(0)partition(1)" "FWSEARCHPATH=scsi(0)disk(0)rdisk(0)partition(1)\\"
 
 echo "--- partition table ---"; sfdisk -l "$IMG"
 echo "--- FAT contents ---"; mdir -i /tmp/part.img ::; minfo -i /tmp/part.img :: | grep -i "cluster size\|sectors per cluster" || true

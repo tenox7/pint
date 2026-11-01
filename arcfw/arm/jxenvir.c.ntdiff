@@ -5,8 +5,10 @@
 +
 +    The environment is a list of "NAME=value" strings, each zero terminated,
 +    names in upper case, followed by zeros. The Pi has no nonvolatile RAM, so
-+    it is held in the firmware's memory and set at each power on to the boot
-+    configuration Setup stores on a Jazz system.
++    the SD card keeps it, in the three sectors that follow its master boot
++    record (the first partition starts at sector 2048), as the Jazz NVRAM
++    keeps it: the environment, then a checksum of its bytes. A card that holds
++    none starts with the boot configuration Setup stores on a Jazz system.
 =1 23 4
 +#include "string.h"
 +#include "ctype.h"
@@ -17,6 +19,19 @@
 +static CHAR Environment[LENGTH_OF_ENVIRONMENT];
 +static CHAR VolatileEnvironment[LENGTH_OF_ENVIRONMENT];
 +static CHAR OutputString[MAXIMUM_ENVIRONMENT_VALUE];
++
++//
++// The sectors of the environment on the SD card, which the HAL writes too
++// (hal\jxenvirv.c): the environment, then its checksum, the one's complement
++// of the sum of its bytes (low byte first), so that sectors that never held
++// an environment (zeros) do not pass.
++//
++
++#define ENVIRONMENT_DEVICE "scsi(0)disk(0)rdisk(0)partition(0)"
++#define ENVIRONMENT_OFFSET 512
++#define ENVIRONMENT_SECTORS_SIZE (3 * 512)
++
++static UCHAR EnvironmentSectors[ENVIRONMENT_SECTORS_SIZE];
 +
 +//
 +// The boot selection of a new install on the first partition: the loader and the HAL in
@@ -75,9 +90,113 @@
 +        OutputString[Outdex] = Environment[ValueIndex++];
 +    }
 =1 208 5
-=1 214 10
-+    This routine sets Variable (not case sensitive) to Value; an empty Value
-+    deletes the variable.
++static ULONG
++FwEnvironmentChecksum (
++    IN PUCHAR Bytes
+=1 54 6
++    This routine returns the checksum of an environment: the one's complement
++    of the sum of its bytes.
+=1 111 4
++    ULONG Checksum = 0;
++    ULONG Index;
++
++    for (Index = 0; Index < LENGTH_OF_ENVIRONMENT; Index += 1) {
++        Checksum += Bytes[Index];
++    }
++
++    return ~Checksum;
++}
++
++static ARC_STATUS
++FwEnvironmentTransfer (
++    IN BOOLEAN Read
+=1 54 6
++    This routine reads the sectors of the environment from the SD card into
++    EnvironmentSectors, or writes them from it.
+=1 65 3
++    ESUCCESS, or the status of the operation that failed.
+=1 111 4
++    ULONG FileId;
++    ULONG Count;
++    LARGE_INTEGER Offset;
++    ARC_STATUS Status;
++
++    Status = FwOpen(ENVIRONMENT_DEVICE, Read ? ArcOpenReadOnly : ArcOpenReadWrite, &FileId);
++    if (Status != ESUCCESS) {
++        return Status;
++    }
++
++    Offset.QuadPart = ENVIRONMENT_OFFSET;
++    Status = FwSeek(FileId, &Offset, SeekAbsolute);
++    if (Status == ESUCCESS) {
++        if (Read) {
++            Status = FwRead(FileId, EnvironmentSectors, ENVIRONMENT_SECTORS_SIZE, &Count);
++        } else {
++            Status = FwWrite(FileId, EnvironmentSectors, ENVIRONMENT_SECTORS_SIZE, &Count);
++        }
++
++        if ((Status == ESUCCESS) && (Count != ENVIRONMENT_SECTORS_SIZE)) {
++            Status = EIO;
+=1 273 3
++    FwClose(FileId);
++    return Status;
++}
++
++static BOOLEAN
++FwEnvironmentRestore (
+=1 53 7
++    This routine sets the environment to the one the SD card keeps.
+=1 65 3
++    TRUE if the card holds an environment, FALSE if it holds none or it does
++    not read.
+=1 111 4
++    ULONG Checksum;
++
++    if (FwEnvironmentTransfer(TRUE) != ESUCCESS) {
++        return FALSE;
++    }
++
++    Checksum = (ULONG)EnvironmentSectors[LENGTH_OF_ENVIRONMENT] |
++               (ULONG)EnvironmentSectors[LENGTH_OF_ENVIRONMENT + 1] << 8 |
++               (ULONG)EnvironmentSectors[LENGTH_OF_ENVIRONMENT + 2] << 16 |
++               (ULONG)EnvironmentSectors[LENGTH_OF_ENVIRONMENT + 3] << 24;
++
++    if (Checksum != FwEnvironmentChecksum(EnvironmentSectors)) {
++        return FALSE;
+=1 133 3
++    // Two zeros end the last string and the environment.
++    //
++
++    memcpy(Environment, EnvironmentSectors, LENGTH_OF_ENVIRONMENT);
++    Environment[LENGTH_OF_ENVIRONMENT - 2] = 0;
++    Environment[LENGTH_OF_ENVIRONMENT - 1] = 0;
++    return TRUE;
++}
++
++static ARC_STATUS
++FwEnvironmentSave (
+=1 53 7
++    This routine writes the environment and its checksum to the SD card.
+=1 65 3
++    ESUCCESS, or the status of the operation that failed.
+=1 111 4
++    ULONG Checksum;
++
++    memset(EnvironmentSectors, 0, ENVIRONMENT_SECTORS_SIZE);
++    memcpy(EnvironmentSectors, Environment, LENGTH_OF_ENVIRONMENT);
++    Checksum = FwEnvironmentChecksum(EnvironmentSectors);
++    EnvironmentSectors[LENGTH_OF_ENVIRONMENT] = (UCHAR)Checksum;
++    EnvironmentSectors[LENGTH_OF_ENVIRONMENT + 1] = (UCHAR)(Checksum >> 8);
++    EnvironmentSectors[LENGTH_OF_ENVIRONMENT + 2] = (UCHAR)(Checksum >> 16);
++    EnvironmentSectors[LENGTH_OF_ENVIRONMENT + 3] = (UCHAR)(Checksum >> 24);
++    return FwEnvironmentTransfer(FALSE);
++}
++
++static ARC_STATUS
++FwEnvironmentChange (
+=1 216 8
++    This routine sets Variable (not case sensitive) to Value in the
++    environment in memory; an empty Value deletes the variable.
 =1 65 3
 +    ESUCCESS, or ENOSPC if there is no space in the environment.
 =1 111 4
@@ -121,6 +240,23 @@
 +    Environment[TopOfEnvironment++] = '=';
 +    strcpy(&Environment[TopOfEnvironment], Value);
 =1 401 3
+=1 214 10
++    This routine sets Variable (not case sensitive) to Value; an empty Value
++    deletes the variable. The SD card keeps the new environment.
+=1 65 3
++    ESUCCESS, ENOSPC if there is no space in the environment, or the status
++    of the write to the card that failed.
+=1 111 4
++    ARC_STATUS Status;
++
++    Status = FwEnvironmentChange(Variable, Value);
++    if (Status == ESUCCESS) {
++        Status = FwEnvironmentSave();
++    }
++
++    return Status;
++}
++
 =2 911 9
 +    This routine copies the environment to a volatile area and returns its
 +    address, for the envp of a program being executed.
@@ -130,20 +266,22 @@
 +}
 +
 =1 51 9
-+    This routine sets the power on environment and initializes the environment
-+    entries of the firmware vector.
++    This routine sets the power on environment, the one the SD card keeps or,
++    on a card that holds none, the default one, and initializes the
++    environment entries of the firmware vector.
 =1 111 4
 +    PCHAR Equal;
 +    CHAR Name[64];
 +    ULONG Index;
 +
-+    memset(Environment, 0, LENGTH_OF_ENVIRONMENT);
-+    for (Index = 0; Index < sizeof(DefaultEnvironment) / sizeof(DefaultEnvironment[0]); Index += 1) {
-+        Equal = strchr(DefaultEnvironment[Index], '=');
-+        memcpy(Name, DefaultEnvironment[Index], Equal - DefaultEnvironment[Index]);
-+        Name[Equal - DefaultEnvironment[Index]] = 0;
-+        FwSetEnvironmentVariable(Name, Equal + 1);
-=1 133 3
++    if (!FwEnvironmentRestore()) {
++        memset(Environment, 0, LENGTH_OF_ENVIRONMENT);
++        for (Index = 0; Index < sizeof(DefaultEnvironment) / sizeof(DefaultEnvironment[0]); Index += 1) {
++            Equal = strchr(DefaultEnvironment[Index], '=');
++            memcpy(Name, DefaultEnvironment[Index], Equal - DefaultEnvironment[Index]);
++            Name[Equal - DefaultEnvironment[Index]] = 0;
++            FwEnvironmentChange(Name, Equal + 1);
+=1 273 4
 +    // The console is the keyboard and the monitor when a keyboard is attached, as
 +    // Setup configures a Jazz system with video, otherwise the serial port, as on a
 +    // Jazz system with its configuration jumper set. The monitor then says so and
@@ -151,16 +289,16 @@
 +    //
 +
 +    if (DisplayOutput && UsbKeyboardPresent()) {
-+        FwSetEnvironmentVariable("CONSOLEIN", "multi()key()keyboard()console()");
-+        FwSetEnvironmentVariable("CONSOLEOUT", "multi()video()monitor()console()");
++        FwEnvironmentChange("CONSOLEIN", "multi()key()keyboard()console()");
++        FwEnvironmentChange("CONSOLEOUT", "multi()video()monitor()console()");
 +    } else {
 +        if (DisplayOutput) {
 +            FwPrint("No USB keyboard: the console is the serial port.\r\n");
 +            UsbPrintDevices();
 +        }
 +
-+        FwSetEnvironmentVariable("CONSOLEIN", "multi(0)serial(0)");
-+        FwSetEnvironmentVariable("CONSOLEOUT", "multi(0)serial(0)");
++        FwEnvironmentChange("CONSOLEIN", "multi(0)serial(0)");
++        FwEnvironmentChange("CONSOLEOUT", "multi(0)serial(0)");
 +    }
 +
 +    SYSTEM_BLOCK->FirmwareVector[GetEnvironmentRoutine] = (PVOID)FwGetEnvironmentVariable;

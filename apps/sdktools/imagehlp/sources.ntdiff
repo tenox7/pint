@@ -1,0 +1,8 @@
+#ntdiff private/sdktools/imagehlp/sources
+=1 1 55
++
++#
++# The UMLIBS without rsa32.lib: the tree has not its source. Of the
++# programs, only certify uses it.
++#
+=1 57 34

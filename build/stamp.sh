@@ -2,16 +2,18 @@
 # when one of its inputs is newer than its stamp (obj/stamp/NAME, touched when it
 # succeeds): the NT tree never changes, so the inputs are the files of the port and
 # what the steps before made. Every step also takes the headers and scripts all use
-# (GLOBAL) and what the tool, hive (REGINI), ksarm and MIDL steps made (GEN); those
-# steps take only what the steps before them made. FORCE=1 runs every step.
+# (GLOBAL) and what the tool, ksarm and MIDL steps made (GEN): of the tools, the stamp
+# of their step, as the tools later steps add to obj/host (REGINI of the hives, MIBCC)
+# are those steps' own; those steps take only what the steps before them made.
+# FORCE=1 runs every step.
 R=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 K=$R/kernel B=$R/build
 ST=$R/obj/stamp
 mkdir -p $ST
 GLOBAL="$K/inc $R/arcfw/inc $(ls $B/*.sh | grep -vE "/(make-|build|stamp|run|portable)[^/]*$") $B/*.sed $B/*.awk $R/tools/ntdiff.pl $R/tools/host.sh"
-HOSTGEN="$R/obj/host $R/obj/gen/farm/.stamp $R/obj/gen/error.h"
+HOSTGEN="$ST/tools $R/obj/gen/farm/.stamp $R/obj/gen/error.h"
 GEN="$HOSTGEN $R/obj/gen/ksarm.h $R/obj/gen/midl"
-CRT="$R/crt $R/ported/crt32 $R/ported/crt32nt $R/ported/fp32"
+CRT="$R/crt $R/ported/crt32 $R/ported/fp32"
 
 # step NAME INPUT... -- COMMAND...: the command (its script an input too) when the
 # step is out of date
@@ -25,12 +27,12 @@ step() {
     "$@" && touch $s
 }
 
-# cstep KIND ROOT COMPONENT [link] -- COMMAND...: the step of a component (inputs.pl),
-# KIND/<its directory>
+# cstep KIND ROOT COMPONENT [link] -- COMMAND...: the step of a component (inputs.pl, and
+# the files X names), KIND/<its directory>
 cstep() {
     local n=$1/$(echo $2/$3 | sed -E 's,^/work/(private/)?,,') a=("$2" "$3"); shift 3
     [ "$1" = link ] && { a+=(link); shift; }
-    step "$n" $(perl $R/build/inputs.pl $R "${a[@]}") "$@"
+    step "$n" $(perl $R/build/inputs.pl $R "${a[@]}") ${X:-} "$@"
 }
 
 # Jobs: with J > 1 (default 8; J=1 in order), job NAME COMMAND... runs COMMAND, a step or a

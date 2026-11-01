@@ -8,7 +8,8 @@ PINT 4.0 is work in progress. PINT 3.5, Windows NT 3.5 (build 782), is on the br
 
 - Runs in QEMU `raspi2b` on four CPUs: NT's developer first run or NT 4.0's own setup, logon, the Explorer desktop
   and Start menu, Control Panel, Task Manager, the accessories and games, WordPad and Paint (OLE), TCP/IP networking,
-  Internet Explorer, printing, WinHelp 4, POSIX and OpenGL.
+  Internet Explorer, WinHelp 4, POSIX and OpenGL.
+- No printing: no spooler and no printer drivers.
 - Not yet: a real Pi.
 
 ## Raspberry Pi models
@@ -30,21 +31,24 @@ code the Pi 1 and Zero need, and the Pi 5 cannot run a 32-bit kernel at all.
 ## Build
 
 The NT 4.0 source (`private`, `public`) goes beside this tree, and the NT 3.5 tree (`nt35`: a few NT 3.5 files and
-DEC's ADK in `arc/adk`, for the ARC DOS shell) beside the NT 4.0 tree; neither is part of this repository. The port's
+DEC's ADK in `arc/adk`, for the ARC DOS shell) and the Windows XP SP1 tree (`XPSP1`: the administrative tools, ping,
+tracert, netstat, nbtstat) beside the NT 4.0 tree; none of them is part of this repository. The port's
 versions of their files are edit scripts (`*.ntdiff`) the build applies to them (`tools/ntdiff.pl`).
 
 Everything builds in Docker with Microsoft C for ARM ([msvc-arm32](https://hub.docker.com/r/tenox7/msvc-arm32)),
 installed once into `msvc` of the NT 3.5 tree; sources and outputs stay on the host, Docker only runs the tools:
 
     docker run --rm -e ACCEPT_MSVC_LICENSE=yes -v "$PWD/../../nt35/msvc":/opt/msvc tenox7/msvc-arm32 msvc-setup
-    build/build-all.sh      # everything from scratch -> obj/arcfw.{elf,bin}, obj/nt-arcfw-sd.img
+    build/build-all.sh      # everything from scratch -> obj/arcfw.{elf,bin}, obj/nt-arcfw-sd.img, obj/nt-setup-sd.img
     build/build-update.sh   # only what changed since the last build
 
 `build-update.sh` runs only the steps whose files changed (`obj/stamp`) and copies what they made into the existing
-system disk, keeping what NT wrote on it; the disk is made anew when the registry hives change. Builds run `J` steps
-at once (default 8, `J=1` in order) and `CJ` compiles per step (default 4).
+system disk, keeping what NT wrote on it; the disk is made anew when the registry hives change. The steps and their
+order are in `build/build-update.sh` and `build/build-nt.sh`. Families of steps (the keyboard layouts, the console
+utilities...) run `J` at once (default 8, `J=1` in order), with `CJ` compiles per step (default
+12). As NT's build lab did, the build rebases the DLLs and programs (`sdcard/rebase.sh`).
 
-    build/portable-qemu-image.sh  # obj/pint-qemu.tar.gz: the system disk, firmware and QEMU for macOS, Linux, Windows
+    build/portable-qemu-image.sh  # obj/pint40-qemu.tar.gz: the system disk, firmware and QEMU for macOS, Linux, Windows
 
 Run it on a Mac with Homebrew `qemu` and `dylibbundler`; `IMG=disk.img` packs another disk, `FORCE=1` rebuilds the
 bundled QEMU.
@@ -59,7 +63,8 @@ bundled QEMU.
 
 The firmware puts the console on HDMI when a USB keyboard is present, otherwise on serial. run.sh always attaches a USB
 mouse (click the window to give it to NT, Ctrl+Alt+G releases it) and a DS1307-type RTC at 0x68 on I2C1 (GPIO 2/3),
-where the HAL keeps the time. Without an RTC the clock starts each boot at the firmware build date.
+where the HAL keeps the time. Without an RTC the clock starts each boot at the firmware build date. The boot settings
+(System > Startup/Shutdown) are kept on the SD card, as an ARC machine keeps them in NVRAM.
 
 The first run is NT's developer setup (three boots). In the second, OK the boxes (Detected Display, Display Properties)
 and press a key at the console's pause; then Ctrl+Alt+Del (QEMU monitor: Ctrl-A C, `sendkey ctrl-alt-delete`, Ctrl-A
@@ -73,11 +78,11 @@ with an absolute mouse, such as PiKVM), can be plugged in at any time; the boot 
 
 ## Setup card
 
-    tools/inf/make-infs.sh && sdcard/make-setup-image.sh   # obj/nt-setup-sd.img
+The build makes `obj/nt-setup-sd.img` (alone: `sdcard/make-setup-image.sh`).
 
-NT 4.0's own setup, as from its CD on an ARC machine; it installs NT on the card itself. The firmware's automatic boot
-fails on a fresh card (nothing installed yet): press a key, choose "Run a program" and type `arm\setupldr`. Text setup
-(keep the FAT partition, `\WINNT`), restart, GUI setup.
+NT 4.0's own setup, as from its CD on an ARC machine; it installs NT on the card itself. A fresh card has no boot
+entry yet: in the firmware's menu choose "Run a program" and type `arm\setupldr`. Text setup (keep the FAT partition,
+`\WINNT`), restart, GUI setup.
 In QEMU: `IMG=copy-of-nt-setup-sd.img build/run.sh -device usb-kbd`. For the network pick the adapter from the list
 (Raspberry Pi Ethernet Adapter); TCP/IP (with DHCP) and NetBEUI install.
 
