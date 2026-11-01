@@ -1,0 +1,18 @@
+/*
+ * ntfetch.rc - the CPU chip icons, one per architecture, from WiNTown.
+ */
+
+#include "resource.h"
+
+IDI_NTFETCH ICON "icons\\ntfetch.ico"
+IDI_X86     ICON "icons\\x86.ico"
+IDI_X64     ICON "icons\\x64.ico"
+IDI_MIPS    ICON "icons\\mips.ico"
+IDI_AXP     ICON "icons\\axp.ico"
+IDI_AXP64   ICON "icons\\axp64.ico"
+IDI_PPC     ICON "icons\\ppc.ico"
+IDI_ARM     ICON "icons\\arm.ico"
+IDI_ARM64   ICON "icons\\arm64.ico"
+IDI_IA64    ICON "icons\\ia64.ico"
+IDI_R3000   ICON "icons\\r3000.ico"
+

@@ -86,11 +86,16 @@ Arts' additional terms (`apps/games/wintown/LICENSE`); the other games are publi
 
 ## VNC viewer
 
-`\APPS\TENOXVNC.EXE` (TenoxVNC in the Accessories group) is the Win32 build of TenoxVNC (`apps/tenoxvnc`, from
+`\APPS\TENOXVNC.EXE` (TenoxVNC in the Main group) is the Win32 build of TenoxVNC (`apps/tenoxvnc`, from
 github.com/tenox7/tenoxvnc), a VNC viewer. Run without a server, it asks for one (`host`, `host:display` or
 `host::port`), with the password, encoding and colors; F8 opens its menu (full screen, Ctrl+Alt+Del, clipboard,
 settings). It is under the GPL 2.0 (`apps/tenoxvnc/LICENCE.TXT`), its zlib and IJG JPEG decoders under their own terms
 (`LICENSE.zlib`, `README.jpeg`).
+
+## ntfetch
+
+`\APPS\NTFETCH.EXE` (ntfetch in the Main group) is ntfetch (`apps/ntfetch`, from github.com/tenox7/ntfetch): the
+system at a glance, in one window in the style of WinMSD; `ntfetch --text > FILE` writes it as text.
 
 ## SDK tools
 

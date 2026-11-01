@@ -81,8 +81,9 @@ mkdir -p /tmp/sd/WINNT/IDW && cp /nt/PRIVATE/WINDOWS/SHELL/PROGMAN/*.GRP /tmp/sd
 perl ../tools/grp.pl /tmp/sd/WINNT/IDW/GAMES.GRP /tmp/sd/GAMES "%HOMEDRIVE%\\GAMES" 5 2048=2048 Breakout=breakout "Bubble Breaker=bubbles" \
     "Moon Lander=lander" "Missile Command=misl" Snake=ntsnake Tankz=tankz "NT Rigue=ntrigue" RISCque=riscque Sokoban=sokoban \
     RISCoban=riscoban WiNTown=wintown
-# the VNC viewer of apps/tenoxvnc and Internet Explorer of apps/ie (\APPS) in the Main group
-perl ../tools/grp.pl /tmp/sd/WINNT/IDW/MAIN.GRP /tmp/sd/APPS "%HOMEDRIVE%\\APPS" 6 TenoxVNC=tenoxvnc "Internet Explorer=iexplore"
+# the VNC viewer of apps/tenoxvnc, Internet Explorer of apps/ie and ntfetch of apps/ntfetch (\APPS) in the Main group
+perl ../tools/grp.pl /tmp/sd/WINNT/IDW/MAIN.GRP /tmp/sd/APPS "%HOMEDRIVE%\\APPS" 6 TenoxVNC=tenoxvnc "Internet Explorer=iexplore" \
+    ntfetch=ntfetch
 # the help files of the programs, where setup puts them
 for h in WINHELP/HLP/WINHELP SHELL/PROGMAN/PROGMAN SHELL/WINFILE/WINFILE SHELL/CONTROL/CONTROL SHELL/ACCESORY/NOTEPAD/NOTEPAD \
          SHELL/ACCESORY/CALC/CALC SHELL/ACCESORY/SPECHARS/CHARMAP SHELL/GAMES/SOL/SOL EP/WINMINE/HELP/WINMINE EP/FREECELL/FREECELL \

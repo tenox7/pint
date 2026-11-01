@@ -105,6 +105,8 @@ DEST=APPS exe /work/RASPI/apps tenoxvnc/win32 tenoxvnc
 # OEM glue and emosaic.rc, into IEXPLORE.EXE (a UMAPPL in apps/ie/make)
 for c in ie/shared ie/win32 ie/basic ie/bearssl ie/make; do lib /work/RASPI/apps $c; done
 DEST=APPS exe /work/RASPI/apps ie/make iexplore
+# ntfetch (the system at a glance, in the style of WinMSD) of apps/ntfetch, in \APPS
+DEST=APPS exe /work/RASPI/apps ntfetch ntfetch
 
 # WinHelp and its full-text search
 for c in MVAPI FTENGINE FTUI; do dll $W WINHELP/$c; done

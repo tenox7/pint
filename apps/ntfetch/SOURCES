@@ -1,0 +1,11 @@
+MAJORCOMP=apps
+MINORCOMP=ntfetch
+
+TARGETNAME=ntfetch
+TARGETPATH=obj
+TARGETTYPE=PROGRAM
+
+SOURCES=ntfetch.c ntfetch.rc
+
+UMTYPE=windows
+UMENTRY=winmain
