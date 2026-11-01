@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/build/buildexe.c
+=1 1 2826
++    DWORD retval = (DWORD) -1;   /* return value (to caller) */
+=1 2828 14

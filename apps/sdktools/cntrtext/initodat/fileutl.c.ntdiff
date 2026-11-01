@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/cntrtext/initodat/fileutl.c
+=1 1 423
++    IN PUNICODE_STRING FileName
+=1 425 65

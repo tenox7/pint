@@ -1,0 +1,6 @@
+#ntdiff private/sdktools/build/build.c
+=1 1 25
++    // (its size: the first word of the record is its size for the linker of
++    // today; the loader of NT 4.0 takes a record of this size, ldrinit.c)
++    sizeof(IMAGE_LOAD_CONFIG_DIRECTORY),
+=1 27 1344

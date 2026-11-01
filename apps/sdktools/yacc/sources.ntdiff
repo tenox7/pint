@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/yacc/sources
+=1 1 95
++# (oldnames.lib: unlink)
++UMLIBS=$(BASEDIR)\public\sdk\lib\*\oldnames.lib

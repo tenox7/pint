@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/dis32/sources
+=1 1 43
++# (oldnames.lib: fstat)
++UMLIBS=$(BASEDIR)\public\sdk\lib\*\oldnames.lib
+=1 45 2

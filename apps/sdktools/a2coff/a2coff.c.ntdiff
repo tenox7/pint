@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/a2coff/a2coff.c
+=1 1 1575
++                static LONG last_VA;
++                static INT  last_type;
+=1 1578 423

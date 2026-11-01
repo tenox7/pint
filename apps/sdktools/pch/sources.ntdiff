@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/pch/sources
+=1 1 8
++# (oldnames.lib: stricmp)
++UMLIBS=$(BASEDIR)\public\sdk\lib\*\oldnames.lib
+=1 9 1

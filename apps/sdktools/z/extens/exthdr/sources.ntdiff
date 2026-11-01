@@ -1,0 +1,3 @@
+#ntdiff private/sdktools/z/extens/exthdr/sources
+=1 1 19
++NTTARGETFILE0=$(BASEDIR)\public\sdk\inc\zext.h

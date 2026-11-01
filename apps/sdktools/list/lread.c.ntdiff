@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/list/lread.c
+=1 1 23
++    unsigned    rc, code, curPri = THREAD_PRIORITY_NORMAL;
+=1 25 678

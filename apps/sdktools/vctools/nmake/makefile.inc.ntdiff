@@ -1,0 +1,2 @@
+#ntdiff private/sdktools/vctools/nmake/makefile.inc
++!include ..\common.inc

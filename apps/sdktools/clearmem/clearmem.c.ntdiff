@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/clearmem/clearmem.c
+=1 1 387
++	ULONG uli;
++	volatile ULONG ulj = 0;
+=1 390 441

@@ -3,6 +3,6 @@
 +
 +#
 +# The UMLIBS without rsa32.lib: the tree has not its source. Of the
-+# programs, only certify uses it.
++# programs, only binplace uses it (-c signs an image); it is not built.
 +#
 =1 57 34

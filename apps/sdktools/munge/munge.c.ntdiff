@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/munge/munge.c
+=1 1 417
++    Escape = Star = Backslash = Pound = Semi = FALSE;
+=1 418 1333

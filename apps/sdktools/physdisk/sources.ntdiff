@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/physdisk/sources
+=1 1 35
++# (oldnames.lib: isatty; ntdll.lib: the Nt and Rtl calls)
++UMLIBS=obj\*\physdisk.lib $(BASEDIR)\public\sdk\lib\*\oldnames.lib $(BASEDIR)\public\sdk\lib\*\ntdll.lib
++UMAPPL=physdisk

@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/owntree/owntree.c
+=1 1 172
++    cUserMsg = NULL;
+=1 174 502

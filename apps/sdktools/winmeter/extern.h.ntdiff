@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/winmeter/extern.h
+=1 1 52
++#if defined(_ALPHA_) || defined(_ARM_)
+=1 54 47

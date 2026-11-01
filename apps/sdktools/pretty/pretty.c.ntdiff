@@ -1,0 +1,7 @@
+#ntdiff private/sdktools/pretty/pretty.c
+=1 1 21
++    BOOL fOldDontPrettyNames;
++
+=1 24 1
++    fOldDontPrettyNames = cs.fDontPrettyNames;
+=1 25 29

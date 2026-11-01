@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/wap/fernel/baseprf.c
+=1 1 587
++	Temp = Arg ;
+=1 588 997

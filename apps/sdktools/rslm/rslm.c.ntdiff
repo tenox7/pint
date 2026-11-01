@@ -1,0 +1,6 @@
+#ntdiff private/sdktools/rslm/rslm.c
+=1 1 965
++                    goto done;
+=1 967 57
++done:
+=1 1025 87

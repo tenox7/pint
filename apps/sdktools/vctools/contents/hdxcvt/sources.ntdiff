@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/vctools/contents/hdxcvt/sources
+=1 1 32
++# (oldnames.lib: unlink)
++TARGETLIBS=$(BASEDIR)\public\sdk\lib\*\oldnames.lib
+=1 32 4

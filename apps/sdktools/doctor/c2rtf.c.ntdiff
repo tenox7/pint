@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/doctor/c2rtf.c
+=1 1 622
++    int i = 0;
+=1 624 68

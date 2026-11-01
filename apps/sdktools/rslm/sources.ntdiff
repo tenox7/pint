@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/rslm/sources
+=1 1 17
++# (oldnames.lib: spawnv)
++UMLIBS=$(UMLIBS) $(BASEDIR)\public\sdk\lib\*\oldnames.lib

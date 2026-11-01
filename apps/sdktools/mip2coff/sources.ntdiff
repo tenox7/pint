@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/mip2coff/sources
+=1 1 58
++# (oldnames.lib: tempnam)
++UMLIBS=$(UMLIBS) $(BASEDIR)\public\sdk\lib\*\oldnames.lib

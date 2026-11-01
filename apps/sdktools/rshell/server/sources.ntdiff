@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/rshell/server/sources
+=1 1 41
++# (oldnames.lib: dup2)
+=1 42 2
++         $(BASEDIR)\public\sdk\lib\*\oldnames.lib

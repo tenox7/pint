@@ -1,0 +1,3 @@
+#ntdiff private/sdktools/z/extens/exthdr/makefile.inc
++$(BASEDIR)\public\sdk\inc\zext.h: ..\..\inc\zext.h
++        copy ..\..\inc\zext.h $(BASEDIR)\public\sdk\inc\zext.h

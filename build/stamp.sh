@@ -38,7 +38,8 @@ cstep() {
 # Jobs: with J > 1 (default 8; J=1 in order), job NAME COMMAND... runs COMMAND, a step or a
 # function of steps that run in order, as one of at most J jobs at once. Its output is
 # printed whole when it ends, and no job starts after one failed. barrier waits for every
-# job and stops the build if one failed. With J=1 a job runs in place.
+# job and stops the build if one failed. With J=1 a job runs in place. KEEPGOING=1 runs every
+# job and barrier only lists the failed ones, as make -k, to see all the failures at once.
 J=${J:-8}
 JD=$R/obj/jobs
 [ "$J" -le 1 ] || { mkdir -p $JD; rm -rf $JD/print $JD/failed; }
@@ -46,7 +47,7 @@ job() {
     local n=$1 l; shift
     [ "$J" -gt 1 ] || { "$@"; return; }
     while [ $(jobs -rp | wc -l) -ge $J ]; do sleep 0.2; done
-    [ ! -f $JD/failed ] || return 0
+    [ ! -f $JD/failed ] || [ -n "${KEEPGOING:-}" ] || return 0
     l=$JD/$(echo $n | tr / _).log
     (
         set +e
@@ -64,5 +65,5 @@ barrier() {
     wait
     [ -f $JD/failed ] || return 0
     echo "!! failed: $(tr '\n' ' ' < $JD/failed)"
-    exit 1
+    [ -n "${KEEPGOING:-}" ] || exit 1
 }

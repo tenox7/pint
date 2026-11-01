@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/cntrtext/initodat/sources
+=1 1 43
++
++# (ntdll.lib: the Nt and Rtl calls of fileutl.c)
++UMLIBS=$(UMLIBS) $(BASEDIR)\public\sdk\lib\*\ntdll.lib

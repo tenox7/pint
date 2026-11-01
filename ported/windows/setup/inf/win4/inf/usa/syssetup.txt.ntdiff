@@ -5,6 +5,7 @@
 =1 17 55
 +tenoxvnc = "TenoxVNC"
 +iexplore = "Internet Explorer"
++ntfetch = "ntfetch"
 +game2048 = "2048"
 +breakout = "Breakout"
 +bubbles = "Bubble Breaker"

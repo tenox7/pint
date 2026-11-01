@@ -21,6 +21,7 @@
 +[Apps]
 +%iexplore% = %24%\apps\iexplore.exe,%24%\apps\iexplore.exe,,0
 +%tenoxvnc% = %24%\apps\tenoxvnc.exe,%24%\apps\tenoxvnc.exe,,0
++%ntfetch% = %24%\apps\ntfetch.exe,%24%\apps\ntfetch.exe,,0
 =1 411 77
 =1 488 1 0 @@:@a:
 =1 488 1 0 @@:@i:

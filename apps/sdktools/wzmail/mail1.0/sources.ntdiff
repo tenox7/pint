@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/wzmail/mail1.0/sources
+=1 1 76
++
++# (oldnames.lib: open, read, write, stat, tzname and the other old names)
++UMLIBS=$(UMLIBS) $(BASEDIR)\public\sdk\lib\*\oldnames.lib

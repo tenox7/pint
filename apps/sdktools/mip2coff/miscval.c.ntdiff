@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/mip2coff/miscval.c
+=1 1 139
++                pinfo->psym->st);
+=1 141 24

@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/srvnsp/sources
+=1 1 37
++# (oldnames.lib: wcsicmp; ntdll.lib: the Nt and Rtl calls)
++UMLIBS=$(BASEDIR)\public\sdk\lib\*\oldnames.lib $(BASEDIR)\public\sdk\lib\*\ntdll.lib
++UMRES=

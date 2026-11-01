@@ -1,4 +1,6 @@
-# SDKTOOLS\TIMTP ARM_SOURCES (its MIPS_SOURCES: mips\xsum.s, mips\chksum.s): the TCP/IP checksum
-# and the image checksum of the ARM port, the routines it times
+# SDKTOOLS\TIMTP ARM_SOURCES (its MIPS_SOURCES: mips\xsum.s, mips\chksum.s, mips\slist.s; mips\timindex.s
+# is the timer table index of MIPS only): the TCP/IP checksum and the image checksum of the ARM port,
+# and the sequenced list, the routines it times
 /work/RASPI/kernel/tcpip/xsum.asm
 ../imagehlp/chksum.asm
+arm/slist.asm

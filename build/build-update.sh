@@ -3,9 +3,10 @@
 # an input of the port is newer. First the tools of the build, ksarm.h and the stubs and
 # headers of MIDL, which every later step takes; the C run-time; the registry hives; the
 # kernel, the HAL, the OS loader and the ARC firmware; the components of NT (build-nt.sh);
-# then the INFs, the images rebased as the build lab rebased a build (sdcard/rebase.sh),
-# the system disk, updated in place, keeping what NT wrote on it (make-sd-image.sh -u), and
-# the setup card (make-setup-image.sh). build-all.sh builds everything from scratch.
+# the tools of the SDK (build-sdktools.sh); then the INFs, the images rebased as the build
+# lab rebased a build (sdcard/rebase.sh), the system disk, updated in place, keeping what
+# NT wrote on it (make-sd-image.sh -u), and the setup card (make-setup-image.sh).
+# build-all.sh builds everything from scratch.
 #
 # Usage:  build/build-update.sh    # J jobs at once (default 8, J=1 in order), CJ compiles each (default 12)
 set -euo pipefail
@@ -50,12 +51,13 @@ CJ=4 job firmware step firmware $R/arcfw/arm $R/drivers/bcmusb/usbhost.c $R/driv
 barrier
 
 $R/build/build-nt.sh
+$R/build/build-sdktools.sh
 
-# the INFs (XDOSNET, a tool of theirs, links setupapi.lib), the images of the system rebased,
-# the system disk, the setup card
+# the INFs (XDOSNET, a tool of theirs, links setupapi.lib), the images of the system and the
+# SDK tools rebased, the system disk, the setup card
 GEN=$HOSTGEN step infs $R/tools/inf $R/ported/windows/setup/bom $R/ported/windows/setup/inf $R/ported/windows/setup/localinf \
     $R/obj/um/setupapi.lib -- $R/tools/inf/make-infs.sh
-step rebase $R/sdcard/root/WINNT $R/obj/REBASE.EXE $R/obj/IMAGECFG.EXE -- $R/sdcard/rebase.sh
+step rebase $R/sdcard/root/WINNT $R/sdcard/root/SDKTOOLS $R/obj/REBASE.EXE $R/obj/IMAGECFG.EXE -- $R/sdcard/rebase.sh
 $R/sdcard/make-sd-image.sh $([ -n "${FORCE:-}" ] || echo -u)
 step setup-image $R/sdcard/root $R/sdcard/config.txt $R/sdcard/firmware $R/sdcard/setupfiles.pl $R/sdcard/arcenv.pl $R/obj/arcfw.bin \
     $R/obj/SETUPLDR $R/obj/USETUP.EXE $R/obj/SETUPDD.SYS $R/obj/SPDDLANG.SYS $R/obj/gen/hives $R/obj/gen/tree/windows/setup/inf \

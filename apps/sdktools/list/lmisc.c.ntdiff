@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/list/lmisc.c
+=1 1 380
++            ckerr( !pt->Data, MEMERR );
+=1 382 157

@@ -499,10 +499,13 @@ INSTALL=0 drv $W/setup/textmode spddlang/sbcs
 lib $N boot/setup
 step setupldr $R/obj/setupldr.lib $R/obj/boot.lib $R/obj/bldrrtl.lib $R/obj/libcntpr.lib -- $B/make-setupldr.sh
 
-# ---- the apps of PINT: the games (\GAMES), TenoxVNC and Internet Explorer 1.5 (\APPS)
+# ---- the apps of PINT: the games (\GAMES), TenoxVNC, Internet Explorer 1.5 and ntfetch (\APPS), the test
+#      programs (System32: hello, smptest the processors, nettest raw TCP)
 DEST=GAMES exes $A games/2048:2048 games/breakout:breakout games/bubbles:bubbles games/lander:lander games/missile:misl \
     games/snake:ntsnake games/tankz:tankz games/ntrigue:ntrigue games/riscque:riscque games/sokoban:sokoban \
     games/riscoban:riscoban games/wintown:wintown
 DEST=APPS exe $A tenoxvnc/win32 tenoxvnc
 lib $A ie/shared ie/win32 ie/basic ie/bearssl ie/make
 DEST=APPS exe $A ie/make iexplore
+DEST=APPS exe $A ntfetch ntfetch
+exes $A hello:hello smptest:smptest nettest:nettest

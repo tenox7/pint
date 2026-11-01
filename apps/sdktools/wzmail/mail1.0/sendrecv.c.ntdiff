@@ -1,0 +1,6 @@
+#ntdiff private/sdktools/wzmail/mail1.0/sendrecv.c
+=1 1 588
++    pszOpSys = (_winmajor >= LOWEST_OS2_MAJOR_VERSION) ? "OS/2" : "DOS";
++
++    sprintf((PSTR)netbuf, vszSite, pszOpSys, _winmajor, _winminor);
+=1 592 1280

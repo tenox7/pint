@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/bugboard/on.cpp
+=1 1 157
++        Reg.SetValue(szRegRestore, (long)FALSE);
+=1 159 190

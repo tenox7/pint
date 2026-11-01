@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/wap/api32prf.c
+=1 1 176
++	static DWORD ARGS64;
+=1 178 595

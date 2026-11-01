@@ -1,0 +1,5 @@
+#ntdiff private/sdktools/swappath/sources
+=1 1 14
++# (ntdll.lib: NtCreatePagingFile and the Rtl string calls)
++UMLIBS=$(BASEDIR)\public\sdk\lib\*\ntdll.lib
++

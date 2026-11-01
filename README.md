@@ -115,7 +115,20 @@ settings). It is under the GPL 2.0 (`apps/tenoxvnc/LICENCE.TXT`), its zlib and I
 `apps/ie`) with PNG images (stb_image, public domain), UTF-8 pages and HTTPS with TLS 1.2 (BearSSL, MIT license:
 `apps/ie/bearssl/LICENSE.txt`). HTTPS does not check server certificates.
 
-The games, TenoxVNC and Internet Explorer are on the SD image; the setup card does not install them.
+## ntfetch
+
+`\APPS\NTFETCH.EXE` (Start > Programs > Apps) is ntfetch (`apps/ntfetch`, from github.com/tenox7/ntfetch): the
+system at a glance, in one window in the style of WinMSD; `ntfetch --text > FILE` writes it as text.
+
+## SDK tools
+
+`\SDKTOOLS` has the tools of the NT source's `private\sdktools` that build for ARM, as in PINT 3.5
+(`build/build-sdktools.sh`): 290 programs and 24 DLLs, such as build, rc, mc, pview, pmon, tlist, kill, qgrep,
+windiff, regini, remote, the z editor and vi. They are not on the PATH. The header of `build/build-sdktools.sh` lists
+the tools left out and why.
+
+The games, TenoxVNC, Internet Explorer, ntfetch and the SDK tools are on the SD image; the setup card does not
+install them.
 
 ## Roadmap
 

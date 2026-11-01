@@ -1,0 +1,4 @@
+#ntdiff private/sdktools/slmnew/fixlog/logfix.c
+=1 1 66
++    struct tm  tmtime = { 0 };
+=1 68 607
