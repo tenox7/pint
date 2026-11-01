@@ -384,6 +384,12 @@ ported/windows/shell/cpls/appwiz/setup.c
 ported/windows/shell/shelldll/bitbuck.c
 ported/windows/shell/shelldll/defviewx.c
 ported/windows/shell/shelldll/fstreex.c
+ported/windows/shell/shelldll/drivesx.c
+ported/windows/shell/shelldll/path.c
+ported/windows/shell/shelldll/views.h
+ported/windows/shell/cabinet/tray.c
+ported/windows/shell/cpls/main/main.c
+ported/windows/shell/ctrlfldr/init.c
 ported/windows/spooler/inc/splcom.h
 ported/windows/spooler/spoolss/client/winspool.c
 ported/windows/win4help/winhelp/binding.c

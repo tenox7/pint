@@ -1,0 +1,16 @@
+#ntdiff private/windows/shell/ctrlfldr/init.c
+=1 1 30
++#ifdef _ARM_    // (ARM has no printing: main.cpl has no Printers applet.)
++    {   TEXT("FONTS"),            TEXT("main.cpl @2")   },
++#else
+=1 31 2
++#endif
+=1 33 59
++#ifndef _ARM_
++    TCHAR sz[MAX_PATH];
++#endif
+=1 93 28
++#ifndef _ARM_   // (ARM has no printing.)
+=1 121 6
++#endif
+=1 127 125

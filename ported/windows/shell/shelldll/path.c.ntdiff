@@ -1,0 +1,9 @@
+#ntdiff private/windows/shell/shelldll/path.c
+=1 1 791
++#ifdef _ARM_
++            // ARM has no printing: no Printers folder.
++            return NULL;
++#else
+=1 792 2
++#endif
+=1 794 3705

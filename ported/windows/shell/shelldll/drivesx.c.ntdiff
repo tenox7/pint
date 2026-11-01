@@ -1,0 +1,6 @@
+#ntdiff private/windows/shell/shelldll/drivesx.c
+=1 1 235
++#ifndef _ARM_   // (ARM has no printing: no Printers folder.)
+=1 236 1
++#endif
+=1 237 4223

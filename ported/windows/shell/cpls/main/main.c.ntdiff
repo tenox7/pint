@@ -1,0 +1,6 @@
+#ntdiff private/windows/shell/cpls/main/main.c
+=1 1 94
++#ifndef _ARM_   // (ARM has no printing: no Printers applet; Fonts is @2, ctrlfldr\init.c.)
+=1 95 1
++#endif
+=1 96 172

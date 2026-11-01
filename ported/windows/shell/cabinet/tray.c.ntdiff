@@ -1,0 +1,9 @@
+#ntdiff private/windows/shell/cabinet/tray.c
+=1 1 2919
++#ifdef _ARM_
++        // ARM has no printing: no Printers folder, no Printers item.
+=1 2888 3 -8
+=1 2904 1 -24
++        }
++#endif
+=1 2920 5834

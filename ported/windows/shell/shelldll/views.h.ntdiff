@@ -1,0 +1,8 @@
+#ntdiff private/windows/shell/shelldll/views.h
+=1 1 66
++#ifdef _ARM_    // (ARM has no printing: no Printers row.)
++#define CDRIVES_REGITEM_CONTROLS        0
++#else
+=1 67 2
++#endif
+=1 69 374

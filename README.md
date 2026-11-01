@@ -6,9 +6,9 @@ PINT 4.0 is work in progress. PINT 3.5, Windows NT 3.5 (build 782), is on the br
 
 ## Status
 
-- Runs in QEMU `raspi2b` on four CPUs: NT's developer first run or NT 4.0's own setup, logon, the Explorer desktop
-  and Start menu, Control Panel, Task Manager, the accessories and games, WordPad and Paint (OLE), TCP/IP networking,
-  Internet Explorer, WinHelp 4, POSIX and OpenGL.
+- Runs in QEMU `raspi2b`, `raspi3b` and `raspi4b` on four CPUs: NT's developer first run or NT 4.0's own setup, logon,
+  the Explorer desktop and Start menu, Control Panel, Task Manager, the accessories and games, WordPad and Paint (OLE),
+  TCP/IP networking, Internet Explorer, WinHelp 4, POSIX and OpenGL.
 - No printing: no spooler and no printer drivers.
 - Not yet: a real Pi.
 
